@@ -199,19 +199,29 @@ export async function getEvents() {
  * Get recent community reviews
  */
 export async function getRecentReviews() {
-  const { data, error } = await supabase
-    .from('reviews')
-    .select('*, profile:profiles(full_name, avatar_url), product:products(title)')
-    .order('created_at', { ascending: false })
-    .limit(10);
+  try {
+    const { data, error } = await supabase
+      .from('reviews')
+      .select('*, profile:profiles(full_name, avatar_url), product:products(title)')
+      .order('created_at', { ascending: false })
+      .limit(10);
 
-  if (error) {
-    console.warn('Reviews fetch failed:', error.message, '| Hint:', error.hint);
-    return [
-      { id: '1', user: 'Sarah W.', rating: 5, comment: 'The Alchemist changed my perspective on life!', book: 'The Alchemist', date: '2 days ago' },
-      { id: '2', user: 'John D.', rating: 4, comment: 'Great read, highly recommend for tech enthusiasts.', book: 'Life 3.0', date: '1 week ago' },
-      { id: '3', user: 'Grace M.', rating: 5, comment: 'Beautifully written, a must-read for everyone.', book: 'Creative Minds', date: '3 days ago' },
-    ];
+    if (error) {
+      // Silently handle missing table or RLS issues in production
+      if (error.code === 'PGRST116' || error.code === '42P01') {
+        console.warn('Reviews table not found or inaccessible, using mock data');
+      } else {
+        throw error;
+      }
+      return [
+        { id: '1', user: 'Sarah W.', rating: 5, comment: 'The Alchemist changed my perspective on life!', book: 'The Alchemist', date: '2 days ago' },
+        { id: '2', user: 'John D.', rating: 4, comment: 'Great read, highly recommend for tech enthusiasts.', book: 'Life 3.0', date: '1 week ago' },
+        { id: '3', user: 'Grace M.', rating: 5, comment: 'Beautifully written, a must-read for everyone.', book: 'Creative Minds', date: '3 days ago' },
+      ];
+    }
+    return data || [];
+  } catch (error: any) {
+    console.warn('Reviews fetch failed:', error.message);
+    return [];
   }
-  return data;
 }

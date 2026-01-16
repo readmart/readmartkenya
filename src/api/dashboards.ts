@@ -6,42 +6,69 @@ import { supabase } from '@/lib/supabase/client';
  * Fetch global analytics for Founders
  */
 export async function getGlobalAnalytics() {
-  // Aggregate sales, users, and orders
-  const { data: sales, error: salesError } = await supabase
-    .from('orders')
-    .select('total_amount, created_at')
-    .eq('status', 'completed');
+  try {
+    // Aggregate sales, users, and orders
+    const { data: sales, error: salesError } = await supabase
+      .from('orders')
+      .select('total_amount, created_at')
+      .eq('status', 'completed');
 
-  const { count: userCount, error: userError } = await supabase
-    .from('profiles')
-    .select('*', { count: 'exact', head: true });
+    const { count: userCount, error: userError } = await supabase
+      .from('profiles')
+      .select('*', { count: 'exact', head: true });
 
-  const { count: orderCount, error: orderError } = await supabase
-    .from('orders')
-    .select('*', { count: 'exact', head: true });
+    const { count: orderCount, error: orderError } = await supabase
+      .from('orders')
+      .select('*', { count: 'exact', head: true });
 
-  const { count: productCount, error: productError } = await supabase
-    .from('products')
-    .select('*', { count: 'exact', head: true });
+    const { count: productCount, error: productError } = await supabase
+      .from('products')
+      .select('*', { count: 'exact', head: true });
 
-  if (salesError || userError || orderError || productError) {
-    const err = salesError || userError || orderError || productError;
-    console.error('Analytics Fetch Failed:', {
-      source: salesError ? 'sales' : userError ? 'users' : orderError ? 'orders' : 'products',
-      message: err?.message,
-      details: err?.details,
-      hint: err?.hint
-    });
-    throw err;
+    if (salesError || userError || orderError || productError) {
+      const err = salesError || userError || orderError || productError;
+      
+      // If it's a 400 error (Bad Request), it might be a schema mismatch or missing table
+      if (err?.code === '42P01' || err?.code === 'PGRST116' || err?.code === '400') {
+        console.warn('Analytics tables might not be fully initialized:', err.message);
+        return {
+          totalRevenue: 0,
+          totalUsers: 0,
+          totalOrders: 0,
+          totalProducts: 0,
+          salesData: [],
+          isInitialized: false
+        };
+      }
+      
+      console.error('Analytics Fetch Failed:', {
+        source: salesError ? 'sales' : userError ? 'users' : orderError ? 'orders' : 'products',
+        message: err?.message,
+        details: err?.details,
+        hint: err?.hint
+      });
+      throw err;
+    }
+
+    return {
+      totalRevenue: sales?.reduce((acc, curr) => acc + Number(curr.total_amount), 0) || 0,
+      totalUsers: userCount || 0,
+      totalOrders: orderCount || 0,
+      totalProducts: productCount || 0,
+      salesData: sales || [],
+      isInitialized: true
+    };
+  } catch (error: any) {
+    console.warn('Global analytics fetch failed, returning defaults:', error.message);
+    return {
+      totalRevenue: 0,
+      totalUsers: 0,
+      totalOrders: 0,
+      totalProducts: 0,
+      salesData: [],
+      isInitialized: false
+    };
   }
-
-  return {
-    totalRevenue: sales.reduce((acc, curr) => acc + Number(curr.total_amount), 0),
-    totalUsers: userCount || 0,
-    totalOrders: orderCount || 0,
-    totalProducts: productCount || 0,
-    salesData: sales,
-  };
 }
 
 /**
