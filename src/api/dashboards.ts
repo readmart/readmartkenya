@@ -156,91 +156,168 @@ export async function bulkUpdateRecords(table: string, ids: string[], updates: a
  * Fetch all orders for management
  */
 export async function getOrders() {
-  const { data, error } = await supabase
-    .from('orders')
-    .select('*, profiles(full_name, email)')
-    .order('created_at', { ascending: false });
+  try {
+    const { data, error } = await supabase
+      .from('orders')
+      .select('*, profiles(full_name, email)')
+      .order('created_at', { ascending: false });
 
-  if (error) throw error;
-  return data;
+    if (error) {
+      if (error.code === '42P01' || error.code === 'PGRST116') {
+        console.warn('Orders table not found or inaccessible');
+        return [];
+      }
+      throw error;
+    }
+    return data || [];
+  } catch (error: any) {
+    console.warn('Orders fetch failed:', error.message);
+    return [];
+  }
 }
 
 /**
  * Fetch all shipping zones
  */
 export async function getShippingZones() {
-  const { data, error } = await supabase
-    .from('shipping_zones')
-    .select('*')
-    .order('name');
+  try {
+    const { data, error } = await supabase
+      .from('shipping_zones')
+      .select('*')
+      .order('name');
 
-  if (error) throw error;
-  return data;
+    if (error) {
+      if (error.code === '42P01' || error.code === 'PGRST116') {
+        console.warn('Shipping zones table not found or inaccessible');
+        return [];
+      }
+      throw error;
+    }
+    return data || [];
+  } catch (error: any) {
+    console.warn('Shipping zones fetch failed:', error.message);
+    return [];
+  }
 }
 
 /**
  * Fetch all promo codes
  */
 export async function getPromos() {
-  const { data, error } = await supabase
-    .from('promos')
-    .select('*')
-    .order('created_at', { ascending: false });
+  try {
+    const { data, error } = await supabase
+      .from('promos')
+      .select('*')
+      .order('created_at', { ascending: false });
 
-  if (error) throw error;
-  return data;
+    if (error) {
+      if (error.code === '42P01' || error.code === 'PGRST116') {
+        console.warn('Promos table not found or inaccessible');
+        return [];
+      }
+      throw error;
+    }
+    return data || [];
+  } catch (error: any) {
+    console.warn('Promos fetch failed:', error.message);
+    return [];
+  }
 }
 
 /**
  * Fetch CMS content (banners, etc.)
  */
 export async function getCMSContent() {
-  const { data, error } = await supabase
-    .from('cms_content')
-    .select('*')
-    .order('created_at', { ascending: false });
+  try {
+    const { data, error } = await supabase
+      .from('cms_content')
+      .select('*')
+      .order('created_at', { ascending: false });
 
-  if (error) throw error;
-  return data;
+    if (error) {
+      if (error.code === '42P01' || error.code === 'PGRST116') {
+        console.warn('CMS content table not found or inaccessible');
+        return [];
+      }
+      throw error;
+    }
+    return data || [];
+  } catch (error: any) {
+    console.warn('CMS content fetch failed:', error.message);
+    return [];
+  }
 }
 
 /**
  * Fetch audit logs for Founders
  */
 export async function getAuditLogs() {
-  const { data, error } = await supabase
-    .from('audit_logs')
-    .select('*, profiles(full_name)')
-    .order('created_at', { ascending: false });
+  try {
+    const { data, error } = await supabase
+      .from('audit_logs')
+      .select('*, profiles(full_name)')
+      .order('created_at', { ascending: false });
 
-  if (error) throw error;
-  return data;
+    if (error) {
+      if (error.code === '42P01' || error.code === 'PGRST116') {
+        console.warn('Audit logs table not found or inaccessible');
+        return [];
+      }
+      throw error;
+    }
+    return data || [];
+  } catch (error: any) {
+    console.warn('Audit logs fetch failed:', error.message);
+    return [];
+  }
 }
 
 /**
  * Fetch all contact inquiries
  */
 export async function getInquiries() {
-  const { data, error } = await supabase
-    .from('contact_messages')
-    .select('*')
-    .order('created_at', { ascending: false });
+  try {
+    const { data, error } = await supabase
+      .from('contact_messages')
+      .select('*')
+      .order('created_at', { ascending: false });
 
-  if (error) throw error;
-  return data;
+    if (error) {
+      if (error.code === '42P01' || error.code === 'PGRST116') {
+        console.warn('Contact messages table not found or inaccessible');
+        return [];
+      }
+      throw error;
+    }
+    return data || [];
+  } catch (error: any) {
+    console.warn('Inquiries fetch failed:', error.message);
+    return [];
+  }
 }
 
 /**
  * Fetch all partnership applications
  */
 export async function getPartnerships() {
-  const { data, error } = await supabase
-    .from('partnership_applications')
-    .select('*')
-    .order('created_at', { ascending: false });
+  try {
+    const { data, error } = await supabase
+      .from('partnership_applications')
+      .select('*')
+      .order('created_at', { ascending: false });
 
-  if (error) throw error;
-  return data;
+    if (error) {
+      if (error.code === '42P01' || error.code === 'PGRST116') {
+        console.warn('Partnership applications table not found or inaccessible');
+        return [];
+      }
+      throw error;
+    }
+    return data || [];
+  } catch (error: any) {
+    console.warn('Partnerships fetch failed:', error.message);
+    return [];
+  }
 }
 
 /**
@@ -273,55 +350,99 @@ export async function getSiteSettings() {
  * Fetch team members (users with admin/manager roles)
  */
 export async function getTeamMembers() {
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('*')
-    .in('role', ['founder', 'admin', 'manager'])
-    .order('created_at', { ascending: false });
+  try {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .in('role', ['founder', 'admin', 'manager'])
+      .order('created_at', { ascending: false });
 
-  if (error) throw error;
-  return data;
+    if (error) {
+      if (error.code === '42P01' || error.code === 'PGRST116') {
+        console.warn('Profiles table not found or inaccessible for team members');
+        return [];
+      }
+      throw error;
+    }
+    return data || [];
+  } catch (error: any) {
+    console.warn('Team members fetch failed:', error.message);
+    return [];
+  }
 }
 
 /**
  * Fetch sales report for a specific author
  */
 export async function getAuthorSalesReport(authorId: string) {
-  const { data, error } = await supabase
-    .from('orders')
-    .select('*, order_items!inner(*)')
-    .eq('order_items.author_id', authorId)
-    .order('created_at', { ascending: false });
+  try {
+    const { data, error } = await supabase
+      .from('orders')
+      .select('*, order_items!inner(*)')
+      .eq('order_items.author_id', authorId)
+      .order('created_at', { ascending: false });
 
-  if (error) throw error;
-  return data;
+    if (error) {
+      if (error.code === '42P01' || error.code === 'PGRST116') {
+        console.warn('Orders/OrderItems table not found or inaccessible for author report');
+        return [];
+      }
+      throw error;
+    }
+    return data || [];
+  } catch (error: any) {
+    console.warn('Author sales report fetch failed:', error.message);
+    return [];
+  }
 }
 
 /**
  * Fetch payouts for a specific partner
  */
 export async function getPartnerPayouts(partnerId: string) {
-  const { data, error } = await supabase
-    .from('fulfillment_ledger')
-    .select('*')
-    .eq('partner_service_id', partnerId)
-    .order('created_at', { ascending: false });
+  try {
+    const { data, error } = await supabase
+      .from('fulfillment_ledger')
+      .select('*')
+      .eq('partner_service_id', partnerId)
+      .order('created_at', { ascending: false });
 
-  if (error) throw error;
-  return data;
+    if (error) {
+      if (error.code === '42P01' || error.code === 'PGRST116') {
+        console.warn('Fulfillment ledger table not found or inaccessible');
+        return [];
+      }
+      throw error;
+    }
+    return data || [];
+  } catch (error: any) {
+    console.warn('Partner payouts fetch failed:', error.message);
+    return [];
+  }
 }
 
 /**
  * Fetch all users for Admin management
  */
 export async function getAllUsers() {
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('*')
-    .order('created_at', { ascending: false });
+  try {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .order('created_at', { ascending: false });
 
-  if (error) throw error;
-  return data;
+    if (error) {
+      if (error.code === '42P01' || error.code === 'PGRST116') {
+        console.warn('Profiles table not found or inaccessible for all users');
+        return [];
+      }
+      throw error;
+    }
+    return data || [];
+  } catch (error: any) {
+    console.warn('All users fetch failed:', error.message);
+    return [];
+  }
 }
 
 /**
