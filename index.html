@@ -8,6 +8,15 @@
   </head>
   <body>
     <div id="root"></div>
+    <script>
+      window.onerror = function(msg, url, line, col, error) {
+        console.error('Global Error:', msg, 'at', url, ':', line, ':', col, error);
+        var root = document.getElementById('root');
+        if (root && !root.innerHTML) {
+          root.innerHTML = '<div style="padding: 20px; color: red; font-family: sans-serif;"><h1>App Initialization Failed</h1><p>' + msg + '</p><p>Please check the browser console for more details.</p></div>';
+        }
+      };
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

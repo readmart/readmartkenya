@@ -9,7 +9,8 @@ import {
   Search, Filter, MoreVertical, Edit, Trash2,
   Truck, Tag, Calendar, MessageSquare,
   Handshake, Users2, Settings, RefreshCw, Eye, Power,
-  ChevronDown, CheckCircle2, Upload, X, PenTool, Building2
+  ChevronDown, CheckCircle2, Upload, X, PenTool, Building2,
+  AlertTriangle
 } from 'lucide-react';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useCurrency } from '@/contexts/CurrencyContext';
@@ -652,6 +653,21 @@ export default function FounderDashboard() {
             <>
               {activeTab === 'overview' && (
                 <div className="space-y-12">
+                  {analytics && !analytics.isInitialized && (
+                    <motion.div 
+                      initial={{ opacity: 0, y: -20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="glass p-6 rounded-[2rem] border-amber-500/20 bg-amber-500/5 flex items-center gap-6"
+                    >
+                      <div className="p-4 bg-amber-500/10 rounded-2xl">
+                        <AlertTriangle className="w-8 h-8 text-amber-500" />
+                      </div>
+                      <div>
+                        <h4 className="text-xl font-black text-amber-500">Database Initialization Pending</h4>
+                        <p className="text-muted-foreground font-medium">Some analytics tables (orders, reviews, etc.) haven't been created or populated yet. Statistics will update once data is available.</p>
+                      </div>
+                    </motion.div>
+                  )}
                   {/* Stats Grid */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                     {stats.map((stat, i) => (

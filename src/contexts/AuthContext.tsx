@@ -90,6 +90,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .eq('id', userId)
         .maybeSingle();
 
+      if (error) {
+        console.error('Profile fetch error:', error);
+        // Don't throw, just allow the user to be logged in without a profile
+      }
+
       // If profile doesn't exist (e.g., OAuth first time), create it
       if (!data && !error) {
         const { data: { user } } = await supabase.auth.getUser();
@@ -98,22 +103,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             .from('profiles')
             .insert({
               id: userId,
-              full_name: user.user_metadata?.full_name || user.user_metadata?.name || 'User',
+              full_name: user.user_metadata?.full_name || 'New User',
               avatar_url: user.user_metadata?.avatar_url || null,
               role: 'customer'
             })
             .select()
             .single();
           
-          if (!createError) {
-            data = newProfile;
+          if (createError) {
+            console.error('Profile creation error:', createError);
+          } else {
+            setProfile(newProfile);
           }
         }
+      } else {
+        setProfile(data);
       }
-
-      if (data) setProfile(data);
     } catch (err) {
-      console.error('Error fetching/creating profile:', err);
+      console.error('Unexpected error in fetchProfile:', err);
     } finally {
       setLoading(false);
     }
