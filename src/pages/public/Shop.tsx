@@ -25,7 +25,12 @@ export default function Shop() {
           getCategories()
         ]);
         setProducts(productsData);
-        setCategories(['All', ...categoriesData.map((c: any) => c.name)]);
+        
+        // Ensure specific categories requested by user are present
+        const dbCategories = categoriesData.map((c: any) => c.name);
+        const requiredCategories = ['All', 'Art Books', 'Accessories', 'Stationery'];
+        const finalCategories = [...new Set([...requiredCategories, ...dbCategories])];
+        setCategories(finalCategories);
       } catch (error) {
         console.error('Failed to load shop data:', error);
       } finally {
@@ -42,9 +47,11 @@ export default function Shop() {
     }
   }, [searchParams]);
 
-  const [priceRange, setPriceRange] = useState(10000);
+  const [priceRange, setPriceRange] = useState(1500000);
   const [minRating, setMinRating] = useState(0);
   const [sortBy, setSortBy] = useState('Newest First');
+  const [selectedConditions, setSelectedConditions] = useState<string[]>([]);
+  const [selectedFormats, setSelectedFormats] = useState<string[]>([]);
   const [showMobileFilters, setShowMobileFilters] = useState(false);
 
   const filteredBooks = useMemo(() => {
@@ -52,15 +59,25 @@ export default function Shop() {
       .filter((book) => {
         const name = book.name || '';
         const author = book.metadata?.author || 'Unknown';
+        const condition = book.metadata?.condition || 'New';
+        const format = book.metadata?.format || 'Physical';
+        
         const matchesSearch = name.toLowerCase().includes(searchQuery.toLowerCase()) || 
                               author.toLowerCase().includes(searchQuery.toLowerCase());
+        
         const matchesCategory = selectedCategory === 'All' 
           ? true 
           : book.category?.name === selectedCategory;
-        const matchesPrice = priceRange >= 10000 || book.price <= priceRange;
+        
+        const matchesPrice = priceRange >= 1500000 || book.price <= priceRange;
+        
         const rating = book.metadata?.rating || 0;
         const matchesRating = rating >= minRating;
-        return matchesSearch && matchesCategory && matchesPrice && matchesRating;
+
+        const matchesCondition = selectedConditions.length === 0 || selectedConditions.includes(condition);
+        const matchesFormat = selectedFormats.length === 0 || selectedFormats.includes(format);
+
+        return matchesSearch && matchesCategory && matchesPrice && matchesRating && matchesCondition && matchesFormat;
       })
       .sort((a, b) => {
         if (sortBy === 'Price: Low to High') return a.price - b.price;
@@ -136,16 +153,70 @@ export default function Shop() {
               <input 
                 type="range" 
                 min="0"
-                max="10000"
-                step="500"
+                max="1500000"
+                step="1000"
                 value={priceRange}
                 onChange={(e) => setPriceRange(parseInt(e.target.value))}
                 className="w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer accent-primary" 
               />
               <div className="flex justify-between mt-2 text-xs text-muted-foreground font-bold">
                 <span>Min</span>
-                <span>{formatPrice(10000)}+</span>
+                <span>{formatPrice(1500000)}+</span>
               </div>
+            </div>
+          </div>
+
+          <div>
+            <h3 className="font-black mb-4 flex items-center justify-between uppercase text-sm tracking-widest">
+              Condition <ChevronDown className="h-4 w-4" />
+            </h3>
+            <div className="space-y-2">
+              {['New', 'Pre-loved'].map(condition => (
+                <label key={condition} className="flex items-center gap-3 cursor-pointer group">
+                  <input 
+                    type="checkbox" 
+                    checked={selectedConditions.includes(condition)}
+                    onChange={() => {
+                      setSelectedConditions(prev => 
+                        prev.includes(condition) 
+                          ? prev.filter(c => c !== condition) 
+                          : [...prev, condition]
+                      );
+                    }}
+                    className="w-4 h-4 rounded border-white/20 bg-white/10 text-primary focus:ring-primary" 
+                  />
+                  <span className={`text-sm transition-colors ${selectedConditions.includes(condition) ? 'text-primary font-bold' : 'text-muted-foreground group-hover:text-foreground'}`}>
+                    {condition}
+                  </span>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <h3 className="font-black mb-4 flex items-center justify-between uppercase text-sm tracking-widest">
+              Format <ChevronDown className="h-4 w-4" />
+            </h3>
+            <div className="space-y-2">
+              {['Physical', 'E-book'].map(format => (
+                <label key={format} className="flex items-center gap-3 cursor-pointer group">
+                  <input 
+                    type="checkbox" 
+                    checked={selectedFormats.includes(format)}
+                    onChange={() => {
+                      setSelectedFormats(prev => 
+                        prev.includes(format) 
+                          ? prev.filter(f => f !== format) 
+                          : [...prev, format]
+                      );
+                    }}
+                    className="w-4 h-4 rounded border-white/20 bg-white/10 text-primary focus:ring-primary" 
+                  />
+                  <span className={`text-sm transition-colors ${selectedFormats.includes(format) ? 'text-primary font-bold' : 'text-muted-foreground group-hover:text-foreground'}`}>
+                    {format}
+                  </span>
+                </label>
+              ))}
             </div>
           </div>
 
@@ -174,8 +245,10 @@ export default function Shop() {
           <button 
             onClick={() => {
               setSelectedCategory('All');
-              setPriceRange(10000);
+              setPriceRange(1500000);
               setMinRating(0);
+              setSelectedConditions([]);
+              setSelectedFormats([]);
               setSearchQuery('');
             }}
             className="w-full py-3 glass rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-red-500/10 hover:text-red-500 transition-all"
@@ -253,8 +326,10 @@ export default function Shop() {
                     onClick={() => {
                       setSearchQuery('');
                       setSelectedCategory('All');
-                      setPriceRange(10000);
+                      setPriceRange(1500000);
                       setMinRating(0);
+                      setSelectedConditions([]);
+                      setSelectedFormats([]);
                     }}
                     className="glass px-8 py-4 rounded-2xl font-black uppercase text-sm hover:bg-primary hover:text-white transition-all"
                   >
@@ -337,16 +412,82 @@ export default function Shop() {
                     <input 
                       type="range" 
                       min="0"
-                      max="10000"
-                      step="500"
+                      max="1500000"
+                      step="1000"
                       value={priceRange}
                       onChange={(e) => setPriceRange(parseInt(e.target.value))}
                       className="w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer accent-primary" 
                     />
                     <div className="flex justify-between mt-2 text-xs text-muted-foreground font-bold">
                       <span>Min</span>
-                      <span>{formatPrice(10000)}+</span>
+                      <span>{formatPrice(1500000)}+</span>
                     </div>
+                  </div>
+                </div>
+
+                <div>
+                  <h3 className="font-black mb-4 uppercase text-xs tracking-widest">Condition</h3>
+                  <div className="space-y-2">
+                    {['New', 'Pre-loved'].map(condition => (
+                      <label key={condition} className="flex items-center gap-3">
+                        <input 
+                          type="checkbox" 
+                          checked={selectedConditions.includes(condition)}
+                          onChange={() => {
+                            setSelectedConditions(prev => 
+                              prev.includes(condition) 
+                                ? prev.filter(c => c !== condition) 
+                                : [...prev, condition]
+                            );
+                          }}
+                          className="w-4 h-4 rounded border-white/20 bg-white/10 text-primary" 
+                        />
+                        <span className={`text-sm ${selectedConditions.includes(condition) ? 'text-primary font-bold' : 'text-muted-foreground'}`}>{condition}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <h3 className="font-black mb-4 uppercase text-xs tracking-widest">Format</h3>
+                  <div className="space-y-2">
+                    {['Physical', 'E-book'].map(format => (
+                      <label key={format} className="flex items-center gap-3">
+                        <input 
+                          type="checkbox" 
+                          checked={selectedFormats.includes(format)}
+                          onChange={() => {
+                            setSelectedFormats(prev => 
+                              prev.includes(format) 
+                                ? prev.filter(f => f !== format) 
+                                : [...prev, format]
+                            );
+                          }}
+                          className="w-4 h-4 rounded border-white/20 bg-white/10 text-primary" 
+                        />
+                        <span className={`text-sm ${selectedFormats.includes(format) ? 'text-primary font-bold' : 'text-muted-foreground'}`}>{format}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <h3 className="font-black mb-4 uppercase text-xs tracking-widest">Min Rating</h3>
+                  <div className="space-y-2">
+                    {[4, 3, 2, 0].map(star => (
+                      <label key={star} className="flex items-center gap-3">
+                        <input 
+                          type="radio" 
+                          name="rating-mobile"
+                          checked={minRating === star}
+                          onChange={() => setMinRating(star)}
+                          className="w-4 h-4 rounded-full border-white/20 bg-white/10 text-primary" 
+                        />
+                        <span className={`text-sm ${minRating === star ? 'text-primary font-bold' : 'text-muted-foreground'}`}>
+                          {star === 0 ? 'All Ratings' : `${star}+ Stars`}
+                        </span>
+                      </label>
+                    ))}
                   </div>
                 </div>
 
