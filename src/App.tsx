@@ -3,44 +3,45 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { Toaster } from 'sonner';
 import ProtectedRoute from '@/components/auth/ProtectedRoute';
 import Layout from '@/components/layout/Layout';
+import { lazyRetry } from '@/lib/utils';
 
 // Public Pages
-const Home = lazy(() => import('@/pages/public/Home'));
-const Shop = lazy(() => import('@/pages/public/Shop'));
-const BookDetail = lazy(() => import('@/pages/public/BookDetail'));
-const BookClub = lazy(() => import('@/pages/public/BookClub'));
-const Events = lazy(() => import('@/pages/public/Events'));
-const PartnershipApply = lazy(() => import('@/pages/public/PartnershipApply'));
-const AuthorApply = lazy(() => import('@/pages/public/AuthorApply'));
-const TrackOrder = lazy(() => import('@/pages/public/TrackOrder'));
+const Home = lazy(() => lazyRetry(() => import('@/pages/public/Home')));
+const Shop = lazy(() => lazyRetry(() => import('@/pages/public/Shop')));
+const BookDetail = lazy(() => lazyRetry(() => import('@/pages/public/BookDetail')));
+const BookClub = lazy(() => lazyRetry(() => import('@/pages/public/BookClub')));
+const Events = lazy(() => lazyRetry(() => import('@/pages/public/Events')));
+const PartnershipApply = lazy(() => lazyRetry(() => import('@/pages/public/PartnershipApply')));
+const AuthorApply = lazy(() => lazyRetry(() => import('@/pages/public/AuthorApply')));
+const TrackOrder = lazy(() => lazyRetry(() => import('@/pages/public/TrackOrder')));
 
 // Auth Pages
-const Login = lazy(() => import('@/pages/auth/Login'));
-const Signup = lazy(() => import('@/pages/auth/Signup'));
-const AdminLogin = lazy(() => import('@/pages/auth/AdminLogin'));
-const ForgotPassword = lazy(() => import('@/pages/auth/ForgotPassword'));
-const ResetPassword = lazy(() => import('@/pages/auth/ResetPassword'));
+const Login = lazy(() => lazyRetry(() => import('@/pages/auth/Login')));
+const Signup = lazy(() => lazyRetry(() => import('@/pages/auth/Signup')));
+const AdminLogin = lazy(() => lazyRetry(() => import('@/pages/auth/AdminLogin')));
+const ForgotPassword = lazy(() => lazyRetry(() => import('@/pages/auth/ForgotPassword')));
+const ResetPassword = lazy(() => lazyRetry(() => import('@/pages/auth/ResetPassword')));
 
 // User Pages
-const Account = lazy(() => import('@/pages/user/Account'));
-const OrderHistory = lazy(() => import('@/pages/user/OrderHistory'));
-const Wishlist = lazy(() => import('@/pages/user/Wishlist'));
-const Cart = lazy(() => import('@/pages/user/Cart'));
-const Checkout = lazy(() => import('@/pages/user/Checkout'));
+const Account = lazy(() => lazyRetry(() => import('@/pages/user/Account')));
+const OrderHistory = lazy(() => lazyRetry(() => import('@/pages/user/OrderHistory')));
+const Wishlist = lazy(() => lazyRetry(() => import('@/pages/user/Wishlist')));
+const Cart = lazy(() => lazyRetry(() => import('@/pages/user/Cart')));
+const Checkout = lazy(() => lazyRetry(() => import('@/pages/user/Checkout')));
 
 // Dashboard Pages
-const FounderDashboard = lazy(() => import('@/pages/dashboard/FounderDashboard'));
-const AuthorDashboard = lazy(() => import('@/pages/dashboard/AuthorDashboard'));
-const PartnerDashboard = lazy(() => import('@/pages/dashboard/PartnerDashboard'));
+const FounderDashboard = lazy(() => lazyRetry(() => import('@/pages/dashboard/FounderDashboard')));
+const AuthorDashboard = lazy(() => lazyRetry(() => import('@/pages/dashboard/AuthorDashboard')));
+const PartnerDashboard = lazy(() => lazyRetry(() => import('@/pages/dashboard/PartnerDashboard')));
 
 // Info Pages
-const About = lazy(() => import('@/pages/public/About'));
-const Contact = lazy(() => import('@/pages/public/Contact'));
-const Help = lazy(() => import('@/pages/public/Help'));
-const Shipping = lazy(() => import('@/pages/public/Shipping'));
-const Returns = lazy(() => import('@/pages/public/Returns'));
-const Privacy = lazy(() => import('@/pages/public/Privacy'));
-const Terms = lazy(() => import('@/pages/public/Terms'));
+const About = lazy(() => lazyRetry(() => import('@/pages/public/About')));
+const Contact = lazy(() => lazyRetry(() => import('@/pages/public/Contact')));
+const Help = lazy(() => lazyRetry(() => import('@/pages/public/Help')));
+const Shipping = lazy(() => lazyRetry(() => import('@/pages/public/Shipping')));
+const Returns = lazy(() => lazyRetry(() => import('@/pages/public/Returns')));
+const Privacy = lazy(() => lazyRetry(() => import('@/pages/public/Privacy')));
+const Terms = lazy(() => lazyRetry(() => import('@/pages/public/Terms')));
 
 const LoadingSpinner = () => (
   <div className="min-h-screen flex items-center justify-center">
