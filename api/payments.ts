@@ -48,13 +48,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           const finalStatus = isSuccess ? 'paid' : 'failed';
           
           // Update order
+          const updatePayload: any = { 
+            status: finalStatus,
+            payment_metadata: payload 
+          };
+          
+          if (transactionId) {
+            updatePayload.payment_id = transactionId;
+          }
+          
           const { data: updatedOrders, error: orderError } = await supabase
             .from('orders')
-            .update({ 
-              status: finalStatus, 
-              payment_id: transactionId,
-              payment_metadata: payload 
-            })
+            .update(updatePayload)
             .eq('id', orderId)
             .select();
 
@@ -129,10 +134,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         });
 
         // Update order with payment request location for polling
-        await supabase.from('orders').update({ 
-          payment_id: k2Result.location || (k2Result as any).id,
+        const paymentId = k2Result.location || (k2Result as any).id;
+        const updatePayload: any = { 
           payment_metadata: k2Result 
-        }).eq('id', orderId);
+        };
+        
+        if (paymentId) {
+          updatePayload.payment_id = paymentId;
+        }
+
+        await supabase.from('orders').update(updatePayload).eq('id', orderId);
 
         return json(res, 200, k2Result);
       } catch (err: any) {
