@@ -622,7 +622,7 @@ export default function FounderDashboard() {
               className={`flex items-center gap-3 px-6 py-4 rounded-2xl font-black whitespace-nowrap transition-all duration-300 relative group ${
                 activeTab === tab.id 
                   ? 'text-white' 
-                  : 'text-muted-foreground hover:text-slate-900 glass hover:bg-slate-50 border-slate-200 bg-white'
+                  : 'text-muted-foreground hover:text-slate-900 glass hover:bg-slate-100 border-slate-200 bg-white'
               }`}
             >
               {activeTab === tab.id && (
@@ -746,7 +746,7 @@ export default function FounderDashboard() {
                         {auditLogs.length > 0 ? (
                           auditLogs.slice(0, 6).map((log) => (
                             <div key={log.id} className="flex items-center gap-4 group">
-                          <div className="w-12 h-12 rounded-2xl bg-slate-50 flex items-center justify-center text-primary group-hover:bg-primary/20 transition-all shrink-0">
+                          <div className="w-12 h-12 rounded-2xl bg-white flex items-center justify-center text-primary group-hover:bg-primary/20 transition-all shrink-0">
                                 <Shield className="w-5 h-5" />
                               </div>
                               <div className="flex-1 min-w-0">
@@ -785,7 +785,7 @@ export default function FounderDashboard() {
                               setBulkEditForm({ stock_quantity: '', price: '', category: '' });
                               setIsModalOpen(true);
                             }}
-                            className="glass px-6 py-3 rounded-2xl font-black text-sm flex items-center gap-2 hover:bg-slate-50 transition-all border-slate-200 text-slate-900 bg-white"
+                            className="glass px-6 py-3 rounded-2xl font-black text-sm flex items-center gap-2 hover:bg-slate-100 transition-all border-slate-200 text-slate-900 bg-white"
                           >
                             <Edit className="w-4 h-4" /> Bulk Edit ({selectedIds.length})
                           </button>
@@ -799,7 +799,7 @@ export default function FounderDashboard() {
                       )}
                       <button 
                         onClick={() => toast.info('Auto-categorization engine starting...')}
-                        className="glass px-6 py-3 rounded-2xl font-black text-sm flex items-center gap-2 hover:bg-slate-50 transition-all border-slate-200 text-slate-900 bg-white"
+                        className="glass px-6 py-3 rounded-2xl font-black text-sm flex items-center gap-2 hover:bg-slate-100 transition-all border-slate-200 text-slate-900 bg-white"
                       >
                         <RefreshCw className="w-4 h-4" /> Auto-Categorize
                       </button>
@@ -837,7 +837,7 @@ export default function FounderDashboard() {
                         className="w-full pl-14 pr-6 py-5 glass rounded-[2rem] focus:ring-4 focus:ring-primary/20 outline-none transition-all font-bold border-slate-200 bg-white text-slate-900"
                       />
                     </div>
-                    <button className="glass px-8 py-5 rounded-[2rem] flex items-center gap-3 font-black hover:bg-slate-50 transition-all border-slate-200 text-slate-900 bg-white">
+                    <button className="glass px-8 py-5 rounded-[2rem] flex items-center gap-3 font-black hover:bg-slate-100 transition-all border-slate-200 text-slate-900 bg-white">
                       <Filter className="w-5 h-5" /> Filters
                     </button>
                   </div>
@@ -873,7 +873,7 @@ export default function FounderDashboard() {
                             (item.name || '').toLowerCase().includes(inventorySearch.toLowerCase()) ||
                             (item.metadata?.sku || '').toLowerCase().includes(inventorySearch.toLowerCase())
                           ).map(item => (
-                            <tr key={item.id} className={`hover:bg-slate-50/50 transition-colors group ${selectedIds.includes(item.id) ? 'bg-primary/5' : ''}`}>
+                            <tr key={item.id} className={`hover:bg-slate-100/50 transition-colors group ${selectedIds.includes(item.id) ? 'bg-primary/5' : ''}`}>
                               <td className="px-10 py-6">
                                 <input 
                                   type="checkbox" 
@@ -954,7 +954,7 @@ export default function FounderDashboard() {
                                   >
                                     <Trash2 className="w-5 h-5" />
                                   </button>
-                                  <button className="p-4 glass rounded-2xl hover:bg-slate-50 transition-all border-slate-200 text-slate-600 bg-white"><MoreVertical className="w-5 h-5" /></button>
+                                  <button className="p-4 glass rounded-2xl hover:bg-slate-100 transition-all border-slate-200 text-slate-600 bg-white"><MoreVertical className="w-5 h-5" /></button>
                                 </div>
                               </td>
                             </tr>
@@ -973,7 +973,7 @@ export default function FounderDashboard() {
                       <h3 className="text-3xl font-black mb-2 text-slate-900">Logistics Authority</h3>
                       <p className="text-muted-foreground">Order Fulfillment and Status Governance</p>
                     </div>
-                    <button className="glass px-8 py-4 rounded-2xl font-black text-sm hover:bg-slate-50 transition-all border-slate-200 text-slate-900 bg-white">Export Manifest</button>
+                    <button className="glass px-8 py-4 rounded-2xl font-black text-sm hover:bg-slate-100 transition-all border-slate-200 text-slate-900 bg-white">Export Manifest</button>
                   </div>
 
                   <div className="glass rounded-[3rem] overflow-hidden border-slate-200 bg-white shadow-sm">
@@ -989,7 +989,7 @@ export default function FounderDashboard() {
                       </thead>
                       <tbody className="divide-y divide-slate-100">
                         {orders.map((order) => (
-                          <tr key={order.id} className="hover:bg-slate-50/50 transition-all group">
+                          <tr key={order.id} className="hover:bg-slate-100/50 transition-all group">
                             <td className="px-10 py-6">
                               <p className="font-black text-lg text-slate-900">#RM-{order.id.slice(0, 8).toUpperCase()}</p>
                               <p className="text-xs text-muted-foreground font-bold">{new Date(order.created_at).toLocaleString()}</p>
@@ -1020,14 +1020,14 @@ export default function FounderDashboard() {
                                 <div className="flex glass rounded-xl overflow-hidden border-slate-200 bg-white">
                                   <button 
                                     onClick={() => handleStatusUpdate(order.id, 'processing')}
-                                    className={`px-4 py-3 text-[10px] font-black uppercase tracking-widest transition-all ${order.status === 'processing' ? 'bg-blue-500 text-white' : 'hover:bg-slate-50 text-blue-500'}`}
+                                    className={`px-4 py-3 text-[10px] font-black uppercase tracking-widest transition-all ${order.status === 'processing' ? 'bg-blue-500 text-white' : 'hover:bg-slate-100 text-blue-500'}`}
                                     title="Set to Processing"
                                   >
                                     Proc
                                   </button>
                                   <button 
                                     onClick={() => handleStatusUpdate(order.id, 'completed')}
-                                    className={`px-4 py-3 text-[10px] font-black uppercase tracking-widest transition-all ${order.status === 'completed' ? 'bg-green-500 text-white' : 'hover:bg-slate-50 text-green-500'}`}
+                                    className={`px-4 py-3 text-[10px] font-black uppercase tracking-widest transition-all ${order.status === 'completed' ? 'bg-green-500 text-white' : 'hover:bg-slate-100 text-green-500'}`}
                                     title="Set to Completed"
                                   >
                                     Done
@@ -1096,7 +1096,7 @@ export default function FounderDashboard() {
                               });
                               setIsModalOpen(true);
                             }}
-                            className="flex-[2] py-4 glass rounded-2xl font-black text-xs hover:bg-slate-50 transition-all uppercase tracking-widest border-slate-200 text-slate-600 bg-white"
+                            className="flex-[2] py-4 glass rounded-2xl font-black text-xs hover:bg-slate-100 transition-all uppercase tracking-widest border-slate-200 text-slate-600 bg-white"
                           >
                             Adjust Rate
                           </button>
@@ -1152,7 +1152,7 @@ export default function FounderDashboard() {
                       </thead>
                       <tbody className="divide-y divide-slate-100">
                         {promos.map((promo) => (
-                          <tr key={promo.id} className="hover:bg-slate-50/50 transition-all group">
+                          <tr key={promo.id} className="hover:bg-slate-100/50 transition-all group">
                             <td className="px-10 py-6">
                               <div className="flex items-center gap-4">
                                 <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center text-primary font-black">
@@ -1199,7 +1199,7 @@ export default function FounderDashboard() {
                                     });
                                     setIsModalOpen(true);
                                   }}
-                                  className="p-3 glass rounded-xl hover:bg-slate-50 transition-all border-slate-200 text-slate-600 bg-white"
+                                  className="p-3 glass rounded-xl hover:bg-slate-100 transition-all border-slate-200 text-slate-600 bg-white"
                                 >
                                   <Edit className="w-4 h-4" />
                                 </button>
@@ -1349,7 +1349,7 @@ export default function FounderDashboard() {
                           });
                           setIsModalOpen(true); 
                         }}
-                        className="glass px-8 py-4 rounded-2xl font-black text-sm hover:bg-slate-50 transition-all border border-slate-200 text-slate-600 bg-white"
+                        className="glass px-8 py-4 rounded-2xl font-black text-sm hover:bg-slate-100 transition-all border border-slate-200 text-slate-600 bg-white"
                       >
                         Deploy New Visual
                       </button>
@@ -1379,7 +1379,7 @@ export default function FounderDashboard() {
                                   });
                                   setIsModalOpen(true);
                                 }}
-                                className="flex-1 py-4 glass rounded-2xl font-black text-xs hover:bg-slate-50 transition-all uppercase tracking-widest border border-slate-200 text-slate-600 bg-white"
+                                className="flex-1 py-4 glass rounded-2xl font-black text-xs hover:bg-slate-100 transition-all uppercase tracking-widest border border-slate-200 text-slate-600 bg-white"
                               >
                                 Edit Layout
                               </button>
@@ -1427,7 +1427,7 @@ export default function FounderDashboard() {
 
                   <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
                     {events.map((event) => (
-                      <div key={event.id} className="glass p-10 rounded-[3rem] relative group hover:bg-slate-50/50 transition-all border border-slate-200 bg-white shadow-sm">
+                      <div key={event.id} className="glass p-10 rounded-[3rem] relative group hover:bg-slate-100/50 transition-all border border-slate-200 bg-white shadow-sm">
                         <div className="flex items-start justify-between mb-8">
                           <div className="w-20 h-20 rounded-[2rem] bg-gradient-to-br from-primary/10 to-secondary/10 flex flex-col items-center justify-center border border-slate-100">
                             <span className="text-2xl font-black text-primary">{new Date(event.published_at).getDate()}</span>
@@ -1448,7 +1448,7 @@ export default function FounderDashboard() {
                                 });
                                 setIsModalOpen(true);
                               }}
-                              className="p-3 glass rounded-xl hover:bg-slate-50 transition-all border border-slate-200 text-slate-600 bg-white"
+                              className="p-3 glass rounded-xl hover:bg-slate-100 transition-all border border-slate-200 text-slate-600 bg-white"
                             >
                               <Edit className="w-4 h-4" />
                             </button>
@@ -1724,7 +1724,7 @@ export default function FounderDashboard() {
                                 });
                                 setIsModalOpen(true);
                               }}
-                              className="p-3 glass rounded-xl hover:bg-slate-50 transition-all border-slate-200 text-slate-600 bg-white"
+                              className="p-3 glass rounded-xl hover:bg-slate-100 transition-all border-slate-200 text-slate-600 bg-white"
                             >
                               <Edit className="w-4 h-4" />
                             </button>
@@ -1787,7 +1787,7 @@ export default function FounderDashboard() {
                       </thead>
                       <tbody className="divide-y divide-slate-100">
                         {users.map((user) => (
-                          <tr key={user.id} className="hover:bg-slate-50 transition-all group">
+                          <tr key={user.id} className="hover:bg-slate-100 transition-all group">
                             <td className="px-10 py-6">
                               <div className="flex items-center gap-6">
                                 <div className="w-16 h-16 rounded-[1.5rem] bg-gradient-to-br from-primary/20 to-secondary/20 flex items-center justify-center text-primary font-black text-2xl border border-slate-100">
@@ -1829,12 +1829,12 @@ export default function FounderDashboard() {
                                     });
                                     setIsModalOpen(true);
                                   }}
-                                  className="p-4 glass rounded-2xl hover:bg-slate-50 transition-all border-slate-200 text-slate-400 hover:text-primary bg-white" 
+                                  className="p-4 glass rounded-2xl hover:bg-slate-100 transition-all border-slate-200 text-slate-400 hover:text-primary bg-white" 
                                   title="Adjust Permissions"
                                 >
                                   <Shield className="w-5 h-5" />
                                 </button>
-                                <button className="p-4 glass rounded-2xl hover:bg-slate-50 transition-all border-slate-200 text-slate-400 hover:text-amber-500 bg-white" title="View Purchase History"><Eye className="w-5 h-5" /></button>
+                                <button className="p-4 glass rounded-2xl hover:bg-slate-100 transition-all border-slate-200 text-slate-400 hover:text-amber-500 bg-white" title="View Purchase History"><Eye className="w-5 h-5" /></button>
                                 <button 
                                   onClick={() => handleUserStatusUpdate(user.id, user.is_active)}
                                   className={`p-4 glass rounded-2xl transition-all border-slate-200 ${user.is_active ? 'text-amber-500 hover:bg-amber-500' : 'text-green-500 hover:bg-green-500'} hover:text-white bg-white`}
@@ -1913,7 +1913,7 @@ export default function FounderDashboard() {
                               });
                               setIsModalOpen(true);
                             }}
-                            className="flex-1 py-4 glass rounded-2xl font-black text-[10px] hover:bg-slate-50 transition-all uppercase tracking-widest border-slate-200 text-slate-600 bg-white"
+                            className="flex-1 py-4 glass rounded-2xl font-black text-[10px] hover:bg-slate-100 transition-all uppercase tracking-widest border-slate-200 text-slate-600 bg-white"
                           >
                             Adjust Powers
                           </button>
@@ -2082,7 +2082,7 @@ export default function FounderDashboard() {
                 </div>
                 <button 
                   onClick={() => setIsModalOpen(false)}
-                  className="p-4 glass rounded-2xl hover:bg-slate-50 transition-all border-slate-200 text-slate-400 bg-white"
+                  className="p-4 glass rounded-2xl hover:bg-slate-100 transition-all border-slate-200 text-slate-400 bg-white"
                 >
                   <Plus className="w-6 h-6 rotate-45" />
                 </button>
@@ -2550,7 +2550,7 @@ export default function FounderDashboard() {
               <div className="flex gap-4 mt-10">
                 <button 
                   onClick={() => setIsModalOpen(false)}
-                  className="flex-1 py-5 glass rounded-[2rem] font-black uppercase tracking-widest text-xs hover:bg-slate-50 transition-all border-slate-200 text-slate-600 bg-white"
+                  className="flex-1 py-5 glass rounded-[2rem] font-black uppercase tracking-widest text-xs hover:bg-slate-100 transition-all border-slate-200 text-slate-600 bg-white"
                 >
                   Abort Protocol
                 </button>

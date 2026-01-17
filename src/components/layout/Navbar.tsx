@@ -263,29 +263,29 @@ export default function Navbar() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setIsMenuOpen(false)}
-              className="fixed inset-0 bg-black/90 backdrop-blur-xl z-[90] lg:hidden"
+              className="fixed inset-0 bg-white/90 backdrop-blur-xl z-[90] lg:hidden"
             />
             <motion.div
               initial={{ x: '100%' }}
               animate={{ x: 0 }}
               exit={{ x: '100%' }}
               transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-              className="fixed top-0 right-0 bottom-0 w-[80%] max-w-sm glass bg-white/95 z-[100] lg:hidden p-8 flex flex-col gap-8"
+              className="fixed top-0 right-0 bottom-0 w-[80%] max-sm glass bg-white/95 z-[100] lg:hidden p-8 flex flex-col gap-8 shadow-2xl"
             >
               <div className="flex items-center justify-between mb-4">
                 <img src="/assets/logo.jpg" alt="ReadMart" className="h-10 w-auto rounded" />
-                <button onClick={() => setIsMenuOpen(false)} className="p-2 hover:bg-white/5 rounded-full">
-                  <X className="h-6 h-6" />
+                <button onClick={() => setIsMenuOpen(false)} className="p-2 hover:bg-slate-100 rounded-full transition-colors">
+                  <X className="h-6 w-6 text-slate-900" />
                 </button>
               </div>
 
               {/* Mobile Search */}
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                 <input 
                   type="text" 
                   placeholder="Search books..." 
-                  className="w-full pl-10 pr-4 py-4 rounded-2xl bg-white/5 border border-white/10 focus:ring-2 focus:ring-primary text-sm"
+                  className="w-full pl-10 pr-4 py-4 rounded-2xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-primary text-sm text-slate-900 outline-none"
                 />
               </div>
 
@@ -297,12 +297,13 @@ export default function Navbar() {
                       <Link 
                         key={link.name} 
                         to={link.href}
-                        className="flex items-center gap-4 px-6 py-4 rounded-2xl hover:bg-white/5 transition-all group"
+                        onClick={() => setIsMenuOpen(false)}
+                        className="flex items-center gap-4 px-6 py-4 rounded-2xl hover:bg-slate-50 transition-all group"
                       >
                         <span className="p-3 rounded-xl bg-primary/10 text-primary group-hover:scale-110 transition-transform">
                           {link.icon}
                         </span>
-                        <span className="font-bold text-sm">{link.name}</span>
+                        <span className="font-bold text-sm text-slate-700">{link.name}</span>
                       </Link>
                     ))}
                   </div>
@@ -315,7 +316,8 @@ export default function Navbar() {
                       <Link 
                         key={link.name} 
                         to={link.href}
-                        className="px-6 py-4 rounded-2xl hover:bg-white/5 font-bold text-sm transition-all"
+                        onClick={() => setIsMenuOpen(false)}
+                        className="px-6 py-4 rounded-2xl hover:bg-slate-50 font-bold text-sm text-slate-700 transition-all"
                       >
                         {link.name}
                       </Link>
@@ -323,6 +325,7 @@ export default function Navbar() {
                     {dashboardLink && (
                       <Link 
                         to={dashboardLink.href}
+                        onClick={() => setIsMenuOpen(false)}
                         className="flex items-center gap-4 px-6 py-4 rounded-2xl bg-primary/10 text-primary font-black text-sm"
                       >
                         {dashboardLink.icon}
@@ -332,36 +335,39 @@ export default function Navbar() {
                   </div>
                 </div>
 
-                <div className="mt-4 pt-8 border-t border-white/5 space-y-4">
+                <div className="mt-4 pt-8 border-t border-slate-100 space-y-4">
                   <p className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground px-2">Account</p>
                   {user ? (
                     <div className="grid gap-2">
                       <Link 
                         to="/account"
-                        className="flex items-center gap-4 px-6 py-4 rounded-2xl hover:bg-white/5 font-bold text-sm"
+                        onClick={() => setIsMenuOpen(false)}
+                        className="flex items-center gap-4 px-6 py-4 rounded-2xl hover:bg-slate-50 font-bold text-sm text-slate-700"
                       >
                         <User className="w-5 h-5" />
                         My Profile
                       </Link>
                       <button 
-                        onClick={() => logout()}
-                        className="w-full flex items-center gap-4 px-6 py-4 rounded-2xl hover:bg-red-500/10 text-red-500 transition-all text-sm font-bold"
+                        onClick={() => { logout(); setIsMenuOpen(false); }}
+                        className="w-full flex items-center gap-4 px-6 py-4 rounded-2xl hover:bg-red-50 text-red-500 transition-all text-sm font-bold"
                       >
                         <LogOut className="w-5 h-5" />
-                        Sign Out
+                        Logout
                       </button>
                     </div>
                   ) : (
-                    <div className="grid gap-3">
+                    <div className="grid gap-2">
                       <Link 
                         to="/login"
-                        className="w-full py-4 bg-primary text-white rounded-2xl font-black text-center text-sm shadow-lg shadow-primary/20"
+                        onClick={() => setIsMenuOpen(false)}
+                        className="px-6 py-4 rounded-2xl bg-slate-50 font-bold text-sm text-center text-slate-700"
                       >
-                        Sign In
+                        Login
                       </Link>
                       <Link 
-                        to="/register"
-                        className="w-full py-4 glass rounded-2xl font-black text-center text-sm hover:bg-white/5"
+                        to="/signup"
+                        onClick={() => setIsMenuOpen(false)}
+                        className="px-6 py-4 rounded-2xl bg-primary text-white font-black text-sm text-center shadow-lg shadow-primary/20"
                       >
                         Create Account
                       </Link>
