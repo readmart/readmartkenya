@@ -231,17 +231,17 @@ export default function SearchDialog({ isOpen, onClose }: SearchDialogProps) {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onClose}
-            className="absolute inset-0 bg-black/85 backdrop-blur-md"
+            className="absolute inset-0 bg-white/85 backdrop-blur-md"
           />
           
           <motion.div
             initial={{ opacity: 0, scale: 0.95, y: -20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: -20 }}
-            className="relative w-full max-w-2xl glass overflow-hidden rounded-[2.5rem] shadow-2xl border border-white/10"
+            className="relative w-full max-w-2xl bg-white overflow-hidden rounded-[2.5rem] shadow-2xl border border-slate-200"
           >
             {/* Search Input */}
-            <div className="relative p-6 border-b border-white/10">
+            <div className="relative p-6 border-b border-slate-100">
               <Search className="absolute left-10 top-1/2 -translate-y-1/2 w-6 h-6 text-primary" />
               <input
                 ref={inputRef}
@@ -249,13 +249,13 @@ export default function SearchDialog({ isOpen, onClose }: SearchDialogProps) {
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Search products, events, orders..."
-                className="w-full pl-14 pr-14 py-4 bg-white/5 rounded-2xl border-none focus:ring-2 focus:ring-primary/50 text-xl font-medium placeholder:text-muted-foreground outline-none"
+                className="w-full pl-14 pr-14 py-4 bg-slate-50 rounded-2xl border-none focus:ring-2 focus:ring-primary/50 text-xl font-bold placeholder:text-slate-400 text-slate-900 outline-none"
               />
               <button 
                 onClick={onClose}
-                className="absolute right-10 top-1/2 -translate-y-1/2 p-2 hover:bg-white/10 rounded-xl transition-colors"
+                className="absolute right-10 top-1/2 -translate-y-1/2 p-2 hover:bg-slate-100 rounded-xl transition-colors"
               >
-                <X className="w-6 h-6" />
+                <X className="w-6 h-6 text-slate-400" />
               </button>
             </div>
 
@@ -264,7 +264,7 @@ export default function SearchDialog({ isOpen, onClose }: SearchDialogProps) {
               {isLoading ? (
                 <div className="flex flex-col items-center justify-center py-20 gap-4">
                   <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin" />
-                  <p className="text-muted-foreground font-medium">Scanning the library...</p>
+                  <p className="text-slate-500 font-medium">Scanning the library...</p>
                 </div>
               ) : query.length > 0 ? (
                 results.length > 0 ? (
@@ -273,9 +273,9 @@ export default function SearchDialog({ isOpen, onClose }: SearchDialogProps) {
                       <button
                         key={result.id}
                         onClick={() => handleResultClick(result.link, result.title)}
-                        className="w-full flex items-center gap-4 p-4 hover:bg-white/5 rounded-2xl transition-all group text-left"
+                        className="w-full flex items-center gap-4 p-4 hover:bg-slate-50 rounded-2xl transition-all group text-left"
                       >
-                        <div className="w-12 h-12 rounded-xl bg-white/5 flex items-center justify-center text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary transition-colors overflow-hidden">
+                        <div className="w-12 h-12 rounded-xl bg-slate-100 flex items-center justify-center text-slate-400 group-hover:bg-primary/10 group-hover:text-primary transition-colors overflow-hidden">
                           {result.image ? (
                             <img src={result.image} alt="" className="w-full h-full object-cover" />
                           ) : (
@@ -284,7 +284,7 @@ export default function SearchDialog({ isOpen, onClose }: SearchDialogProps) {
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">
-                            <span className="font-bold truncate">{result.title}</span>
+                            <span className="font-bold truncate text-slate-900">{result.title}</span>
                             {result.badge && (
                               <span className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-purple-500/10 text-purple-500 text-[10px] font-black uppercase tracking-wider">
                                 <Shield className="w-3 h-3" />
@@ -292,7 +292,7 @@ export default function SearchDialog({ isOpen, onClose }: SearchDialogProps) {
                               </span>
                             )}
                           </div>
-                          <p className="text-sm text-muted-foreground truncate">{result.subtitle}</p>
+                          <p className="text-sm text-slate-500 truncate">{result.subtitle}</p>
                         </div>
                         <ArrowRight className="w-5 h-5 opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all text-primary" />
                       </button>
@@ -300,11 +300,11 @@ export default function SearchDialog({ isOpen, onClose }: SearchDialogProps) {
                   </div>
                 ) : (
                   <div className="flex flex-col items-center justify-center py-20 text-center">
-                    <div className="p-6 bg-white/5 rounded-full mb-6">
-                      <Search className="w-12 h-12 text-muted-foreground" />
+                    <div className="p-6 bg-slate-50 rounded-full mb-6">
+                      <Search className="w-12 h-12 text-slate-300" />
                     </div>
-                    <h3 className="text-xl font-bold mb-2">No results found</h3>
-                    <p className="text-muted-foreground max-w-xs">We couldn't find anything matching "{query}". Try adjusting your search.</p>
+                    <h3 className="text-xl font-bold mb-2 text-slate-900">No results found</h3>
+                    <p className="text-slate-500 max-w-xs">We couldn't find anything matching "{query}". Try adjusting your search.</p>
                   </div>
                 )
               ) : (
@@ -312,7 +312,7 @@ export default function SearchDialog({ isOpen, onClose }: SearchDialogProps) {
                   {/* Recent Searches */}
                   {recentSearches.length > 0 && (
                     <div className="space-y-4">
-                      <h4 className="flex items-center gap-2 text-sm font-black uppercase tracking-widest text-muted-foreground">
+                      <h4 className="flex items-center gap-2 text-sm font-black uppercase tracking-widest text-slate-400">
                         <History className="w-4 h-4" />
                         Recent Searches
                       </h4>
@@ -321,46 +321,33 @@ export default function SearchDialog({ isOpen, onClose }: SearchDialogProps) {
                           <button
                             key={s}
                             onClick={() => setQuery(s)}
-                            className="w-full flex items-center gap-3 p-3 hover:bg-white/5 rounded-xl transition-all text-left group"
+                            className="w-full flex items-center gap-3 p-3 hover:bg-slate-50 rounded-xl transition-all text-left group"
                           >
-                            <Clock className="w-4 h-4 text-muted-foreground group-hover:text-primary" />
-                            <span className="text-sm font-medium">{s}</span>
+                            <Clock className="w-4 h-4 text-slate-400 group-hover:text-primary" />
+                            <span className="text-sm font-medium text-slate-700">{s}</span>
                           </button>
                         ))}
                       </div>
                     </div>
                   )}
 
-                  {/* Trending Categories */}
+                  {/* Quick Navigation */}
                   <div className="space-y-4">
-                    <h4 className="flex items-center gap-2 text-sm font-black uppercase tracking-widest text-muted-foreground">
+                    <h4 className="flex items-center gap-2 text-sm font-black uppercase tracking-widest text-slate-400">
                       <TrendingUp className="w-4 h-4" />
-                      Trending Categories
-                    </h4>
-                    <div className="flex flex-wrap gap-2">
-                      {TRENDING_CATEGORIES.map((cat) => (
-                        <button
-                          key={cat}
-                          onClick={() => handleResultClick(`/shop?category=${cat}`, cat)}
-                          className="px-4 py-2 bg-white/5 hover:bg-primary/10 hover:text-primary rounded-xl text-sm font-bold transition-all"
-                        >
-                          {cat}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Quick Links */}
-                  <div className="space-y-4">
-                    <h4 className="flex items-center gap-2 text-sm font-black uppercase tracking-widest text-muted-foreground">
-                      <Layout className="w-4 h-4" />
-                      Quick Access
+                      Quick Navigation
                     </h4>
                     <div className="grid grid-cols-2 gap-2">
-                      <Link to="/shop" onClick={onClose} className="p-3 bg-white/5 hover:bg-white/10 rounded-xl text-sm font-bold text-center transition-all">Shop</Link>
-                      <Link to="/events" onClick={onClose} className="p-3 bg-white/5 hover:bg-white/10 rounded-xl text-sm font-bold text-center transition-all">Events</Link>
-                      <Link to="/book-club" onClick={onClose} className="p-3 bg-white/5 hover:bg-white/10 rounded-xl text-sm font-bold text-center transition-all">Book Club</Link>
-                      <Link to="/account" onClick={onClose} className="p-3 bg-white/5 hover:bg-white/10 rounded-xl text-sm font-bold text-center transition-all">Account</Link>
+                      {STATIC_PAGES.slice(0, 6).map((page) => (
+                        <Link
+                          key={page.link}
+                          to={page.link}
+                          onClick={onClose}
+                          className="p-3 rounded-xl bg-slate-50 hover:bg-primary/5 hover:text-primary transition-all text-xs font-bold text-slate-600 border border-slate-100"
+                        >
+                          {page.title}
+                        </Link>
+                      ))}
                     </div>
                   </div>
                 </div>

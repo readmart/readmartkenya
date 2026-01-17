@@ -367,43 +367,43 @@ export default function Shop() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setShowMobileFilters(false)}
-              className="fixed inset-0 bg-black/70 backdrop-blur-md z-50 lg:hidden"
+              className="fixed inset-0 bg-white/70 backdrop-blur-md z-50 lg:hidden"
             />
             <motion.div 
               initial={{ x: '100%' }}
               animate={{ x: 0 }}
               exit={{ x: '100%' }}
-              className="fixed right-0 top-0 bottom-0 w-[300px] glass border-l border-white/10 z-[51] p-8 lg:hidden overflow-y-auto"
+              className="fixed right-0 top-0 bottom-0 w-[300px] bg-white border-l border-slate-200 z-[51] p-8 lg:hidden overflow-y-auto shadow-2xl"
             >
               <div className="flex justify-between items-center mb-8">
-                <h2 className="text-2xl font-black uppercase">Filters</h2>
-                <button onClick={() => setShowMobileFilters(false)} className="p-2 glass rounded-full">
-                  <X className="w-6 h-6" />
+                <h2 className="text-2xl font-black uppercase text-slate-900">Filters</h2>
+                <button onClick={() => setShowMobileFilters(false)} className="p-2 hover:bg-slate-100 rounded-full transition-colors">
+                  <X className="w-6 h-6 text-slate-900" />
                 </button>
               </div>
               
               <div className="space-y-8">
                 {/* Same filter sections as desktop */}
                 <div>
-                  <h3 className="font-black mb-4 uppercase text-xs tracking-widest">Categories</h3>
+                  <h3 className="font-black mb-4 uppercase text-xs tracking-widest text-slate-500">Categories</h3>
                   <div className="space-y-2">
                     {categories.map(cat => (
-                      <label key={cat} className="flex items-center gap-3">
+                      <label key={cat} className="flex items-center gap-3 cursor-pointer group">
                         <input 
                           type="radio" 
                           name="category-mobile"
                           checked={selectedCategory === cat}
                           onChange={() => setSelectedCategory(cat)}
-                          className="w-4 h-4 rounded-full border-white/20 bg-white/10 text-primary" 
+                          className="w-4 h-4 rounded-full border-slate-300 bg-slate-50 text-primary focus:ring-primary/20" 
                         />
-                        <span className={`text-sm ${selectedCategory === cat ? 'text-primary font-bold' : 'text-muted-foreground'}`}>{cat}</span>
+                        <span className={`text-sm transition-colors ${selectedCategory === cat ? 'text-primary font-bold' : 'text-slate-600 group-hover:text-slate-900'}`}>{cat}</span>
                       </label>
                     ))}
                   </div>
                 </div>
 
                 <div>
-                  <h3 className="font-black mb-4 uppercase text-xs tracking-widest">Price Range</h3>
+                  <h3 className="font-black mb-4 uppercase text-xs tracking-widest text-slate-500">Price Range</h3>
                   <div className="px-2">
                     <div className="flex justify-between mb-4 text-sm font-black text-primary">
                       <span>{formatPrice(0)}</span>
@@ -416,9 +416,9 @@ export default function Shop() {
                       step="100"
                       value={priceRange}
                       onChange={(e) => setPriceRange(parseInt(e.target.value))}
-                      className="w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer accent-primary" 
+                      className="w-full h-2 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-primary" 
                     />
-                    <div className="flex justify-between mt-2 text-xs text-muted-foreground font-bold">
+                    <div className="flex justify-between mt-2 text-xs text-slate-400 font-bold">
                       <span>Min</span>
                       <span>{formatPrice(10000)}+</span>
                     </div>
@@ -426,10 +426,10 @@ export default function Shop() {
                 </div>
 
                 <div>
-                  <h3 className="font-black mb-4 uppercase text-xs tracking-widest">Condition</h3>
+                  <h3 className="font-black mb-4 uppercase text-xs tracking-widest text-slate-500">Condition</h3>
                   <div className="space-y-2">
                     {['New', 'Pre-loved'].map(condition => (
-                      <label key={condition} className="flex items-center gap-3">
+                      <label key={condition} className="flex items-center gap-3 cursor-pointer group">
                         <input 
                           type="checkbox" 
                           checked={selectedConditions.includes(condition)}
@@ -440,9 +440,9 @@ export default function Shop() {
                                 : [...prev, condition]
                             );
                           }}
-                          className="w-4 h-4 rounded border-white/20 bg-white/10 text-primary" 
+                          className="w-4 h-4 rounded border-slate-300 bg-slate-50 text-primary focus:ring-primary/20" 
                         />
-                        <span className={`text-sm ${selectedConditions.includes(condition) ? 'text-primary font-bold' : 'text-muted-foreground'}`}>{condition}</span>
+                        <span className={`text-sm transition-colors ${selectedConditions.includes(condition) ? 'text-primary font-bold' : 'text-slate-600 group-hover:text-slate-900'}`}>{condition}</span>
                       </label>
                     ))}
                   </div>
