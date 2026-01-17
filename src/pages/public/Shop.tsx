@@ -57,12 +57,12 @@ export default function Shop() {
   const filteredBooks = useMemo(() => {
     return products
       .filter((book) => {
-        const name = book.name || '';
+        const title = book.title || '';
         const author = book.metadata?.author || 'Unknown';
         const condition = book.metadata?.condition || 'New';
         const format = book.metadata?.format || 'Physical';
         
-        const matchesSearch = name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+        const matchesSearch = title.toLowerCase().includes(searchQuery.toLowerCase()) || 
                               author.toLowerCase().includes(searchQuery.toLowerCase());
         
         const matchesCategory = selectedCategory === 'All' 
@@ -302,12 +302,12 @@ export default function Shop() {
                       >
                         <BookCard 
                           id={book.id}
-                          title={book.name}
+                          title={book.title}
                           author={book.metadata?.author || 'ReadMart Original'}
                           price={book.price}
                           rating={book.metadata?.rating || 5.0}
                           category={book.category?.name || 'General'}
-                          image={book.metadata?.image_url || 'https://images.unsplash.com/photo-1544947950-fa07a98d237f?auto=format&fit=crop&q=80&w=800'}
+                          image={book.image_url || book.metadata?.image_url || 'https://images.unsplash.com/photo-1544947950-fa07a98d237f?auto=format&fit=crop&q=80&w=800'}
                         />
                       </motion.div>
                     ))}

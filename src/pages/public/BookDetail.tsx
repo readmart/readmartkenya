@@ -1,11 +1,12 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useParams, Link } from 'react-router-dom';
-import { ShoppingCart, Heart, Share2, Star, ChevronLeft, Check, Truck, ShieldCheck, RotateCcw, ThumbsUp } from 'lucide-react';
+import { ShoppingCart, Heart, Share2, Star, ChevronLeft, Check, Truck, ShieldCheck, RotateCcw, ThumbsUp, Loader2 } from 'lucide-react';
 import { useCart } from '@/contexts/CartContext';
 import { useWishlist } from '@/contexts/WishlistContext';
 import { useCurrency } from '@/contexts/CurrencyContext';
 import { toast } from 'sonner';
+import { getProductById } from '@/api/products';
 
 const mockReviews = [
   { id: 1, user: 'Sarah M.', rating: 5, date: '2 days ago', comment: 'Absolutely loved this book! The characters are so well-developed and the plot kept me guessing until the very end.', likes: 12 },
@@ -16,54 +17,83 @@ const mockReviews = [
 export default function BookDetail() {
   const { id } = useParams();
   const [activeTab, setActiveTab] = useState('details');
+  const [book, setBook] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const { addToCart } = useCart();
   const { addToWishlist, removeFromWishlist, isInWishlist } = useWishlist();
   const { formatPrice, currency } = useCurrency();
 
-  // Mock book data
-  const book = {
-    id: id || '1',
-    title: 'The Midnight Library',
-    author: 'Matt Haig',
-    price: 24.99,
-    rating: 4.8,
-    reviews: 1250,
-    category: 'Fiction',
-    description: 'Between life and death there is a library, and within that library, the shelves go on forever. Every book provides a chance to try another life you could have lived. To see how things would be if you had made other choices... Would you have done anything differently, if you had the chance to undo your regrets?',
-    image: 'https://images.unsplash.com/photo-1544947950-fa07a98d237f?auto=format&fit=crop&q=80&w=800',
-    stock: 12,
-    pages: 304,
-    publisher: 'Canongate Books',
-    format: 'Hardcover',
-    authorBio: 'Matt Haig is the number one bestselling author of Reasons to Stay Alive, Notes on a Nervous Planet and six highly acclaimed novels for adults, including How to Stop Time and The Humans.',
-  };
-
-  const jsonLd = useMemo(() => ({
-    "@context": "https://schema.org/",
-    "@type": "Book",
-    "name": book.title,
-    "author": {
-      "@type": "Person",
-      "name": book.author
-    },
-    "description": book.description,
-    "image": book.image,
-    "isbn": book.id,
-    "offers": {
-      "@type": "Offer",
-      "price": book.price,
-      "priceCurrency": currency,
-      "availability": book.stock > 0 ? "https://schema.org/InStock" : "https://schema.org/OutOfStock"
-    },
-    "aggregateRating": {
-      "@type": "AggregateRating",
-      "ratingValue": book.rating,
-      "reviewCount": book.reviews
+  useEffect(() => {
+    async function loadBook() {
+      if (!id) return;
+      setIsLoading(true);
+      try {
+        const data = await getProductById(id);
+        setBook(data);
+      } catch (error) {
+        console.error('Failed to load book:', error);
+        toast.error('Book not found');
+      } finally {
+        setIsLoading(false);
+      }
     }
-  }), [book, currency]);
+    loadBook();
+  }, [id]);
+
+  const jsonLd = useMemo(() => {
+    if (!book) return null;
+    return {
+      "@context": "https://schema.org/",
+      "@type": "Book",
+      "name": book.title,
+      "author": {
+        "@type": "Person",
+        "name": book.metadata?.author || 'ReadMart Author'
+      },
+      "description": book.description,
+      "image": book.image_url || book.metadata?.image_url,
+      "isbn": book.id,
+      "offers": {
+        "@type": "Offer",
+        "price": book.price,
+        "priceCurrency": currency,
+        "availability": (book.stock_quantity || 0) > 0 ? "https://schema.org/InStock" : "https://schema.org/OutOfStock"
+      },
+      "aggregateRating": {
+        "@type": "AggregateRating",
+        "ratingValue": book.metadata?.rating || 5,
+        "reviewCount": 0
+      }
+    };
+  }, [book, currency]);
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
+        <Loader2 className="w-12 h-12 text-primary animate-spin" />
+        <p className="text-muted-foreground font-black uppercase tracking-widest text-xs">Loading Book Details...</p>
+      </div>
+    );
+  }
+
+  if (!book) {
+    return (
+      <div className="container mx-auto px-4 py-24 text-center">
+        <h2 className="text-3xl font-black mb-4">Book Not Found</h2>
+        <Link to="/shop" className="text-primary font-bold hover:underline">Back to Shop</Link>
+      </div>
+    );
+  }
 
   const handleAddToCart = () => {
-    addToCart(book);
+    addToCart({
+      id: book.id,
+      title: book.title,
+      author: book.metadata?.author || 'ReadMart Original',
+      price: book.price,
+      image: book.image_url || book.metadata?.image_url,
+      category: book.category?.name || 'General'
+    });
     toast.success(`${book.title} added to cart!`);
   };
 
@@ -72,16 +102,26 @@ export default function BookDetail() {
       removeFromWishlist(book.id);
       toast.info(`${book.title} removed from wishlist`);
     } else {
-      addToWishlist(book);
+      addToWishlist({
+        id: book.id,
+        title: book.title,
+        author: book.metadata?.author || 'ReadMart Original',
+        price: book.price,
+        image: book.image_url || book.metadata?.image_url,
+        category: book.category?.name || 'General',
+        rating: book.metadata?.rating || 5
+      });
       toast.success(`${book.title} added to wishlist!`);
     }
   };
 
   return (
     <div className="container mx-auto px-4 py-8">
-      <script type="application/ld+json">
-        {JSON.stringify(jsonLd)}
-      </script>
+      {jsonLd && (
+        <script type="application/ld+json">
+          {JSON.stringify(jsonLd)}
+        </script>
+      )}
       <Link to="/shop" className="inline-flex items-center gap-2 text-muted-foreground hover:text-primary mb-8 transition-colors font-bold">
         <ChevronLeft className="w-4 h-4" />
         Back to Shop
@@ -95,7 +135,7 @@ export default function BookDetail() {
           className="relative aspect-[3/4] rounded-[2.5rem] overflow-hidden glass shadow-2xl group"
         >
           <img 
-            src={book.image} 
+            src={book.image_url || book.metadata?.image_url} 
             alt={book.title} 
             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" 
             referrerPolicy="no-referrer"
@@ -117,29 +157,31 @@ export default function BookDetail() {
           <div className="space-y-4">
             <div className="flex items-center gap-4">
               <span className="glass px-4 py-1.5 rounded-full text-xs font-black text-primary uppercase tracking-widest border-primary/20">
-                {book.category}
+                {book.category?.name || 'General'}
               </span>
               <div className="flex items-center gap-1.5 text-secondary">
                 <Star className="w-5 h-5 fill-secondary" />
-                <span className="font-black text-lg">{book.rating}</span>
-                <span className="text-muted-foreground text-sm font-medium">({book.reviews} reviews)</span>
+                <span className="font-black text-lg">{book.metadata?.rating || 5.0}</span>
+                <span className="text-muted-foreground text-sm font-medium">(New Arrival)</span>
               </div>
             </div>
             
             <h1 className="text-5xl md:text-6xl font-black tracking-tight leading-tight">{book.title}</h1>
-            <p className="text-2xl text-muted-foreground">by <span className="text-foreground font-black underline decoration-primary/30 underline-offset-4">{book.author}</span></p>
+            <p className="text-2xl text-muted-foreground">by <span className="text-foreground font-black underline decoration-primary/30 underline-offset-4">{book.metadata?.author || 'ReadMart Original'}</span></p>
           </div>
 
           <div className="flex items-end gap-4">
             <span className="text-5xl font-black text-primary">{formatPrice(book.price)}</span>
-            <span className="text-muted-foreground line-through text-xl mb-1.5">{formatPrice(29.99)}</span>
+            {book.sale_price && (
+              <span className="text-muted-foreground line-through text-xl mb-1.5">{formatPrice(book.sale_price)}</span>
+            )}
             <span className="bg-green-500/10 text-green-500 px-4 py-1.5 rounded-xl text-sm font-black mb-1.5 border border-green-500/20">
-              SAVE 20%
+              NEW COLLECTION
             </span>
           </div>
 
           <p className="text-lg text-muted-foreground leading-relaxed font-medium">
-            {book.description}
+            {book.description || 'A premium selection from the ReadMart collection. This book offers profound insights and a captivating reading experience.'}
           </p>
 
           <div className="grid grid-cols-2 gap-6 py-8 border-y border-white/10">
@@ -147,7 +189,7 @@ export default function BookDetail() {
               <div className="p-2.5 glass rounded-xl text-green-500">
                 <Check className="w-5 h-5" />
               </div>
-              <span className="text-sm font-bold">In Stock ({book.stock} copies)</span>
+              <span className="text-sm font-bold">In Stock ({book.stock_quantity || 0} copies)</span>
             </div>
             <div className="flex items-center gap-4">
               <div className="p-2.5 glass rounded-xl text-primary">
@@ -172,10 +214,11 @@ export default function BookDetail() {
           <div className="flex gap-4 pt-4">
             <button 
               onClick={handleAddToCart}
-              className="flex-1 bg-primary text-white h-16 rounded-2xl font-black text-lg hover:shadow-2xl hover:shadow-primary/30 hover:-translate-y-1 transition-all flex items-center justify-center gap-3"
+              disabled={(book.stock_quantity || 0) <= 0}
+              className={`flex-1 ${ (book.stock_quantity || 0) <= 0 ? 'bg-muted cursor-not-allowed' : 'bg-primary hover:shadow-2xl hover:shadow-primary/30 hover:-translate-y-1' } text-white h-16 rounded-2xl font-black text-lg transition-all flex items-center justify-center gap-3`}
             >
               <ShoppingCart className="w-6 h-6" />
-              ADD TO CART
+              {(book.stock_quantity || 0) <= 0 ? 'OUT OF STOCK' : 'ADD TO CART'}
             </button>
             <button className="w-16 h-16 glass rounded-2xl flex items-center justify-center hover:bg-white/10 transition-all">
               <Share2 className="w-6 h-6" />
@@ -202,91 +245,68 @@ export default function BookDetail() {
             </div>
 
             <AnimatePresence mode="wait">
-              <motion.div
-                key={activeTab}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                transition={{ duration: 0.2 }}
-              >
-                {activeTab === 'details' && (
-                  <div className="grid grid-cols-2 gap-y-6 text-sm">
-                    <div className="text-muted-foreground font-bold uppercase tracking-wider">Pages</div>
-                    <div className="font-black text-base">{book.pages} pages</div>
-                    <div className="text-muted-foreground font-bold uppercase tracking-wider">Publisher</div>
-                    <div className="font-black text-base">{book.publisher}</div>
-                    <div className="text-muted-foreground font-bold uppercase tracking-wider">Format</div>
-                    <div className="font-black text-base">{book.format}</div>
+              {activeTab === 'details' && (
+                <motion.div 
+                  key="details"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  className="space-y-4"
+                >
+                  <div className="grid grid-cols-2 gap-y-4 text-sm">
+                    <span className="text-muted-foreground font-bold uppercase tracking-wider">Format</span>
+                    <span className="font-black text-right">{book.metadata?.format || 'Physical'}</span>
+                    <span className="text-muted-foreground font-bold uppercase tracking-wider">Condition</span>
+                    <span className="font-black text-right">{book.metadata?.condition || 'New'}</span>
+                    <span className="text-muted-foreground font-bold uppercase tracking-wider">SKU</span>
+                    <span className="font-black text-right">{book.sku || book.id.slice(0, 8).toUpperCase()}</span>
                   </div>
-                )}
+                </motion.div>
+              )}
 
-                {activeTab === 'reviews' && (
-                  <div className="space-y-6">
-                    <div className="flex items-center justify-between mb-8">
-                      <div>
-                        <h3 className="text-2xl font-black mb-1">Customer Reviews</h3>
-                        <p className="text-sm text-muted-foreground font-medium">Based on {book.reviews} ratings</p>
+              {activeTab === 'reviews' && (
+                <motion.div 
+                  key="reviews"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  className="space-y-6"
+                >
+                  {mockReviews.map((review) => (
+                    <div key={review.id} className="glass p-6 rounded-2xl space-y-3">
+                      <div className="flex justify-between items-center">
+                        <span className="font-black text-primary">{review.user}</span>
+                        <span className="text-xs text-muted-foreground font-bold">{review.date}</span>
                       </div>
-                      <button className="glass px-6 py-3 rounded-xl text-sm font-black hover:bg-primary hover:text-white transition-all">
-                        WRITE A REVIEW
+                      <div className="flex gap-1">
+                        {[...Array(5)].map((_, i) => (
+                          <Star key={i} className={`w-3 h-3 ${i < review.rating ? 'text-secondary fill-secondary' : 'text-muted-foreground'}`} />
+                        ))}
+                      </div>
+                      <p className="text-sm text-muted-foreground leading-relaxed">{review.comment}</p>
+                      <button className="flex items-center gap-2 text-xs font-black text-primary hover:opacity-70 transition-all uppercase tracking-widest">
+                        <ThumbsUp className="w-3 h-3" />
+                        Helpful ({review.likes})
                       </button>
                     </div>
-                    
-                    <div className="space-y-6">
-                      {mockReviews.map((review) => (
-                        <div key={review.id} className="glass p-6 rounded-3xl border-white/5">
-                          <div className="flex justify-between items-start mb-4">
-                            <div className="flex items-center gap-3">
-                              <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center font-black text-primary">
-                                {review.user[0]}
-                              </div>
-                              <div>
-                                <p className="font-black text-sm">{review.user}</p>
-                                <div className="flex items-center gap-1">
-                                  {[...Array(5)].map((_, i) => (
-                                    <Star key={i} className={`w-3 h-3 ${i < review.rating ? 'fill-yellow-500 text-yellow-500' : 'text-white/20'}`} />
-                                  ))}
-                                </div>
-                              </div>
-                            </div>
-                            <span className="text-xs text-muted-foreground font-bold">{review.date}</span>
-                          </div>
-                          <p className="text-muted-foreground font-medium mb-4 italic">"{review.comment}"</p>
-                          <button className="flex items-center gap-2 text-xs font-black text-muted-foreground hover:text-primary transition-colors">
-                            <ThumbsUp className="w-3.5 h-3.5" />
-                            HELPFUL ({review.likes})
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
+                  ))}
+                </motion.div>
+              )}
 
-                {activeTab === 'author' && (
-                  <div className="space-y-6">
-                    <div className="flex items-center gap-6 mb-6">
-                      <div className="w-24 h-24 rounded-3xl overflow-hidden glass p-1">
-                        <img 
-                          src="https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?q=80&w=400" 
-                          alt={book.author}
-                          className="w-full h-full object-cover rounded-2xl"
-                          referrerPolicy="no-referrer"
-                        />
-                      </div>
-                      <div>
-                        <h3 className="text-2xl font-black mb-1">{book.author}</h3>
-                        <p className="text-primary font-black text-sm uppercase tracking-widest">Bestselling Author</p>
-                      </div>
-                    </div>
-                    <p className="text-muted-foreground leading-relaxed font-medium">
-                      {book.authorBio}
-                    </p>
-                    <button className="text-primary font-black flex items-center gap-2 hover:translate-x-1 transition-all">
-                      VIEW ALL BOOKS BY {book.author.toUpperCase()} <ChevronLeft className="w-4 h-4 rotate-180" />
-                    </button>
-                  </div>
-                )}
-              </motion.div>
+              {activeTab === 'author' && (
+                <motion.div 
+                  key="author"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  className="space-y-4"
+                >
+                  <h3 className="text-xl font-black uppercase tracking-tight">{book.metadata?.author || 'ReadMart Original'}</h3>
+                  <p className="text-muted-foreground leading-relaxed font-medium">
+                    A featured contributor to the ReadMart collection, specializing in curated works that inspire and educate our community.
+                  </p>
+                </motion.div>
+              )}
             </AnimatePresence>
           </div>
         </motion.div>

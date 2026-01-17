@@ -5,7 +5,6 @@ import {
   MessageSquare, 
   BookOpen, 
   ArrowRight, 
-  Plus, 
   Calendar, 
   Lightbulb, 
   Star,
@@ -154,17 +153,6 @@ export default function BookClub() {
           {/* Communities Section */}
           {activeTab === 'communities' && (
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-              <motion.div
-                whileHover={{ y: -5 }}
-                className="glass p-8 rounded-[3rem] border-dashed border-2 border-white/10 flex flex-col items-center justify-center text-center group hover:border-primary/50 transition-all cursor-pointer"
-              >
-                <div className="p-6 rounded-full bg-primary/10 text-primary mb-6 group-hover:scale-110 transition-transform">
-                  <Plus className="w-10 h-10" />
-                </div>
-                <h3 className="text-2xl font-black mb-2">Start a Club</h3>
-                <p className="text-muted-foreground text-sm font-medium">Lead your own community of readers</p>
-              </motion.div>
-
               {clubs.map((club) => (
                 <motion.div
                   key={club.id}

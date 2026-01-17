@@ -3,7 +3,8 @@ import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { 
   Truck, CreditCard, CheckCircle, ChevronRight, 
-  MapPin, ShieldCheck, ArrowLeft, Loader2, ShoppingBag 
+  MapPin, ShieldCheck, ArrowLeft, Loader2, ShoppingBag,
+  Lock, Zap, Info, Smartphone, ArrowRight
 } from 'lucide-react';
 import { useCurrency } from '@/contexts/CurrencyContext';
 import { useCart } from '@/contexts/CartContext';
@@ -11,6 +12,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { createOrder } from '@/api/orders';
 import { initiateSTKPush, checkPaymentStatus } from '@/api/payments';
+import { supabase } from '@/lib/supabase/client';
 
 type CheckoutStep = 'shipping' | 'payment' | 'confirmation';
 
@@ -110,30 +112,61 @@ export default function Checkout() {
       } else {
         toast.success('M-Pesa request sent! Please enter your PIN.');
         
-        // 3. Poll for payment status
+        // Use Realtime for instant updates
+        const channel = supabase
+          .channel(`order-status-${order.id}`)
+          .on(
+            'postgres_changes',
+            {
+              event: 'UPDATE',
+              schema: 'public',
+              table: 'orders',
+              filter: `id=eq.${order.id}`
+            },
+            (payload) => {
+              const newStatus = payload.new.status;
+              if (newStatus === 'paid' || newStatus === 'processing') {
+                cleanup();
+                setIsProcessing(false);
+                setStep('confirmation');
+                clearCart();
+                toast.success('Payment received! Order placed successfully.');
+              } else if (newStatus === 'failed') {
+                cleanup();
+                setIsProcessing(false);
+                toast.error('Payment failed. Please try again.');
+              }
+            }
+          )
+          .subscribe();
+
+        // Fallback polling (in case Realtime fails or is not enabled)
         let attempts = 0;
-        const maxAttempts = 20; // 60 seconds (3s * 20)
-        
+        const maxAttempts = 20;
         const pollInterval = setInterval(async () => {
           attempts++;
           const orderStatus = await checkPaymentStatus(order.id);
-          
           if (orderStatus?.status === 'paid' || orderStatus?.status === 'processing') {
-            clearInterval(pollInterval);
+            cleanup();
             setIsProcessing(false);
             setStep('confirmation');
             clearCart();
             toast.success('Payment received! Order placed successfully.');
           } else if (orderStatus?.status === 'failed') {
-            clearInterval(pollInterval);
+            cleanup();
             setIsProcessing(false);
             toast.error('Payment failed. Please try again.');
           } else if (attempts >= maxAttempts) {
-            clearInterval(pollInterval);
+            cleanup();
             setIsProcessing(false);
-            toast.error('Payment timeout. If you paid, please check your order history in a few minutes.');
+            toast.error('Payment timeout. If you paid, please check your order history.');
           }
         }, 3000);
+
+        const cleanup = () => {
+          clearInterval(pollInterval);
+          supabase.removeChannel(channel);
+        };
       }
 
     } catch (error: any) {
@@ -263,58 +296,94 @@ export default function Checkout() {
                 initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: 20 }}
-                className="glass p-8 rounded-3xl space-y-6"
+                className="glass p-8 rounded-3xl space-y-6 relative overflow-hidden"
               >
+                {/* Fast & Secure Header */}
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2 px-3 py-1 bg-green-500/10 text-green-500 rounded-full text-[10px] font-black uppercase tracking-widest border border-green-500/20">
+                    <Lock className="w-3 h-3" />
+                    Secure SSL Encrypted
+                  </div>
+                  <div className="flex items-center gap-2 px-3 py-1 bg-primary/10 text-primary rounded-full text-[10px] font-black uppercase tracking-widest border border-primary/20">
+                    <Zap className="w-3 h-3" />
+                    Fast Processing
+                  </div>
+                </div>
+
                 <div className="flex items-center justify-between">
                   <h2 className="text-2xl font-bold flex items-center gap-2">
                     <CreditCard className="text-primary" />
                     Payment Method
                   </h2>
-                  <button onClick={() => setStep('shipping')} className="text-sm text-primary font-bold flex items-center gap-1">
+                  <button onClick={() => setStep('shipping')} className="text-sm text-primary font-bold flex items-center gap-1 hover:underline">
                     <ArrowLeft className="w-4 h-4" /> Edit Shipping
                   </button>
                 </div>
 
-                <div className="p-6 glass border-2 border-primary rounded-2xl flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 bg-green-500 rounded-xl flex items-center justify-center text-white font-bold text-xl italic">
-                      M
+                <div className="grid gap-4">
+                  <div className="p-6 glass border-2 border-primary rounded-2xl flex items-center justify-between bg-primary/5 transition-all">
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 bg-green-500 rounded-xl flex items-center justify-center text-white font-black text-xl italic shadow-lg shadow-green-500/20">
+                        M
+                      </div>
+                      <div>
+                        <p className="font-bold text-lg">M-Pesa Express</p>
+                        <p className="text-sm text-muted-foreground font-medium">Instant STK Push to your phone</p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="font-bold">M-Pesa STK Push</p>
-                      <p className="text-sm text-muted-foreground">Pay securely via your phone</p>
+                    <div className="w-6 h-6 rounded-full border-4 border-primary bg-primary shadow-[0_0_10px_rgba(var(--primary),0.5)]" />
+                  </div>
+
+                  {/* Trust Badges */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="glass p-3 rounded-xl flex items-center gap-2 border-white/5">
+                      <ShieldCheck className="w-4 h-4 text-primary" />
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Fraud Protected</span>
+                    </div>
+                    <div className="glass p-3 rounded-xl flex items-center gap-2 border-white/5">
+                      <Smartphone className="w-4 h-4 text-primary" />
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Phone Verified</span>
                     </div>
                   </div>
-                  <div className="w-6 h-6 rounded-full border-4 border-primary bg-primary" />
                 </div>
 
-                <div className="glass p-6 rounded-2xl bg-primary/5 border border-primary/20">
-                  <div className="flex items-start gap-3">
-                    <ShieldCheck className="text-primary w-6 h-6 flex-shrink-0" />
-                    <p className="text-sm">
-                      A payment request will be sent to <strong>{formData.phone}</strong>. 
-                      Please enter your M-Pesa PIN on your phone to complete the transaction.
-                    </p>
+                <div className="glass p-6 rounded-2xl bg-white/5 border border-white/10 relative group">
+                  <div className="flex items-start gap-4">
+                    <div className="p-2 rounded-lg bg-primary/10 text-primary">
+                      <Info className="w-5 h-5" />
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-sm font-bold">How it works:</p>
+                      <p className="text-xs text-muted-foreground leading-relaxed">
+                        1. Click "Authorize Payment" below.<br/>
+                        2. Check your phone <strong>{formData.phone}</strong> for a prompt.<br/>
+                        3. Enter your M-Pesa PIN to confirm.
+                      </p>
+                    </div>
                   </div>
                 </div>
 
                 <button 
                   onClick={handlePayment}
                   disabled={isProcessing}
-                  className="w-full bg-primary text-white py-4 rounded-2xl font-bold flex items-center justify-center gap-2 hover:opacity-90 transition-all shadow-lg shadow-primary/20 disabled:opacity-50"
+                  className="w-full bg-primary text-white py-5 rounded-2xl font-black uppercase tracking-[0.2em] text-sm flex items-center justify-center gap-3 hover:scale-[1.02] active:scale-[0.98] transition-all shadow-2xl shadow-primary/30 disabled:opacity-50 disabled:hover:scale-100"
                 >
                   {isProcessing ? (
                     <>
                       <Loader2 className="w-5 h-5 animate-spin" />
-                      Processing M-Pesa...
+                      Waiting for PIN...
                     </>
                   ) : (
                     <>
-                      Pay {formatPrice(total)}
-                      <ShieldCheck className="w-5 h-5" />
+                      Authorize {formatPrice(total)}
+                      <ArrowRight className="w-5 h-5" />
                     </>
                   )}
                 </button>
+                
+                <p className="text-[10px] text-center text-muted-foreground font-medium uppercase tracking-widest flex items-center justify-center gap-2">
+                  <Lock className="w-3 h-3" /> 256-bit Secure Connection
+                </p>
               </motion.div>
             )}
 
