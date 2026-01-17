@@ -13,7 +13,6 @@ import {
   History,
   TrendingUp,
   Shield,
-  Layout,
   FileText,
   Clock
 } from 'lucide-react';
@@ -48,8 +47,6 @@ const STATIC_PAGES = [
   { title: 'Returns & Refunds', link: '/returns', category: 'Legal' },
   { title: 'Shipping Policy', link: '/shipping', category: 'Legal' },
 ];
-
-const TRENDING_CATEGORIES = ['Fiction', 'Business', 'Technology', 'Art', 'Science'];
 
 export default function SearchDialog({ isOpen, onClose }: SearchDialogProps) {
   const [query, setQuery] = useState('');

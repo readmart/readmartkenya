@@ -9,7 +9,7 @@ import {
   Search, Filter, MoreVertical, Edit, Trash2,
   Truck, Tag, Calendar, MessageSquare,
   Handshake, Users2, Settings, RefreshCw, Eye, Power,
-  ChevronDown, CheckCircle2, Upload, X, PenTool, Building2,
+  ChevronDown, Upload, X, PenTool, Building2,
   AlertTriangle
 } from 'lucide-react';
 import { useState, useEffect, useMemo, useRef } from 'react';
