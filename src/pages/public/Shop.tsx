@@ -292,7 +292,7 @@ export default function Shop() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setShowMobileFilters(false)}
-              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 lg:hidden"
+              className="fixed inset-0 bg-black/70 backdrop-blur-md z-50 lg:hidden"
             />
             <motion.div 
               initial={{ x: '100%' }}

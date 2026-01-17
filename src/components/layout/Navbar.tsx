@@ -239,7 +239,7 @@ export default function Navbar() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setIsMenuOpen(false)}
-              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[90] lg:hidden"
+              className="fixed inset-0 bg-black/70 backdrop-blur-md z-[90] lg:hidden"
             />
             <motion.div
               initial={{ x: '100%' }}
