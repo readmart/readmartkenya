@@ -106,7 +106,8 @@ export const calculateOrderCommissions = async (orderId: string) => {
     const ledgerEntries: any[] = [];
 
     for (const item of items) {
-      const amount = Number(item.price) * Number(item.quantity);
+      const price = item.price_at_purchase || item.price || 0;
+      const amount = Number(price) * Number(item.quantity);
       
       // Calculate platform commission (default 10% if not found)
       const commissionRate = platformService?.commission_rate || 10;

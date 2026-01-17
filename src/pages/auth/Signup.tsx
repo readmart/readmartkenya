@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { Mail, Lock, ArrowRight, User, Loader2, Chrome } from 'lucide-react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '@/lib/supabase/client';
+import { createSession } from '@/api/auth';
 import { toast } from 'sonner';
 
 export default function Signup() {
@@ -18,8 +19,15 @@ export default function Signup() {
     e.preventDefault();
     setIsLoading(true);
 
+    if (password.length < 6) {
+      toast.error('Password must be at least 6 characters');
+      setIsLoading(false);
+      return;
+    }
+
     try {
-      const { error } = await supabase.auth.signUp({
+      console.log('Attempting signup for:', email);
+      const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
@@ -32,10 +40,20 @@ export default function Signup() {
 
       if (error) throw error;
 
-      toast.success('Registration successful! Please check your email to verify your account.');
-      navigate(`/login?redirect=${redirect}`);
+      if (data.user) {
+        await createSession(data.user.id, email);
+      }
+
+      if (data.session) {
+        toast.success('Account created and logged in successfully!');
+        navigate(redirect);
+      } else {
+        toast.success('Registration successful! Please check your email to verify your account.');
+        navigate(`/login?redirect=${redirect}`);
+      }
     } catch (error: any) {
-      toast.error(error.message || 'Signup failed');
+      console.error('Signup error:', error);
+      toast.error(error.message || 'Signup failed. Please try again.');
     } finally {
       setIsLoading(false);
     }

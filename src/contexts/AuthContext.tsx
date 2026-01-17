@@ -99,13 +99,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (!data && !error) {
         const { data: { user } } = await supabase.auth.getUser();
         if (user) {
+          // Use upsert to avoid race conditions with the database trigger
           const { data: newProfile, error: createError } = await supabase
             .from('profiles')
-            .insert({
+            .upsert({
               id: userId,
               full_name: user.user_metadata?.full_name || 'New User',
               avatar_url: user.user_metadata?.avatar_url || null,
               role: 'customer'
+            }, {
+              onConflict: 'id'
             })
             .select()
             .single();
