@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Search, 
@@ -15,8 +15,7 @@ import {
   Shield,
   Layout,
   FileText,
-  Clock,
-  ExternalLink
+  Clock
 } from 'lucide-react';
 import { useNavigate, Link } from 'react-router-dom';
 import { supabase } from '@/lib/supabase/client';
@@ -163,7 +162,7 @@ export default function SearchDialog({ isOpen, onClose }: SearchDialogProps) {
               id: o.id,
               type: 'order',
               title: `Order #${o.id.slice(0, 8)}`,
-              subtitle: `Customer: ${o.profiles?.full_name || 'Unknown'}`,
+              subtitle: `Customer: ${Array.isArray(o.profiles) ? o.profiles[0]?.full_name : (o.profiles as any)?.full_name || 'Unknown'}`,
               link: `/founder-dashboard?tab=orders`,
               badge: 'Founder'
             });
