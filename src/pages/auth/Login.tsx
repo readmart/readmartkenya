@@ -40,9 +40,19 @@ export default function Login() {
         provider,
         options: {
           redirectTo: `${window.location.origin}${redirect}`,
+          queryParams: {
+            access_type: 'offline',
+            prompt: 'select_account',
+          },
         },
       });
-      if (error) throw error;
+      if (error) {
+        if (error.message.includes('provider is not enabled')) {
+          toast.error('Google Sign-In is not enabled. Please enable it in your Supabase Dashboard > Authentication > Providers.');
+          return;
+        }
+        throw error;
+      }
     } catch (error: any) {
       toast.error(error.message || `Failed to login with ${provider}`);
     }
