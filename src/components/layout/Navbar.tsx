@@ -4,11 +4,12 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
   ShoppingCart, User, Heart, Search, Menu, X, 
   LayoutDashboard, LogOut, ShoppingBag,
-  BookOpen, Calendar, ChevronDown
+  BookOpen, Calendar, ChevronDown, Command
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCart } from '@/contexts/CartContext';
 import { useWishlist } from '@/contexts/WishlistContext';
+import SearchDialog from '../search/SearchDialog';
 
 export default function Navbar() {
   const { user, profile, logout } = useAuth();
@@ -17,6 +18,7 @@ export default function Navbar() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isExploreOpen, setIsExploreOpen] = useState(false);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
   const location = useLocation();
 
   // Close menus on navigation
@@ -24,7 +26,20 @@ export default function Navbar() {
     setIsMenuOpen(false);
     setIsProfileOpen(false);
     setIsExploreOpen(false);
+    setIsSearchOpen(false);
   }, [location.pathname]);
+
+  // Keyboard shortcut for search
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault();
+        setIsSearchOpen(prev => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   // Close menus on click outside
   useEffect(() => {
@@ -131,16 +146,25 @@ export default function Navbar() {
       </div>
 
       <div className="flex items-center gap-4">
-        <div className="relative hidden sm:block">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <input 
-            type="text" 
-            placeholder="Search books..." 
-            className="pl-10 pr-4 py-2 rounded-full bg-muted/50 border-none focus:ring-2 focus:ring-primary text-sm w-64 transition-all focus:w-80"
-          />
-        </div>
+        <button 
+          onClick={() => setIsSearchOpen(true)}
+          className="hidden sm:flex items-center gap-3 px-4 py-2 rounded-full bg-muted/50 hover:bg-muted transition-all border border-white/5 group min-w-[240px]"
+        >
+          <Search className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
+          <span className="text-sm text-muted-foreground flex-1 text-left">Search books...</span>
+          <div className="flex items-center gap-1 px-1.5 py-0.5 rounded border border-white/10 bg-white/5 text-[10px] font-medium text-muted-foreground">
+            <Command className="w-2.5 h-2.5" />
+            <span>K</span>
+          </div>
+        </button>
 
         <div className="flex items-center gap-2 sm:gap-4">
+          <button 
+            onClick={() => setIsSearchOpen(true)}
+            className="sm:hidden p-2 hover:bg-primary/10 rounded-full transition-colors"
+          >
+            <Search className="h-5 w-5" />
+          </button>
           <Link to="/wishlist" className="p-2 hover:bg-primary/10 rounded-full transition-colors relative group">
             <Heart className="h-5 w-5 group-hover:scale-110 transition-transform" />
             {wishlistCount > 0 && (
@@ -239,7 +263,7 @@ export default function Navbar() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setIsMenuOpen(false)}
-              className="fixed inset-0 bg-black/85 backdrop-blur-md z-[90] lg:hidden"
+              className="fixed inset-0 bg-black/90 backdrop-blur-xl z-[90] lg:hidden"
             />
             <motion.div
               initial={{ x: '100%' }}
@@ -349,6 +373,11 @@ export default function Navbar() {
           </>
         )}
       </AnimatePresence>
+
+      <SearchDialog 
+        isOpen={isSearchOpen} 
+        onClose={() => setIsSearchOpen(false)} 
+      />
     </nav>
   );
 }
