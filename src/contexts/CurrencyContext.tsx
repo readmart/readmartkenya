@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useState, type ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
+import { useSettings } from '@/hooks/useSettings';
 
 type Currency = 'KES' | 'USD' | 'EUR';
 
@@ -7,12 +8,20 @@ interface CurrencyContextType {
   setCurrency: (currency: Currency) => void;
   formatPrice: (amount: number) => string;
   exchangeRate: number; // For simplicity, relative to USD
+  isLoading: boolean;
 }
 
 const CurrencyContext = createContext<CurrencyContextType | undefined>(undefined);
 
 export const CurrencyProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+  const { settings, isLoading: settingsLoading } = useSettings();
   const [currency, setCurrency] = useState<Currency>('KES');
+
+  useEffect(() => {
+    if (settings?.default_currency) {
+      setCurrency(settings.default_currency as Currency);
+    }
+  }, [settings]);
 
   // Mock exchange rates (USD base)
   const rates: Record<Currency, number> = {
@@ -28,6 +37,8 @@ export const CurrencyProvider: React.FC<{ children: ReactNode }> = ({ children }
     return new Intl.NumberFormat('en-KE', {
       style: 'currency',
       currency: currency,
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
     }).format(convertedAmount);
   };
 
@@ -36,7 +47,8 @@ export const CurrencyProvider: React.FC<{ children: ReactNode }> = ({ children }
       currency, 
       setCurrency, 
       formatPrice, 
-      exchangeRate: rates[currency] 
+      exchangeRate: rates[currency],
+      isLoading: settingsLoading
     }}>
       {children}
     </CurrencyContext.Provider>

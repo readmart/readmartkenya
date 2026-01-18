@@ -158,16 +158,27 @@ export const renderOrderConfirmationEmail = (data: any) => {
   const id = order.id.slice(0, 8).toUpperCase();
   const formatPrice = (amount: number) => `KES ${Number(amount).toLocaleString()}`;
   
-  const itemsHtml = items.map((item: any) => `
+  const itemsHtml = items.map((item: any) => {
+    const isEbook = item.product_snapshot?.type === 'ebook' || item.is_ebook;
+    const password = item.ebook_password || (item.ebook_metadata?.password);
+    
+    return `
     <tr>
       <td style="padding: 10px; border-bottom: 1px solid #eee;">
-        ${item.product_snapshot?.title || 'Product'} x ${item.quantity}
+        <div style="font-weight: bold;">${item.product_snapshot?.title || 'Product'} x ${item.quantity}</div>
+        ${isEbook ? `
+          <div style="font-size: 12px; color: #6366f1; margin-top: 4px;">
+            <strong>Digital E-book (PDF)</strong><br/>
+            Access Password: <span style="background: #f3f4f6; padding: 2px 6px; border-radius: 4px; font-family: monospace; font-weight: bold; color: #333;">${password || 'N/A'}</span>
+          </div>
+        ` : ''}
       </td>
-      <td style="padding: 10px; border-bottom: 1px solid #eee; text-align: right;">
+      <td style="padding: 10px; border-bottom: 1px solid #eee; text-align: right; vertical-align: top;">
         ${formatPrice(item.price_at_purchase * item.quantity)}
       </td>
     </tr>
-  `).join('');
+  `;
+  }).join('');
 
   return `
     <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; color: #333;">

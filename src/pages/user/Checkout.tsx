@@ -9,6 +9,7 @@ import {
 import { useCurrency } from '@/contexts/CurrencyContext';
 import { useCart } from '@/contexts/CartContext';
 import { useAuth } from '@/contexts/AuthContext';
+import { useSettings } from '@/hooks/useSettings';
 import { toast } from 'sonner';
 import { createOrder } from '@/api/orders';
 import { initiateSTKPush, checkPaymentStatus } from '@/api/payments';
@@ -21,6 +22,7 @@ export default function Checkout() {
   const { formatPrice } = useCurrency();
   const { cartItems, cartTotal, clearCart } = useCart();
   const { user, loading } = useAuth();
+  const { settings } = useSettings();
   const [isProcessing, setIsProcessing] = useState(false);
   const [orderNumber, setOrderNumber] = useState('');
   const navigate = useNavigate();
@@ -52,8 +54,9 @@ export default function Checkout() {
 
   if (!user) return null;
   
+  const taxRate = settings?.tax_rate || 16;
   const shipping = cartTotal > 5000 ? 0 : 500;
-  const tax = cartTotal * 0.16;
+  const tax = cartTotal * (taxRate / 100);
   const total = cartTotal + shipping + tax;
 
   const handleNext = () => {
@@ -437,7 +440,7 @@ export default function Checkout() {
                 <span className="font-bold">{formatPrice(shipping)}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-muted-foreground">VAT (16%)</span>
+                <span className="text-muted-foreground">VAT ({taxRate}%)</span>
                 <span className="font-bold">{formatPrice(tax)}</span>
               </div>
               <div className="flex justify-between items-end pt-4 border-t border-white/10">

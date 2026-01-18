@@ -1,86 +1,208 @@
 import { supabase } from '@/lib/supabase/client';
 
+/**
+ * Utility to calculate percentage trend between two periods
+ */
+function calculateTrend(current: number, previous: number): string {
+  if (previous === 0) return current > 0 ? '+100%' : '0%';
+  const diff = ((current - previous) / previous) * 100;
+  return `${diff >= 0 ? '+' : ''}${diff.toFixed(1)}%`;
+}
+
 // --- Founder Services ---
 
 /**
  * Fetch global analytics for Founders
+ * Ensures data is fetched properly and securely from the database
  */
 export async function getGlobalAnalytics() {
   try {
-    // Aggregate sales, users, and orders
-    // We try to get 'completed' or 'paid' orders for revenue
-    // Using a more robust query that handles potential enum issues by fetching all and filtering if needed
-    let salesData: any[] = [];
-    const { data: sales, error: salesError } = await supabase
-      .from('orders')
-      .select('total_amount, created_at, status');
-    
-    if (!salesError && sales) {
-      salesData = sales.filter(o => o.status === 'completed' || o.status === 'paid');
+    // 0. Security Check: Verify user role before fetching sensitive data
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) throw new Error('Authentication required');
+
+    const { data: profile, error: roleError } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', session.user.id)
+      .single();
+
+    if (roleError || !profile || (profile.role !== 'founder' && profile.role !== 'admin')) {
+      throw new Error('Unauthorized access: Administrative privileges required');
     }
 
-    const { count: userCount, error: userError } = await supabase
-      .from('profiles')
-      .select('*', { count: 'exact', head: true });
+    const now = new Date();
+    const thirtyDaysAgo = new Date(now.getTime() - (30 * 24 * 60 * 60 * 1000));
+    const sixtyDaysAgo = new Date(now.getTime() - (60 * 24 * 60 * 60 * 1000));
 
-    const { count: orderCount, error: orderError } = await supabase
+    // 1. Fetch orders for the last 60 days to calculate trends
+    // Selecting only required columns for security and performance
+    const { data: orders, error: ordersError } = await supabase
       .from('orders')
-      .select('*', { count: 'exact', head: true });
+      .select('total_amount, created_at, status')
+      .gte('created_at', sixtyDaysAgo.toISOString());
 
-    const { count: productCount, error: productError } = await supabase
+    if (ordersError) {
+      console.error('Database Error (Orders):', ordersError);
+      throw ordersError;
+    }
+
+    // 2. Fetch basic counts and trends for products and users
+    const [
+      profilesCountResult,
+      productsCountResult,
+      recentProductsResult,
+      recentUsersResult
+    ] = await Promise.all([
+      supabase.from('profiles').select('*', { count: 'exact', head: true }),
+      supabase.from('products').select('*', { count: 'exact', head: true }),
+      supabase.from('products').select('created_at').gte('created_at', sixtyDaysAgo.toISOString()),
+      supabase.from('profiles').select('created_at').gte('created_at', sixtyDaysAgo.toISOString())
+    ]);
+
+    // Check for errors in parallel queries
+    if (profilesCountResult.error) throw profilesCountResult.error;
+    if (productsCountResult.error) throw productsCountResult.error;
+    if (recentProductsResult.error) throw recentProductsResult.error;
+    if (recentUsersResult.error) throw recentUsersResult.error;
+
+    const userCount = profilesCountResult.count;
+    const productCount = productsCountResult.count;
+    const productsData = recentProductsResult.data;
+    const usersData = recentUsersResult.data;
+
+    // Product trends
+    const currentProducts = productsData?.filter(p => new Date(p.created_at) >= thirtyDaysAgo).length || 0;
+    const previousProducts = productsData?.filter(p => new Date(p.created_at) < thirtyDaysAgo).length || 0;
+    const productsTrend = calculateTrend(currentProducts, previousProducts);
+
+    // User trends
+    const currentUsers = usersData?.filter(u => new Date(u.created_at) >= thirtyDaysAgo).length || 0;
+    const previousUsers = usersData?.filter(u => new Date(u.created_at) < thirtyDaysAgo).length || 0;
+    const usersTrend = calculateTrend(currentUsers, previousUsers);
+
+    // 3. Process revenue and order trends
+    const currentOrders = orders?.filter(o => new Date(o.created_at) >= thirtyDaysAgo) || [];
+    const previousOrders = orders?.filter(o => new Date(o.created_at) < thirtyDaysAgo) || [];
+
+    // Revenue only from successful transactions
+    const SUCCESS_STATUSES = ['completed', 'paid', 'delivered'];
+    const completedOrders = currentOrders.filter(o => SUCCESS_STATUSES.includes(o.status.toLowerCase()));
+    const currentRevenue = completedOrders.reduce((acc, curr) => acc + Number(curr.total_amount || 0), 0);
+    
+    const previousRevenue = previousOrders
+      .filter(o => SUCCESS_STATUSES.includes(o.status.toLowerCase()))
+      .reduce((acc, curr) => acc + Number(curr.total_amount || 0), 0);
+
+    const revenueTrend = calculateTrend(currentRevenue, previousRevenue);
+    const ordersTrend = calculateTrend(currentOrders.length, previousOrders.length);
+
+    // 4. Detailed Metrics: AOV, Order Status, Low Stock
+    const aov = currentOrders.length > 0 ? currentRevenue / currentOrders.length : 0;
+    
+    const orderStatusCount = currentOrders.reduce((acc: Record<string, number>, curr) => {
+      const status = curr.status || 'unknown';
+      acc[status] = (acc[status] || 0) + 1;
+      return acc;
+    }, {});
+
+    const { data: lowStockProducts, error: lowStockError } = await supabase
       .from('products')
-      .select('*', { count: 'exact', head: true });
+      .select('id, name, stock_quantity')
+      .lt('stock_quantity', 10)
+      .limit(10);
 
-    if (salesError || userError || orderError || productError) {
-      const err = salesError || userError || orderError || productError;
+    if (lowStockError) console.error('Low Stock Fetch Error:', lowStockError);
+
+    // 5. Book Club Stats - properly secured
+    const { count: clubMembersCount, error: clubError } = await supabase
+      .from('book_club_memberships')
+      .select('*', { count: 'exact', head: true })
+      .eq('is_active', true);
+
+    if (clubError) console.error('Club Members Fetch Error:', clubError);
+
+    // 6. Revenue by Category - Optimized processing
+    const { data: categoryRevenueData, error: catRevError } = await supabase
+      .from('order_items')
+      .select('product_snapshot, quantity')
+      .gte('created_at', thirtyDaysAgo.toISOString());
+
+    if (catRevError) console.error('Category Revenue Fetch Error:', catRevError);
+
+    const categoryRevenue: Record<string, number> = {};
+    categoryRevenueData?.forEach(item => {
+      const snapshot = item.product_snapshot as any;
+      const category = snapshot?.category || 'Uncategorized';
+      const revenue = Number(item.quantity || 0) * Number(snapshot?.price || 0);
+      categoryRevenue[category] = (categoryRevenue[category] || 0) + revenue;
+    });
+
+    const categoryStats = Object.entries(categoryRevenue)
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value);
+
+    // 7. Fetch Top Products (most sold) - Enhanced accuracy
+    const productSales: Record<string, { name: string, quantity: number, revenue: number }> = {};
+    categoryRevenueData?.forEach(item => {
+      const snapshot = item.product_snapshot as any;
+      const pid = snapshot?.id;
+      if (!pid) return;
       
-      // If it's a 400 error (Bad Request) or RLS issue (which might manifest as 406 or aborted)
-      if (err?.code === '42P01' || err?.code === 'PGRST116' || err?.code === '400' || err?.code === '406') {
-        console.warn('Analytics tables might not be fully accessible or initialized:', err.message);
-        return {
-          totalRevenue: 0,
-          totalUsers: 0,
-          totalOrders: 0,
-          totalProducts: 0,
-          salesData: [],
-          isInitialized: false
+      if (!productSales[pid]) {
+        productSales[pid] = {
+          name: snapshot?.name || 'Unknown Product', 
+          quantity: 0, 
+          revenue: 0 
         };
       }
-      
-      console.error('Analytics Fetch Failed:', {
-        source: salesError ? 'sales' : userError ? 'users' : orderError ? 'orders' : 'products',
-        message: err?.message,
-        details: err?.details,
-        hint: err?.hint
-      });
-      // Instead of throwing, we return defaults to keep the UI running
-      return {
-        totalRevenue: 0,
-        totalUsers: 0,
-        totalOrders: 0,
-        totalProducts: 0,
-        salesData: [],
-        isInitialized: false
-      };
-    }
+      productSales[pid].quantity += Number(item.quantity || 0);
+      productSales[pid].revenue += Number(item.quantity || 0) * Number(snapshot?.price || 0);
+    });
+
+    const topProducts = Object.values(productSales)
+      .sort((a, b) => b.revenue - a.revenue)
+      .slice(0, 5);
 
     return {
-      totalRevenue: salesData.reduce((acc, curr) => acc + Number(curr.total_amount), 0) || 0,
+      totalRevenue: currentRevenue,
+      totalOrders: currentOrders.length,
       totalUsers: userCount || 0,
-      totalOrders: orderCount || 0,
       totalProducts: productCount || 0,
-      salesData: salesData,
+      revenueTrend,
+      ordersTrend,
+      usersTrend,
+      productsTrend,
+      salesData: currentOrders,
+      topProducts,
+      aov,
+      orderStatusCount,
+      lowStockProducts: lowStockProducts || [],
+      clubMembersCount: clubMembersCount || 0,
+      categoryStats,
       isInitialized: true
     };
   } catch (error: any) {
-    console.warn('Global analytics fetch failed, returning defaults:', error.message);
+    console.error('CRITICAL: Analytics fetch failed:', error.message);
+    // Return empty but structured data on error to prevent UI crash
     return {
       totalRevenue: 0,
-      totalUsers: 0,
       totalOrders: 0,
+      totalUsers: 0,
       totalProducts: 0,
+      revenueTrend: '0%',
+      ordersTrend: '0%',
+      usersTrend: '0%',
+      productsTrend: '0%',
       salesData: [],
-      isInitialized: false
+      topProducts: [],
+      aov: 0,
+      orderStatusCount: {},
+      lowStockProducts: [],
+      clubMembersCount: 0,
+      categoryStats: [],
+      isInitialized: false,
+      error: error.message
     };
   }
 }
@@ -104,7 +226,7 @@ export async function getCategories() {
 export async function getInventory() {
   const { data, error } = await supabase
     .from('products')
-    .select('*')
+    .select('*, ebook_metadata(password, file_path, format)')
     .order('created_at', { ascending: false });
 
   if (error) throw error;
@@ -353,9 +475,14 @@ export async function getSiteSettings() {
       tax_rate: 16,
       default_currency: 'KES',
       site_name: 'READMART',
-      whatsapp_link: 'https://wa.me/254700000000',
+      whatsapp_link: 'https://wa.me/254794129958',
       address: 'Nairobi, Kenya',
-      maintenance_mode: false
+      maintenance_mode: false,
+      instagram_url: 'https://instagram.com/readmartke',
+      facebook_url: 'https://facebook.com/readmartke',
+      twitter_url: 'https://x.com/readmartke',
+      linkedin_url: 'https://linkedin.com/company/readmartke',
+      announcement_text: ''
     };
   }
 }

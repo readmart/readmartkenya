@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import { Facebook, Instagram, Youtube, Linkedin, Send, Phone, Mail, MapPin, MessageCircle } from 'lucide-react';
 import { useSettings } from '@/hooks/useSettings';
-import { SOCIAL_LINKS, CONTACT_INFO } from '@/lib/constants';
+import { CONTACT_INFO } from '@/lib/constants';
 
 // Custom SVG Icons for X (Twitter) and Threads
 const XIcon = ({ className }: { className?: string }) => (
@@ -43,29 +43,23 @@ export default function Footer() {
               Bringing books to homes, cafes, and hearts since 2022. Experience the magic of stories with ReadMart.
             </p>
             <div className="space-y-4">
-              <a href={`tel:${CONTACT_INFO.phone1}`} className="flex items-center gap-3 text-muted-foreground hover:text-primary transition-colors group">
+              <a href={`tel:${settings.contact_phone || CONTACT_INFO.phone1}`} className="flex items-center gap-3 text-muted-foreground hover:text-primary transition-colors group">
                 <div className="p-2 glass rounded-lg group-hover:bg-primary/10 transition-all">
                   <Phone className="w-4 h-4" />
                 </div>
-                <span className="font-medium">{CONTACT_INFO.phone1}</span>
+                <span className="font-medium">{settings.contact_phone || CONTACT_INFO.phone1}</span>
               </a>
-              <a href={`tel:${CONTACT_INFO.phone2}`} className="flex items-center gap-3 text-muted-foreground hover:text-primary transition-colors group">
-                <div className="p-2 glass rounded-lg group-hover:bg-primary/10 transition-all">
-                  <Phone className="w-4 h-4" />
-                </div>
-                <span className="font-medium">{CONTACT_INFO.phone2}</span>
-              </a>
-              <a href={`mailto:${CONTACT_INFO.email}`} className="flex items-center gap-3 text-muted-foreground hover:text-primary transition-colors group">
+              <a href={`mailto:${settings.contact_email || CONTACT_INFO.email}`} className="flex items-center gap-3 text-muted-foreground hover:text-primary transition-colors group">
                 <div className="p-2 glass rounded-lg group-hover:bg-primary/10 transition-all">
                   <Mail className="w-4 h-4" />
                 </div>
-                <span className="font-medium">{CONTACT_INFO.email}</span>
+                <span className="font-medium">{settings.contact_email || CONTACT_INFO.email}</span>
               </a>
               <div className="flex items-center gap-3 text-muted-foreground">
                 <div className="p-2 glass rounded-lg">
                   <MapPin className="w-4 h-4" />
                 </div>
-                <span className="font-medium">{CONTACT_INFO.address}</span>
+                <span className="font-medium">{settings.address || CONTACT_INFO.address}</span>
               </div>
             </div>
           </div>
@@ -123,7 +117,12 @@ export default function Footer() {
             <div className="space-y-4">
               <h3 className="text-sm font-bold uppercase tracking-widest text-muted-foreground">Connect With Us</h3>
               <div className="flex flex-wrap gap-3">
-                {SOCIAL_LINKS.map((link) => {
+                {[
+                  { icon: 'Instagram', href: settings.instagram_url, label: 'Instagram', color: 'hover:bg-[#E1306C]' },
+                  { icon: 'Facebook', href: settings.facebook_url, label: 'Facebook', color: 'hover:bg-[#1877F2]' },
+                  { icon: 'X', href: settings.twitter_url, label: 'X (Twitter)', color: 'hover:bg-[#000000]' },
+                  { icon: 'Linkedin', href: settings.linkedin_url, label: 'LinkedIn', color: 'hover:bg-[#0A66C2]' },
+                ].filter(link => link.href).map((link) => {
                   const Icon = socialIcons[link.icon];
                   return (
                     <a

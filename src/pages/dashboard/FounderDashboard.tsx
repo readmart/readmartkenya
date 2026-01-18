@@ -1,16 +1,16 @@
 import { motion } from 'framer-motion';
 import { 
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
-  AreaChart, Area 
+  AreaChart, Area, PieChart, Pie, Cell 
 } from 'recharts';
 import { 
   Users, ShoppingBag, DollarSign, Package, TrendingUp, 
-  Shield, Image as ImageIcon, Plus, 
+  Shield, Image as ImageIcon, Plus, BookOpen, 
   Search, Filter, MoreVertical, Edit, Trash2,
   Truck, Tag, Calendar, MessageSquare,
   Handshake, Users2, Settings, RefreshCw, Eye, Power,
   ChevronDown, Upload, X, PenTool, Building2,
-  AlertTriangle
+  AlertTriangle, Layers, AlertCircle
 } from 'lucide-react';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useCurrency } from '@/contexts/CurrencyContext';
@@ -44,8 +44,9 @@ import {
   updateProduct,
   bulkUpdateProducts
 } from '@/api/dashboards';
-import { uploadProductImage } from '@/api/storage';
+import { uploadProductImage, uploadSiteAsset, uploadEbookFile } from '@/api/storage';
 import { toast } from 'sonner';
+import type { SiteSettings } from '@/hooks/useSettings';
 
 type DashboardTab = 
   | 'overview' 
@@ -72,7 +73,10 @@ export default function FounderDashboard() {
   const [modalType, setModalType] = useState<string>('');
   const [modalData, setModalData] = useState<any>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [selectedEbookFile, setSelectedEbookFile] = useState<File | null>(null);
+  const ebookInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const logoInputRef = useRef<HTMLInputElement>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [bulkEditForm, setBulkEditForm] = useState({
     stock_quantity: '',
@@ -84,13 +88,15 @@ export default function FounderDashboard() {
   // Form States
    const [productForm, setProductForm] = useState({
      title: '',
-     category: 'Hardcover',
+     category: '',
      price: 0,
      stock_quantity: 0,
      description: '',
      image_url: '',
      sku: '',
-     isbn: ''
+     isbn: '',
+     type: 'physical' as 'physical' | 'ebook',
+     ebook_password: ''
    });
 
    const [promoForm, setPromoForm] = useState<{
@@ -206,7 +212,7 @@ export default function FounderDashboard() {
   const [partnerships, setPartnerships] = useState<any[]>([]);
   const [authorApps, setAuthorApps] = useState<any[]>([]);
   const [team, setTeam] = useState<any[]>([]);
-  const [settings, setSettings] = useState<any>(null);
+  const [settings, setSettings] = useState<SiteSettings | null>(null);
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
   const [analytics, setAnalytics] = useState<any>(null);
   
@@ -224,11 +230,12 @@ export default function FounderDashboard() {
   const { formatPrice } = useCurrency();
 
   useEffect(() => {
+    setSelectedIds([]);
     fetchTabData();
   }, [activeTab]);
 
   const fetchTabData = async () => {
-    setIsLoading(true);
+      setIsLoading(true);
     try {
       switch (activeTab) {
         case 'overview':
@@ -314,13 +321,17 @@ export default function FounderDashboard() {
   const handleDelete = async (table: string, id: string) => {
     if (!confirm('Are you sure you want to delete this record? This action cannot be undone.')) return;
     
+    setIsLoading(true);
     try {
-      await deleteRecord(table, id);
+      const targetTable = (table === 'book_clubs' || table === 'events' || table === 'banners') ? 'cms_content' : table;
+      await deleteRecord(targetTable, id);
       toast.success('Record deleted successfully');
-      fetchTabData(); // Refresh data
-    } catch (error) {
+      fetchTabData();
+    } catch (error: any) {
       console.error('Delete error:', error);
-      toast.error('Failed to delete record');
+      toast.error(error.message || 'Failed to delete record');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -349,6 +360,16 @@ export default function FounderDashboard() {
 
   const handleProductSave = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (Number(productForm.price) < 0) {
+      toast.error('Price cannot be negative');
+      return;
+    }
+    if (Number(productForm.stock_quantity) < 0) {
+      toast.error('Stock quantity cannot be negative');
+      return;
+    }
+
     setIsLoading(true);
     try {
       let imageUrl = productForm.image_url;
@@ -356,7 +377,15 @@ export default function FounderDashboard() {
       // Handle file upload if a file is selected
       if (selectedFile) {
         toast.info('Uploading product image...');
-        imageUrl = await uploadProductImage(selectedFile);
+        try {
+          imageUrl = await uploadProductImage(selectedFile);
+          toast.success('Product image uploaded');
+        } catch (imageError: any) {
+          console.error('Image upload error:', imageError);
+          toast.error(`Image upload failed: ${imageError.message}`);
+          // Fallback to existing image if upload fails
+          imageUrl = productForm.image_url;
+        }
       }
 
       const slug = productForm.title
@@ -371,6 +400,7 @@ export default function FounderDashboard() {
         price: Number(productForm.price),
         stock_quantity: Number(productForm.stock_quantity),
         category_id: productForm.category,
+        type: productForm.type,
         metadata: {
           image_url: imageUrl,
           sku: productForm.sku,
@@ -379,15 +409,78 @@ export default function FounderDashboard() {
         }
       };
 
+      let productId: string;
       if (modalData) {
+        productId = modalData.id;
         await updateProduct(modalData.id, payload);
         toast.success('Product updated successfully');
       } else {
-        await createProduct(payload);
+        const newProduct = await createProduct(payload);
+        productId = newProduct.id;
         toast.success('Product created successfully');
       }
+
+      // Handle E-book specific data
+      if (productForm.type === 'ebook') {
+        let ebookFilePath = modalData?.ebook_metadata?.[0]?.file_path || modalData?.ebook_metadata?.file_path;
+
+        if (selectedEbookFile) {
+          toast.info('Uploading e-book file...');
+          try {
+            ebookFilePath = await uploadEbookFile(selectedEbookFile, productId);
+            toast.success('E-book file uploaded successfully');
+          } catch (uploadError: any) {
+            console.error('E-book upload error:', uploadError);
+            toast.error(`E-book upload failed: ${uploadError.message}`);
+            // Don't throw here, allow the product to be saved even if file fails
+          }
+        }
+
+        if (ebookFilePath || productForm.ebook_password) {
+          const ebookData = {
+            product_id: productId,
+            file_path: ebookFilePath || 'pending_upload',
+            format: 'pdf',
+            password: productForm.ebook_password
+          };
+
+          // Check if metadata exists to update or create
+          const { data: existingMetadata, error: fetchMetadataError } = await supabase
+            .from('ebook_metadata')
+            .select('id')
+            .eq('product_id', productId)
+            .maybeSingle();
+
+          if (fetchMetadataError) {
+            console.error('Error fetching ebook metadata:', fetchMetadataError);
+          }
+
+          if (existingMetadata) {
+            const { error: updateMetadataError } = await supabase
+              .from('ebook_metadata')
+              .update(ebookData)
+              .eq('id', existingMetadata.id);
+            
+            if (updateMetadataError) {
+              console.error('Error updating ebook metadata:', updateMetadataError);
+              toast.error('Failed to update e-book details');
+            }
+          } else {
+            const { error: createMetadataError } = await supabase
+              .from('ebook_metadata')
+              .insert(ebookData);
+
+            if (createMetadataError) {
+              console.error('Error creating ebook metadata:', createMetadataError);
+              toast.error('Failed to create e-book details');
+            }
+          }
+        }
+      }
+
       setIsModalOpen(false);
       setSelectedFile(null);
+      setSelectedEbookFile(null);
       fetchTabData();
     } catch (error: any) {
       toast.error(error.message || 'Failed to save product');
@@ -399,11 +492,16 @@ export default function FounderDashboard() {
   const handleGenericSave = async (table: string, formData: any) => {
     setIsLoading(true);
     try {
+      const isCMS = table === 'book_clubs' || table === 'events' || table === 'banners';
+      const targetTable = isCMS ? 'cms_content' : table;
+      const type = table === 'book_clubs' ? 'book_club' : table === 'events' ? 'event' : table === 'banners' ? 'banner' : null;
+      const dataToSave = isCMS ? { ...formData, type } : formData;
+
       if (modalData) {
-        await updateRecord(table, modalData.id, formData);
+        await updateRecord(targetTable, modalData.id, dataToSave);
         toast.success(`${table} updated successfully`);
       } else {
-        await createRecord(table, formData);
+        await createRecord(targetTable, dataToSave);
         toast.success(`${table} created successfully`);
       }
       setIsModalOpen(false);
@@ -449,7 +547,8 @@ export default function FounderDashboard() {
 
     setIsLoading(true);
     try {
-      await deleteRecords(table, selectedIds);
+      const targetTable = (table === 'book_clubs' || table === 'events' || table === 'banners') ? 'cms_content' : table;
+      await deleteRecords(targetTable, selectedIds);
       toast.success('Items deleted successfully');
       setSelectedIds([]);
       fetchTabData();
@@ -491,32 +590,41 @@ export default function FounderDashboard() {
   };
 
   const handleInquiryStatusUpdate = async (id: string, status: string) => {
+    setIsLoading(true);
     try {
       await updateRecord('contact_messages', id, { status });
       toast.success(`Inquiry status updated to ${status}`);
       fetchTabData();
-    } catch (error) {
-      toast.error('Failed to update inquiry status');
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to update inquiry status');
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const handlePartnershipStatusUpdate = async (id: string, status: string) => {
+    setIsLoading(true);
     try {
       await updateRecord('partnership_applications', id, { status });
       toast.success(`Partnership status updated to ${status}`);
       fetchTabData();
-    } catch (error) {
-      toast.error('Failed to update partnership status');
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to update partnership status');
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const handleAuthorStatusUpdate = async (id: string, status: string) => {
+    setIsLoading(true);
     try {
       await updateRecord('author_applications', id, { status });
       toast.success(`Author application status updated to ${status}`);
       fetchTabData();
-    } catch (error) {
-      toast.error('Failed to update author application status');
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to update author application status');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -530,11 +638,28 @@ export default function FounderDashboard() {
     }
   };
 
+  const handleLogoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const loadingToast = toast.loading('Uploading logo...');
+      const publicUrl = await uploadSiteAsset(file, 'logo');
+      setSettings((prev: SiteSettings | null) => prev ? { ...prev, site_logo: publicUrl } : null);
+      toast.dismiss(loadingToast);
+      toast.success('Logo uploaded successfully');
+    } catch (error) {
+      toast.error('Failed to upload logo');
+    }
+  };
+
   const stats = useMemo(() => [
-    { label: 'Total Revenue', value: formatPrice(analytics?.totalRevenue || 0), icon: <DollarSign className="w-6 h-6" />, trend: '+12.5%' },
-    { label: 'Total Orders', value: analytics?.totalOrders?.toLocaleString() || '0', icon: <ShoppingBag className="w-6 h-6" />, trend: '+8.2%' },
-    { label: 'Total Customers', value: analytics?.totalUsers?.toLocaleString() || '0', icon: <Users className="w-6 h-6" />, trend: '+15.1%' },
-    { label: 'Active Products', value: analytics?.totalProducts?.toLocaleString() || '0', icon: <Package className="w-6 h-6" />, trend: '+2.4%' },
+    { label: 'Total Revenue', value: formatPrice(analytics?.totalRevenue || 0), icon: <DollarSign className="w-6 h-6" />, trend: analytics?.revenueTrend || '0%', color: 'text-emerald-600', bg: 'bg-emerald-50' },
+    { label: 'Total Orders', value: analytics?.totalOrders?.toLocaleString() || '0', icon: <ShoppingBag className="w-6 h-6" />, trend: analytics?.ordersTrend || '0%', color: 'text-blue-600', bg: 'bg-blue-50' },
+    { label: 'Avg Order Value', value: formatPrice(analytics?.aov || 0), icon: <Layers className="w-6 h-6" />, trend: 'Calculated', color: 'text-indigo-600', bg: 'bg-indigo-50' },
+    { label: 'Club Members', value: analytics?.clubMembersCount?.toLocaleString() || '0', icon: <Users2 className="w-6 h-6" />, trend: 'Active', color: 'text-orange-600', bg: 'bg-orange-50' },
+    { label: 'Total Customers', value: analytics?.totalUsers?.toLocaleString() || '0', icon: <Users className="w-6 h-6" />, trend: analytics?.usersTrend || '0%', color: 'text-violet-600', bg: 'bg-violet-50' },
+    { label: 'Active Products', value: analytics?.totalProducts?.toLocaleString() || '0', icon: <Package className="w-6 h-6" />, trend: analytics?.productsTrend || '0%', color: 'text-rose-600', bg: 'bg-rose-50' },
   ], [analytics, formatPrice]);
 
   const salesChartData = useMemo(() => {
@@ -696,41 +821,48 @@ export default function FounderDashboard() {
                     <motion.div 
                       initial={{ opacity: 0, y: -20 }}
                       animate={{ opacity: 1, y: 0 }}
-                      className="glass p-6 rounded-[2rem] border-amber-200 bg-amber-50 flex items-center gap-6"
+                      className={`glass p-6 rounded-[2rem] border-2 flex items-center gap-6 ${
+                        analytics.error ? 'border-rose-200 bg-rose-50' : 'border-amber-200 bg-amber-50'
+                      }`}
                     >
-                      <div className="p-4 bg-amber-100 rounded-2xl">
-                        <AlertTriangle className="w-8 h-8 text-amber-600" />
+                      <div className={`p-4 rounded-2xl ${analytics.error ? 'bg-rose-100' : 'bg-amber-100'}`}>
+                        {analytics.error ? (
+                          <AlertCircle className="w-8 h-8 text-rose-600" />
+                        ) : (
+                          <AlertTriangle className="w-8 h-8 text-amber-600" />
+                        )}
                       </div>
                       <div>
-                        <h4 className="text-xl font-black text-amber-600">Database Initialization Pending</h4>
-                        <p className="text-amber-900/70 font-medium">Some analytics tables (orders, reviews, etc.) haven't been created or populated yet. Statistics will update once data is available.</p>
+                        <h4 className={`text-xl font-black ${analytics.error ? 'text-rose-600' : 'text-amber-600'}`}>
+                          {analytics.error ? 'Security Protocol Alert' : 'Database Synchronization Pending'}
+                        </h4>
+                        <p className={`${analytics.error ? 'text-rose-900/70' : 'text-amber-900/70'} font-medium`}>
+                          {analytics.error || "Some analytics tables haven't been fully synchronized yet. Real-time metrics will activate as data flows through the ecosystem."}
+                        </p>
                       </div>
                     </motion.div>
                   )}
                   {/* Stats Grid */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                  <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6">
                     {stats.map((stat, i) => (
                       <motion.div
                         key={stat.label}
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: i * 0.1 }}
-                        className="glass p-8 rounded-[2.5rem] relative overflow-hidden group border-slate-200 bg-white shadow-sm"
+                        className="glass p-6 rounded-[2rem] relative overflow-hidden group border-slate-200 bg-white shadow-sm"
                       >
-                        <div className="absolute top-0 right-0 p-8 opacity-5 group-hover:opacity-10 transition-opacity text-slate-900">
-                          {stat.icon}
-                        </div>
-                        <div className="flex justify-between items-start mb-6">
-                          <div className="p-4 bg-primary/5 rounded-2xl text-primary">
+                        <div className="flex justify-between items-start mb-4">
+                          <div className={`p-3 rounded-xl ${stat.bg} ${stat.color}`}>
                             {stat.icon}
                           </div>
-                          <span className="text-green-600 text-sm font-black bg-green-50 px-3 py-1 rounded-full flex items-center gap-1">
-                            <TrendingUp className="w-4 h-4" />
-                            {stat.trend}
-                          </span>
                         </div>
-                        <p className="text-muted-foreground font-bold text-sm uppercase tracking-widest mb-1">{stat.label}</p>
-                        <h3 className="text-4xl font-black text-slate-900">{stat.value}</h3>
+                        <p className="text-muted-foreground font-bold text-[10px] uppercase tracking-widest mb-1 truncate">{stat.label}</p>
+                        <h3 className="text-2xl font-black text-slate-900 truncate">{stat.value}</h3>
+                        <p className={`text-[10px] font-bold mt-2 flex items-center gap-1 ${stat.trend.startsWith('+') ? 'text-green-600' : stat.trend === '0%' ? 'text-slate-400' : 'text-blue-600'}`}>
+                          {stat.trend.includes('%') && <TrendingUp className="w-3 h-3" />}
+                          {stat.trend}
+                        </p>
                       </motion.div>
                     ))}
                   </div>
@@ -747,9 +879,6 @@ export default function FounderDashboard() {
                           <h3 className="text-2xl font-black text-slate-900">Financial Intelligence</h3>
                           <p className="text-muted-foreground text-sm">Real-time revenue aggregation and trends</p>
                         </div>
-                        <button className="glass px-6 py-3 rounded-2xl font-black text-xs hover:bg-primary hover:text-white transition-all border-slate-200 bg-white">
-                          Reconcile Payments
-                        </button>
                       </div>
                       <div className="h-[400px] w-full min-h-[400px] relative">
                         <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0} debounce={100}>
@@ -773,31 +902,166 @@ export default function FounderDashboard() {
                       </div>
                     </motion.div>
 
-                    {/* Audit Logs */}
+                    {/* Top Products */}
                     <motion.div 
                       initial={{ opacity: 0, scale: 0.95 }}
                       animate={{ opacity: 1, scale: 1 }}
                       transition={{ delay: 0.1 }}
-                      className="glass p-10 rounded-[3rem] min-h-[500px] border-slate-200 bg-white shadow-sm"
+                      className="glass p-10 rounded-[3rem] min-h-[500px] border-slate-200 bg-white shadow-sm flex flex-col"
                     >
-                      <h3 className="text-2xl font-black mb-8 text-slate-900">Audit Authority</h3>
-                      <div className="space-y-6">
-                        {auditLogs.length > 0 ? (
-                          auditLogs.slice(0, 6).map((log) => (
-                            <div key={log.id} className="flex items-center gap-4 group">
-                          <div className="w-12 h-12 rounded-2xl bg-white flex items-center justify-center text-primary group-hover:bg-primary/20 transition-all shrink-0">
-                                <Shield className="w-5 h-5" />
+                      <h3 className="text-2xl font-black mb-8 text-slate-900">Catalog Performance</h3>
+                      <div className="space-y-6 flex-1 overflow-y-auto pr-2">
+                        {analytics?.topProducts && analytics.topProducts.length > 0 ? (
+                          analytics.topProducts.map((product: any, i: number) => (
+                            <div key={i} className="flex items-center gap-4 group">
+                              <div className="w-12 h-12 rounded-2xl bg-slate-50 flex items-center justify-center text-primary font-black text-xs">
+                                #{i + 1}
                               </div>
                               <div className="flex-1 min-w-0">
-                                <p className="font-black truncate text-slate-900">{log.action}</p>
+                                <p className="font-black truncate text-slate-900">{product.name}</p>
                                 <p className="text-xs text-muted-foreground">
-                                  {new Date(log.created_at).toLocaleTimeString()} by {log.profiles?.full_name || 'System'}
+                                  {product.quantity} sold • {formatPrice(product.revenue)}
                                 </p>
                               </div>
                             </div>
                           ))
                         ) : (
-                          <div className="h-full flex flex-col items-center justify-center text-center opacity-50 py-20">
+                          <div className="h-full flex flex-col items-center justify-center text-center opacity-50">
+                            <Package className="w-12 h-12 mb-4 text-slate-400" />
+                            <p className="font-black uppercase tracking-widest text-slate-400">No Sales Data Yet</p>
+                          </div>
+                        )}
+                      </div>
+                    </motion.div>
+
+                    {/* New Metrics Row */}
+                    <motion.div 
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="lg:col-span-1 glass p-10 rounded-[3rem] border-slate-200 bg-white shadow-sm"
+                    >
+                      <h3 className="text-2xl font-black mb-8 text-slate-900">Order Governance</h3>
+                      <div className="h-[250px]">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <PieChart>
+                            <Pie
+                              data={Object.entries(analytics?.orderStatusCount || {}).map(([name, value]) => ({ name, value }))}
+                              innerRadius={60}
+                              outerRadius={80}
+                              paddingAngle={5}
+                              dataKey="value"
+                            >
+                              {Object.entries(analytics?.orderStatusCount || {}).map((_: any, index: number) => (
+                                <Cell key={`cell-${index}`} fill={['#10b981', '#3b82f6', '#f59e0b', '#ef4444'][index % 4]} />
+                              ))}
+                            </Pie>
+                            <Tooltip />
+                          </PieChart>
+                        </ResponsiveContainer>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4 mt-4">
+                        {Object.entries(analytics?.orderStatusCount || {}).map(([status, count]: [string, any], i: number) => (
+                          <div key={status} className="flex items-center gap-2">
+                            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: ['#10b981', '#3b82f6', '#f59e0b', '#ef4444'][i % 4] }} />
+                            <span className="text-[10px] font-black uppercase text-muted-foreground truncate">{status}: {count}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </motion.div>
+
+                    <motion.div 
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="lg:col-span-1 glass p-10 rounded-[3rem] border-slate-200 bg-white shadow-sm"
+                    >
+                      <h3 className="text-2xl font-black mb-8 text-slate-900">Category Mix</h3>
+                      <div className="h-[250px]">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <PieChart>
+                            <Pie
+                              data={analytics?.categoryStats || []}
+                              innerRadius={60}
+                              outerRadius={80}
+                              paddingAngle={5}
+                              dataKey="value"
+                            >
+                              {(analytics?.categoryStats || []).map((_: any, index: number) => (
+                                <Cell key={`cell-${index}`} fill={['#6366f1', '#8b5cf6', '#d946ef', '#ec4899', '#f43f5e'][index % 5]} />
+                              ))}
+                            </Pie>
+                            <Tooltip />
+                          </PieChart>
+                        </ResponsiveContainer>
+                      </div>
+                      <div className="space-y-2 mt-4 max-h-[100px] overflow-y-auto pr-2">
+                        {(analytics?.categoryStats || []).map((cat: any, i: number) => (
+                          <div key={cat.name} className="flex justify-between items-center">
+                            <div className="flex items-center gap-2">
+                              <div className="w-2 h-2 rounded-full" style={{ backgroundColor: ['#6366f1', '#8b5cf6', '#d946ef', '#ec4899', '#f43f5e'][i % 5] }} />
+                              <span className="text-[10px] font-black uppercase text-muted-foreground truncate">{cat.name}</span>
+                            </div>
+                            <span className="text-[10px] font-black">{formatPrice(cat.value)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </motion.div>
+
+                    <motion.div 
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="lg:col-span-1 glass p-10 rounded-[3rem] border-slate-200 bg-white shadow-sm"
+                    >
+                      <h3 className="text-2xl font-black mb-8 text-slate-900">Stock Protocol</h3>
+                      <div className="space-y-4">
+                        {analytics?.lowStockProducts && analytics.lowStockProducts.length > 0 ? (
+                          analytics.lowStockProducts.map((product: any) => (
+                            <div key={product.id} className="flex items-center justify-between p-3 rounded-2xl bg-red-50 border border-red-100">
+                              <div className="flex items-center gap-3">
+                                <AlertCircle className="w-4 h-4 text-red-500" />
+                                <span className="text-xs font-bold text-slate-900 truncate max-w-[120px]">{product.name}</span>
+                              </div>
+                              <span className="text-[10px] font-black bg-red-500 text-white px-2 py-1 rounded-lg">
+                                {product.stock_quantity} left
+                              </span>
+                            </div>
+                          ))
+                        ) : (
+                          <div className="h-full flex flex-col items-center justify-center text-center opacity-50 py-10">
+                            <Shield className="w-10 h-10 mb-4 text-green-500" />
+                            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Inventory Secured</p>
+                          </div>
+                        )}
+                      </div>
+                    </motion.div>
+
+                    {/* Audit Logs */}
+                    <motion.div 
+                      initial={{ opacity: 0, scale: 0.95 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{ delay: 0.2 }}
+                      className="lg:col-span-3 glass p-10 rounded-[3rem] border-slate-200 bg-white shadow-sm"
+                    >
+                      <div className="flex justify-between items-center mb-8">
+                        <h3 className="text-2xl font-black text-slate-900">Audit Authority</h3>
+                        <button className="text-xs font-black uppercase tracking-widest text-primary hover:underline">View All Logs</button>
+                      </div>
+                      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {auditLogs.length > 0 ? (
+                          auditLogs.slice(0, 6).map((log) => (
+                            <div key={log.id} className="flex items-center gap-4 group p-4 rounded-3xl hover:bg-slate-50 transition-all border border-transparent hover:border-slate-100">
+                              <div className="w-12 h-12 rounded-2xl bg-white flex items-center justify-center text-primary group-hover:bg-primary/20 transition-all shrink-0 shadow-sm border border-slate-100">
+                                <Shield className="w-5 h-5" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="font-black truncate text-slate-900 text-sm">{log.action}</p>
+                                <p className="text-[10px] text-muted-foreground uppercase tracking-widest mt-1">
+                                  {new Date(log.created_at).toLocaleTimeString()} • {log.profiles?.full_name || 'System'}
+                                </p>
+                              </div>
+                            </div>
+                          ))
+                        ) : (
+                          <div className="col-span-3 h-full flex flex-col items-center justify-center text-center opacity-50 py-10">
                             <RefreshCw className="w-12 h-12 mb-4 animate-spin-slow text-slate-400" />
                             <p className="font-black uppercase tracking-widest text-slate-400">Waiting for Activity...</p>
                           </div>
@@ -848,13 +1112,15 @@ export default function FounderDashboard() {
                           setModalData(null);
                           setProductForm({
                             title: '',
-                            category: 'Hardcover',
+                            category: '',
                             price: 0,
                             stock_quantity: 0,
                             description: '',
                             image_url: '',
                             sku: '',
-                            isbn: ''
+                            isbn: '',
+                            type: 'physical',
+                            ebook_password: ''
                           });
                           setIsModalOpen(true); 
                         }}
@@ -902,16 +1168,23 @@ export default function FounderDashboard() {
                             </th>
                             <th className="px-10 py-6">Product Intelligence</th>
                             <th className="px-10 py-6">Category</th>
+                            <th className="px-10 py-6">Format</th>
                             <th className="px-10 py-6">Stock Status</th>
                             <th className="px-10 py-6">Pricing</th>
                             <th className="px-10 py-6 text-right">Operations</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
-                          {inventory.filter(item => 
-                            (item.name || '').toLowerCase().includes(inventorySearch.toLowerCase()) ||
-                            (item.metadata?.sku || '').toLowerCase().includes(inventorySearch.toLowerCase())
-                          ).map(item => (
+                          {inventory.filter(item => {
+                            const searchLower = inventorySearch.toLowerCase();
+                            const categoryName = categories.find(c => c.id === item.category_id)?.name || '';
+                            return (
+                              (item.name || '').toLowerCase().includes(searchLower) ||
+                              (item.metadata?.sku || '').toLowerCase().includes(searchLower) ||
+                              (item.metadata?.isbn || '').toLowerCase().includes(searchLower) ||
+                              categoryName.toLowerCase().includes(searchLower)
+                            );
+                          }).map(item => (
                             <tr key={item.id} className={`hover:bg-slate-100/50 transition-colors group ${selectedIds.includes(item.id) ? 'bg-primary/5' : ''}`}>
                               <td className="px-10 py-6">
                                 <input 
@@ -939,8 +1212,9 @@ export default function FounderDashboard() {
                                   </div>
                                   <div>
                                     <p className="font-black text-lg mb-1 text-slate-900">{item.name}</p>
-                                    <div className="flex gap-4 text-xs font-bold text-muted-foreground">
+                                    <div className="flex flex-wrap gap-4 text-xs font-bold text-muted-foreground">
                                       <span>SKU: {item.metadata?.sku || 'N/A'}</span>
+                                      {item.metadata?.isbn && <span>ISBN: {item.metadata.isbn}</span>}
                                       <span>ID: {item.id.slice(0, 8)}</span>
                                     </div>
                                   </div>
@@ -948,6 +1222,28 @@ export default function FounderDashboard() {
                               </td>
                               <td className="px-10 py-6">
                                 <span className="px-4 py-2 bg-primary/10 rounded-full text-[10px] font-black uppercase tracking-widest text-primary border border-primary/20">{categories.find(c => c.id === item.category_id)?.name || 'General'}</span>
+                              </td>
+                              <td className="px-10 py-6">
+                                <div className="flex items-center gap-2">
+                                  {item.type === 'ebook' ? (
+                                    <div className="flex flex-col gap-1">
+                                      <div className="flex items-center gap-2 px-3 py-1.5 bg-indigo-50 text-indigo-600 rounded-lg border border-indigo-100">
+                                        <BookOpen className="w-3.5 h-3.5" />
+                                        <span className="text-[10px] font-black uppercase tracking-tighter">E-Book</span>
+                                      </div>
+                                      {(item.ebook_metadata?.[0]?.password || item.ebook_metadata?.password) && (
+                                        <div className="flex items-center gap-1 px-2 text-[8px] font-bold text-indigo-400 uppercase">
+                                          <Shield className="w-2.5 h-2.5" /> Protected
+                                        </div>
+                                      )}
+                                    </div>
+                                  ) : (
+                                    <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-50 text-amber-600 rounded-lg border border-amber-100">
+                                      <Package className="w-3.5 h-3.5" />
+                                      <span className="text-[10px] font-black uppercase tracking-tighter">Physical</span>
+                                    </div>
+                                  )}
+                                </div>
                               </td>
                               <td className="px-10 py-6">
                                 <div className="space-y-2">
@@ -979,7 +1275,9 @@ export default function FounderDashboard() {
                                         description: item.description || '',
                                         image_url: item.metadata?.image_url || '',
                                         sku: item.metadata?.sku || '',
-                                        isbn: item.metadata?.isbn || ''
+                                        isbn: item.metadata?.isbn || '',
+                                        type: item.type || 'physical',
+                                        ebook_password: item.ebook_metadata?.[0]?.password || item.ebook_metadata?.password || ''
                                       });
                                       setIsModalOpen(true);
                                     }}
@@ -1423,7 +1721,7 @@ export default function FounderDashboard() {
                                 Edit Layout
                               </button>
                               <button 
-                                onClick={() => handleDelete('cms_content', banner.id)}
+                                onClick={() => handleDelete('banners', banner.id)}
                                 className="p-4 glass rounded-2xl text-red-500 hover:bg-red-500 hover:text-white transition-all border border-slate-200 bg-white"
                               >
                                 <Trash2 className="w-5 h-5" />
@@ -1492,7 +1790,7 @@ export default function FounderDashboard() {
                               <Edit className="w-4 h-4" />
                             </button>
                             <button 
-                              onClick={() => handleDelete('cms_content', event.id)}
+                              onClick={() => handleDelete('events', event.id)}
                               className="p-3 glass rounded-xl text-red-500 hover:bg-red-500 hover:text-white transition-all border border-slate-200 bg-white"
                             >
                               <Trash2 className="w-4 h-4" />
@@ -2005,9 +2303,25 @@ export default function FounderDashboard() {
                       </h4>
                       <div className="space-y-8">
                         <div className="flex items-center gap-8">
-                          <div className="w-32 h-32 glass rounded-[2.5rem] flex items-center justify-center relative group overflow-hidden border-2 border-dashed border-slate-200 bg-white">
-                            <img src={settings?.site_logo || '/assets/logo.jpg'} alt="Site Logo" className="w-20 h-20 object-contain" />
-                            <div className="absolute inset-0 bg-white/60 opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center cursor-pointer backdrop-blur-sm">
+                          <div 
+                            onClick={() => logoInputRef.current?.click()}
+                            className="w-32 h-32 glass rounded-[2.5rem] flex items-center justify-center relative group overflow-hidden border-2 border-dashed border-slate-200 bg-white cursor-pointer"
+                          >
+                            <input 
+                              type="file" 
+                              ref={logoInputRef} 
+                              className="hidden" 
+                              accept="image/*"
+                              onChange={handleLogoChange}
+                            />
+                            {settings?.site_logo ? (
+                              <img src={settings.site_logo} alt="Site Logo" className="w-full h-full object-cover" />
+                            ) : (
+                              <div className="p-4 bg-primary/10 rounded-2xl text-primary">
+                                <ImageIcon className="w-8 h-8" />
+                              </div>
+                            )}
+                            <div className="absolute inset-0 bg-white/60 opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center backdrop-blur-sm">
                               <Plus className="w-8 h-8 text-slate-900" />
                             </div>
                           </div>
@@ -2017,7 +2331,7 @@ export default function FounderDashboard() {
                               <input 
                                 type="text" 
                                 value={settings?.site_name || 'ReadMart'} 
-                                onChange={(e) => setSettings({...settings, site_name: e.target.value})}
+                                onChange={(e) => setSettings(prev => prev ? {...prev, site_name: e.target.value} : null)}
                                 className="w-full bg-white border border-slate-200 rounded-2xl px-6 py-4 font-black outline-none text-slate-900" 
                               />
                             </div>
@@ -2030,7 +2344,7 @@ export default function FounderDashboard() {
                             <input 
                               type="text" 
                               value={settings?.whatsapp_link || ''} 
-                              onChange={(e) => setSettings({...settings, whatsapp_link: e.target.value})}
+                              onChange={(e) => setSettings(prev => prev ? {...prev, whatsapp_link: e.target.value} : null)}
                               className="w-full bg-white border border-slate-200 rounded-2xl px-6 py-4 font-black outline-none text-slate-900" 
                             />
                           </div>
@@ -2038,7 +2352,7 @@ export default function FounderDashboard() {
                             <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Headquarters Address</label>
                             <textarea 
                               value={settings?.address || ''} 
-                              onChange={(e) => setSettings({...settings, address: e.target.value})}
+                              onChange={(e) => setSettings(prev => prev ? {...prev, address: e.target.value} : null)}
                               className="w-full bg-white border border-slate-200 rounded-2xl px-6 py-4 font-black outline-none min-h-[120px] resize-none text-slate-900" 
                             />
                           </div>
@@ -2054,7 +2368,7 @@ export default function FounderDashboard() {
                                 type="text" 
                                 placeholder="https://instagram.com/..."
                                 value={settings?.instagram_url || ''} 
-                                onChange={(e) => setSettings({...settings, instagram_url: e.target.value})}
+                                onChange={(e) => setSettings(prev => prev ? {...prev, instagram_url: e.target.value} : null)}
                                 className="w-full bg-white border border-slate-200 rounded-2xl px-6 py-4 font-black outline-none text-slate-900" 
                               />
                             </div>
@@ -2064,7 +2378,7 @@ export default function FounderDashboard() {
                                 type="text" 
                                 placeholder="https://facebook.com/..."
                                 value={settings?.facebook_url || ''} 
-                                onChange={(e) => setSettings({...settings, facebook_url: e.target.value})}
+                                onChange={(e) => setSettings(prev => prev ? {...prev, facebook_url: e.target.value} : null)}
                                 className="w-full bg-white border border-slate-200 rounded-2xl px-6 py-4 font-black outline-none text-slate-900" 
                               />
                             </div>
@@ -2074,7 +2388,7 @@ export default function FounderDashboard() {
                                 type="text" 
                                 placeholder="https://x.com/..."
                                 value={settings?.twitter_url || ''} 
-                                onChange={(e) => setSettings({...settings, twitter_url: e.target.value})}
+                                onChange={(e) => setSettings(prev => prev ? {...prev, twitter_url: e.target.value} : null)}
                                 className="w-full bg-white border border-slate-200 rounded-2xl px-6 py-4 font-black outline-none text-slate-900" 
                               />
                             </div>
@@ -2084,7 +2398,7 @@ export default function FounderDashboard() {
                                 type="text" 
                                 placeholder="https://linkedin.com/..."
                                 value={settings?.linkedin_url || ''} 
-                                onChange={(e) => setSettings({...settings, linkedin_url: e.target.value})}
+                                onChange={(e) => setSettings(prev => prev ? {...prev, linkedin_url: e.target.value} : null)}
                                 className="w-full bg-white border border-slate-200 rounded-2xl px-6 py-4 font-black outline-none text-slate-900" 
                               />
                             </div>
@@ -2123,7 +2437,7 @@ export default function FounderDashboard() {
                             <input 
                               type="number" 
                               value={settings?.tax_rate || 16} 
-                              onChange={(e) => setSettings({...settings, tax_rate: Number(e.target.value)})}
+                              onChange={(e) => setSettings(prev => prev ? {...prev, tax_rate: Number(e.target.value)} : null)}
                               className="w-full bg-white border border-slate-200 rounded-2xl px-6 py-4 font-black focus:ring-2 focus:ring-primary outline-none text-slate-900" 
                             />
                           </div>
@@ -2131,7 +2445,7 @@ export default function FounderDashboard() {
                             <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Default Currency</label>
                             <select 
                               value={settings?.default_currency || 'KES'}
-                              onChange={(e) => setSettings({...settings, default_currency: e.target.value})}
+                              onChange={(e) => setSettings(prev => prev ? {...prev, default_currency: e.target.value} : null)}
                               className="w-full bg-white border border-slate-200 rounded-2xl px-6 py-4 font-black focus:ring-2 focus:ring-primary outline-none appearance-none text-slate-900"
                             >
                               <option value="KES">KES (Kenya Shilling)</option>
@@ -2144,7 +2458,7 @@ export default function FounderDashboard() {
                           <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Global Announcement Intelligence</label>
                           <textarea 
                             value={settings?.announcement_text || ''} 
-                            onChange={(e) => setSettings({...settings, announcement_text: e.target.value})}
+                            onChange={(e) => setSettings(prev => prev ? {...prev, announcement_text: e.target.value} : null)}
                             className="w-full bg-white border border-slate-200 rounded-2xl px-6 py-4 font-black outline-none min-h-[100px] resize-none text-slate-900" 
                             placeholder="Display a global notification to all users..."
                           />
@@ -2163,7 +2477,7 @@ export default function FounderDashboard() {
                           </div>
                           <button 
                             type="button"
-                            onClick={() => setSettings({...settings, maintenance_mode: !settings?.maintenance_mode})}
+                            onClick={() => setSettings(prev => prev ? {...prev, maintenance_mode: !prev.maintenance_mode} : null)}
                             className={`w-16 h-8 rounded-full relative group transition-all ${settings?.maintenance_mode ? 'bg-red-500' : 'bg-slate-200'}`}
                           >
                             <div className={`absolute top-1 w-6 h-6 bg-white rounded-full transition-all ${settings?.maintenance_mode ? 'right-1' : 'left-1'}`} />
@@ -2255,6 +2569,21 @@ export default function FounderDashboard() {
                     </div>
                     <div className="grid grid-cols-2 gap-6">
                       <div className="space-y-2">
+                        <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Product Type</label>
+                        <div className="relative">
+                          <select 
+                            className="w-full bg-white border border-slate-200 rounded-2xl px-6 py-4 font-black outline-none focus:ring-2 focus:ring-primary appearance-none text-slate-900"
+                            value={productForm.type}
+                            onChange={(e) => setProductForm({...productForm, type: e.target.value as any})}
+                            required
+                          >
+                            <option value="physical">Physical Book</option>
+                            <option value="ebook">E-book (PDF)</option>
+                          </select>
+                          <ChevronDown className="absolute right-6 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+                        </div>
+                      </div>
+                      <div className="space-y-2">
                         <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Category</label>
                         <div className="relative">
                           <select 
@@ -2271,6 +2600,50 @@ export default function FounderDashboard() {
                           <ChevronDown className="absolute right-6 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
                         </div>
                       </div>
+                    </div>
+
+                    {productForm.type === 'ebook' && (
+          <div className="space-y-4 animate-in fade-in slide-in-from-top-2">
+            <div className="space-y-2">
+              <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">E-book Access Password</label>
+              <input 
+                type="text" 
+                required
+                className="w-full bg-primary/5 border border-primary/20 rounded-2xl px-6 py-4 font-black outline-none focus:ring-2 focus:ring-primary text-slate-900" 
+                placeholder="e.g. READMART2026" 
+                value={productForm.ebook_password}
+                onChange={(e) => setProductForm({...productForm, ebook_password: e.target.value})}
+              />
+              <p className="text-[10px] text-muted-foreground italic px-2">This password will be sent to customers in their order confirmation email.</p>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">E-book File (PDF only)</label>
+              <input 
+                type="file" 
+                ref={ebookInputRef}
+                accept=".pdf,application/pdf"
+                className="hidden"
+                onChange={(e) => setSelectedEbookFile(e.target.files?.[0] || null)}
+              />
+              <button 
+                type="button"
+                onClick={() => ebookInputRef.current?.click()}
+                className={`w-full border-2 border-dashed rounded-2xl p-6 transition-all flex flex-col items-center gap-2 ${
+                  selectedEbookFile ? 'border-primary bg-primary/5' : 'border-slate-200 hover:border-primary/50'
+                }`}
+              >
+                <Upload className={`w-6 h-6 ${selectedEbookFile ? 'text-primary' : 'text-muted-foreground'}`} />
+                <span className="font-bold text-sm">
+                  {selectedEbookFile ? selectedEbookFile.name : 'Click to upload PDF'}
+                </span>
+                <span className="text-[10px] text-muted-foreground uppercase tracking-widest">Max 50MB</span>
+              </button>
+            </div>
+          </div>
+        )}
+
+                    <div className="grid grid-cols-2 gap-6">
                       <div className="space-y-2">
                         <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Base Price</label>
                         <input 
@@ -2282,8 +2655,6 @@ export default function FounderDashboard() {
                           onChange={(e) => setProductForm({...productForm, price: Number(e.target.value)})}
                         />
                       </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-6">
                       <div className="space-y-2">
                         <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Stock Quantity</label>
                         <input 
@@ -2295,17 +2666,29 @@ export default function FounderDashboard() {
                           onChange={(e) => setProductForm({...productForm, stock_quantity: Number(e.target.value)})}
                         />
                       </div>
-                      <div className="space-y-2">
-                        <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">SKU / ISBN</label>
-                        <input 
-                          type="text" 
-                          className="w-full bg-white border border-slate-200 rounded-2xl px-6 py-4 font-black outline-none focus:ring-2 focus:ring-primary text-slate-900" 
-                          placeholder="SKU-123" 
-                          value={productForm.sku}
-                          onChange={(e) => setProductForm({...productForm, sku: e.target.value})}
-                        />
-                      </div>
                     </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">SKU</label>
+                          <input 
+                            type="text" 
+                            className="w-full bg-white border border-slate-200 rounded-2xl px-6 py-4 font-black outline-none focus:ring-2 focus:ring-primary text-slate-900" 
+                            placeholder="SKU-123" 
+                            value={productForm.sku}
+                            onChange={(e) => setProductForm({...productForm, sku: e.target.value})}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">ISBN</label>
+                          <input 
+                            type="text" 
+                            className="w-full bg-white border border-slate-200 rounded-2xl px-6 py-4 font-black outline-none focus:ring-2 focus:ring-primary text-slate-900" 
+                            placeholder="978-..." 
+                            value={productForm.isbn}
+                            onChange={(e) => setProductForm({...productForm, isbn: e.target.value})}
+                          />
+                        </div>
+                      </div>
                     <div className="space-y-2">
                       <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Product Imagery</label>
                       <div 
@@ -2556,7 +2939,7 @@ export default function FounderDashboard() {
                  )}
 
                  {modalType === 'banner' && (
-                   <form id="bannerForm" onSubmit={(e) => { e.preventDefault(); handleGenericSave('cms_content', bannerForm); }} className="space-y-6">
+                   <form id="bannerForm" onSubmit={(e) => { e.preventDefault(); handleGenericSave('banners', bannerForm); }} className="space-y-6">
                      <div className="space-y-2">
                        <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Banner Title</label>
                        <input 
@@ -2592,7 +2975,7 @@ export default function FounderDashboard() {
                  )}
 
                  {modalType === 'event' && (
-                  <form id="eventForm" onSubmit={(e) => { e.preventDefault(); handleGenericSave('cms_content', { ...eventForm, type: 'event', is_active: true }); }} className="space-y-6">
+                  <form id="eventForm" onSubmit={(e) => { e.preventDefault(); handleGenericSave('events', { ...eventForm, is_active: true }); }} className="space-y-6">
                     <div className="space-y-2">
                       <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Event Designation</label>
                       <input 
@@ -2726,10 +3109,16 @@ export default function FounderDashboard() {
                 </button>
                 <button 
                   type="submit"
-                  form={`${modalType.includes('-') ? modalType.split('-')[0] + modalType.split('-')[1].charAt(0).toUpperCase() + modalType.split('-')[1].slice(1) : modalType}Form`}
-                  className="flex-[2] py-5 bg-primary text-white rounded-[2rem] font-black uppercase tracking-widest text-xs shadow-xl shadow-primary/20 hover:scale-[1.02] transition-all"
+                  form={`${modalType === 'author-apps' ? 'authorApp' : modalType.includes('-') ? modalType.split('-')[0] + modalType.split('-')[1].charAt(0).toUpperCase() + modalType.split('-')[1].slice(1) : modalType}Form`}
+                  className="flex-[2] py-5 bg-primary text-white rounded-[2rem] font-black uppercase tracking-widest text-xs shadow-xl shadow-primary/20 hover:scale-[1.02] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  disabled={isLoading}
                 >
-                  {isLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : `Commit ${modalType.replace('-', ' ')}`}
+                  {isLoading ? (
+                    <div className="flex items-center justify-center gap-2">
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      <span>Processing...</span>
+                    </div>
+                  ) : `Commit ${modalType.replace('-', ' ')}`}
                 </button>
               </div>
             </motion.div>

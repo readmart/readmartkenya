@@ -25,7 +25,7 @@ export async function getProducts(options: {
   }
 
   if (options.search) {
-    query = query.ilike('title', `%${options.search}%`);
+    query = query.or(`name.ilike.%${options.search}%,title.ilike.%${options.search}%`);
   }
 
   if (options.minPrice !== undefined) {

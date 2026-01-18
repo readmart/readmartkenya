@@ -2,7 +2,7 @@ import { motion } from 'framer-motion';
 import { useState, useEffect, useMemo } from 'react';
 import { 
   BookOpen, DollarSign, TrendingUp,
-  Award, MessageSquare, Plus, Loader2
+  Award, MessageSquare, Plus, Loader2, Shield
 } from 'lucide-react';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
@@ -161,7 +161,20 @@ export default function AuthorDashboard() {
                       <img src={book.image_url} alt={book.title} className="w-12 h-16 rounded-lg bg-white/10 object-cover" />
                       <div>
                         <p className="font-bold">{book.title}</p>
-                        <p className="text-sm text-muted-foreground">Status: <span className="text-green-500 font-medium">Published</span></p>
+                        <div className="flex items-center gap-2 mt-1">
+                          <p className="text-sm text-muted-foreground">Status: <span className="text-green-500 font-medium">Published</span></p>
+                          <span className="text-[10px] px-2 py-0.5 rounded-md bg-primary/10 text-primary font-bold uppercase tracking-wider flex items-center gap-1">
+                             {book.type === 'ebook' ? (
+                               <>
+                                 <BookOpen className="w-3 h-3" />
+                                 E-Book
+                                 {(book.ebook_metadata?.[0]?.password || book.ebook_metadata?.password) && (
+                                   <Shield className="w-2.5 h-2.5 text-primary/60" title="Password Protected" />
+                                 )}
+                               </>
+                             ) : 'Physical'}
+                           </span>
+                        </div>
                       </div>
                     </div>
                     <div className="text-right">

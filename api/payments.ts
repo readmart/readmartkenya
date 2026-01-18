@@ -40,14 +40,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
 
       const webhookData = extractK2WebhookData(payload);
-      const { transactionId, isSuccess, amount, phone, eventType, senderName } = webhookData;
+      const { transactionId, isSuccess, amount, phone, eventType, senderName, status } = webhookData;
       const orderId = webhookData.orderId || queryOrderId;
       
+      console.log(`Processing webhook: Event=${eventType}, OrderId=${orderId}, Success=${isSuccess}, Status=${status}`);
+      
       if (orderId) {
-        if ([K2_EVENT_TYPES.STK_PUSH_SUCCESS, K2_EVENT_TYPES.BUYGOODS_RECEIVED, K2_EVENT_TYPES.PAYBILL_RECEIVED].includes(eventType)) {
-          const finalStatus = isSuccess ? 'paid' : 'failed';
+        // Handle STK Push results (incoming_payment) and other transaction events
+        const isTransactionEvent = [
+          K2_EVENT_TYPES.STK_PUSH_SUCCESS, 
+          K2_EVENT_TYPES.BUYGOODS_RECEIVED, 
+          K2_EVENT_TYPES.PAYBILL_RECEIVED,
+          'incoming_payment' // K2 often uses this for STK Push
+        ].includes(eventType) || eventType?.includes('payment');
+
+        if (isTransactionEvent) {
+          const finalStatus = (isSuccess || status === 'Success' || status === 'Completed') ? 'paid' : 'failed';
           
-          // Update order
+          console.log(`Updating order ${orderId} status to ${finalStatus}`);
           const updatePayload: any = { 
             status: finalStatus,
             payment_metadata: payload 
@@ -94,11 +104,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
               // Email
               try {
-                const { data: items } = await supabase.from('order_items').select('*').eq('order_id', order.id);
-                // We'd need the user's email here. Assuming it's in the order's shipping_address or we fetch from profile.
+                // Fetch items with product type and ebook metadata
+                const { data: items } = await supabase
+                  .from('order_items')
+                  .select(`
+                    *,
+                    product:products(
+                      type,
+                      ebook_metadata(password)
+                    )
+                  `)
+                  .eq('order_id', order.id);
+
                 const email = order.shipping_address?.email;
                 if (email) {
-                  const html = renderOrderConfirmationEmail({ order, items: items || [] });
+                  const processedItems = (items as any[])?.map(item => ({
+                    ...item,
+                    is_ebook: item.product?.type === 'ebook',
+                    ebook_password: item.product?.ebook_metadata?.[0]?.password || item.product?.ebook_metadata?.password
+                  }));
+
+                  const html = renderOrderConfirmationEmail({ order, items: processedItems || [] });
                   await sendEmail({
                     to: email,
                     subject: `Order Confirmed - #${order.id.slice(0, 8).toUpperCase()}`,

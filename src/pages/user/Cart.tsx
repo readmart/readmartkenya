@@ -3,13 +3,16 @@ import { Trash2, Plus, Minus, ArrowRight, ShoppingBag } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useCart } from '@/contexts/CartContext';
 import { useCurrency } from '@/contexts/CurrencyContext';
+import { useSettings } from '@/hooks/useSettings';
 
 export default function Cart() {
   const { cartItems, updateQuantity, removeFromCart, cartTotal } = useCart();
   const { formatPrice } = useCurrency();
+  const { settings } = useSettings();
 
+  const taxRate = settings?.tax_rate || 16;
   const shipping = cartTotal > 5000 ? 0 : 500; // Example: free shipping over 5000 KES
-  const tax = cartTotal * 0.16; // 16% VAT for Kenya
+  const tax = cartTotal * (taxRate / 100);
   const total = cartTotal + shipping + tax;
 
   if (cartItems.length === 0) {

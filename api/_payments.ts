@@ -173,12 +173,15 @@ export const getK2TransactionStatus = async (transactionId: string) => {
 };
 
 export const verifyK2Signature = (payload: unknown, signature: string) => {
-  const secret = process.env.KOPOKOPO_SECRET || process.env.KOPOKOPO_CLIENT_SECRET;
-  if (!secret) return true; // Skip in dev if not set
+  const apiKey = process.env.KOPOKOPO_API_KEY;
+  if (!apiKey) {
+    console.warn('KOPOKOPO_API_KEY is not set. Skipping signature verification.');
+    return true; 
+  }
   if (!signature) return false;
 
   const bodyString = typeof payload === 'string' ? payload : JSON.stringify(payload);
-  const hash = crypto.createHmac('sha256', secret).update(bodyString).digest('hex');
+  const hash = crypto.createHmac('sha256', apiKey).update(bodyString).digest('hex');
 
   return hash === signature;
 };

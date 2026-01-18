@@ -12,6 +12,11 @@ export interface SiteSettings {
   tax_rate?: number;
   default_currency?: string;
   maintenance_mode?: boolean;
+  instagram_url?: string;
+  facebook_url?: string;
+  twitter_url?: string;
+  linkedin_url?: string;
+  announcement_text?: string;
 }
 
 const defaultSettings: SiteSettings = {
@@ -25,6 +30,11 @@ const defaultSettings: SiteSettings = {
   tax_rate: 16,
   default_currency: 'KES',
   maintenance_mode: false,
+  instagram_url: 'https://instagram.com/readmartke',
+  facebook_url: 'https://facebook.com/readmartke',
+  twitter_url: 'https://x.com/readmartke',
+  linkedin_url: 'https://linkedin.com/company/readmartke',
+  announcement_text: '',
 };
 
 export function useSettings() {

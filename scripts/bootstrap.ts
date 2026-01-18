@@ -91,6 +91,33 @@ async function bootstrap() {
       console.log('✅ Founder profile is already correctly configured.');
     }
 
+    // 3. Ensure Storage Buckets exist
+    console.log('📦 Checking storage buckets...');
+    const bucketsToCreate = ['products'];
+
+    for (const bucketName of bucketsToCreate) {
+      const { data: bucket, error: bucketError } = await supabase.storage.getBucket(bucketName);
+
+      if (bucketError && bucketError.message.includes('not found')) {
+        console.log(`Creating ${bucketName} bucket...`);
+        const { error: createError } = await supabase.storage.createBucket(bucketName, {
+          public: true,
+          allowedMimeTypes: ['image/png', 'image/jpeg', 'image/webp', 'image/gif'],
+          fileSizeLimit: 5242880 // 5MB
+        });
+
+        if (createError) {
+          console.error(`❌ Failed to create ${bucketName} bucket:`, createError.message);
+        } else {
+          console.log(`✅ ${bucketName} bucket created successfully.`);
+        }
+      } else if (bucketError) {
+        console.error(`❌ Error checking ${bucketName} bucket:`, bucketError.message);
+      } else {
+        console.log(`✅ ${bucketName} bucket already exists.`);
+      }
+    }
+
     console.log('✨ Bootstrap completed successfully!');
   } catch (error) {
     console.error('❌ Bootstrap failed:', error);
