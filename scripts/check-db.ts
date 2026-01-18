@@ -32,6 +32,7 @@ const tables = [
   'contact_messages',
   'notification_logs',
   'fulfillment_ledger',
+  'partnership_agreements',
   'settings'
 ];
 

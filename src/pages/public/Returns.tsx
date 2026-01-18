@@ -1,24 +1,24 @@
 import { motion } from 'framer-motion';
-import { RefreshCcw, ShieldCheck, Clock, FileText, HelpCircle } from 'lucide-react';
+import { RefreshCcw, ShieldCheck, Clock, HelpCircle } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 export default function Returns() {
-  const returnSteps = [
+  const features = [
     {
-      icon: <FileText className="w-6 h-6" />,
-      title: "Check Eligibility",
-      description: "Ensure the item is in its original condition and within the 30-day return window."
+      icon: <Clock className="w-6 h-6" />,
+      title: "14-Day Returns",
+      description: "Return any book within 14 days of delivery."
     },
     {
       icon: <RefreshCcw className="w-6 h-6" />,
-      title: "Start Request",
-      description: "Log in to your account and select the order you wish to return to generate a label."
+      title: "Free Return Shipping",
+      description: "We provide prepaid return labels for hassle-free returns."
     },
     {
       icon: <ShieldCheck className="w-6 h-6" />,
-      title: "Pack & Ship",
-      description: "Pack the item securely and drop it off at any of our partner collection points."
-    }
+      title: "Quick Refunds",
+      description: "Refunds processed within 5–7 business days."
+    },
   ];
 
   return (
@@ -31,18 +31,18 @@ export default function Returns() {
         >
           <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 text-primary text-sm font-black uppercase tracking-widest mb-6">
             <RefreshCcw className="w-4 h-4" />
-            Returns & Refunds
+            Returns & Exchanges
           </div>
-          <h1 className="text-4xl md:text-6xl font-black mb-6">Easy Returns Policy</h1>
+          <h1 className="text-4xl md:text-6xl font-black mb-6">Easy, hassle-free returns</h1>
           <p className="text-xl text-muted-foreground max-w-2xl mx-auto font-medium">
-            Not quite what you expected? No worries. Our hassle-free return policy ensures you can shop with absolute confidence.
+            Your satisfaction is our priority. Shop with confidence knowing returns are simple and fast.
           </p>
         </motion.div>
 
         <div className="grid md:grid-cols-3 gap-8 mb-20">
-          {returnSteps.map((step, i) => (
+          {features.map((feature, i) => (
             <motion.div
-              key={step.title}
+              key={feature.title}
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: i * 0.1 }}
@@ -52,11 +52,11 @@ export default function Returns() {
                 <span className="absolute -top-2 -right-2 w-8 h-8 bg-primary text-white rounded-full flex items-center justify-center font-black text-sm">
                   {i + 1}
                 </span>
-                {step.icon}
+                {feature.icon}
               </div>
-              <h3 className="text-xl font-bold mb-3">{step.title}</h3>
+              <h3 className="text-xl font-bold mb-3">{feature.title}</h3>
               <p className="text-muted-foreground text-sm leading-relaxed">
-                {step.description}
+                {feature.description}
               </p>
             </motion.div>
           ))}
@@ -74,10 +74,13 @@ export default function Returns() {
                   <Clock className="w-6 h-6 text-primary" />
                 </div>
                 <div>
-                  <h4 className="font-bold mb-1">30-Day Return Window</h4>
-                  <p className="text-muted-foreground text-sm">
-                    Items must be returned within 30 days of delivery for a full refund or exchange.
-                  </p>
+                  <h4 className="font-bold mb-1">1. Eligibility</h4>
+                  <ul className="text-muted-foreground text-sm list-disc pl-5 space-y-2">
+                    <li>Books must be in original condition (unread, unmarked).</li>
+                    <li>Returns must be initiated within 14 days of delivery.</li>
+                    <li>Original packaging is preferred but not required.</li>
+                    <li>Gift receipts are accepted for store credit.</li>
+                  </ul>
                 </div>
               </div>
 
@@ -86,10 +89,13 @@ export default function Returns() {
                   <ShieldCheck className="w-6 h-6 text-primary" />
                 </div>
                 <div>
-                  <h4 className="font-bold mb-1">Condition Requirements</h4>
-                  <p className="text-muted-foreground text-sm">
-                    Books must be in their original condition, free of marks, creases, or damage.
-                  </p>
+                  <h4 className="font-bold mb-1">2. Non-Returnable Items</h4>
+                  <ul className="text-muted-foreground text-sm list-disc pl-5 space-y-2">
+                    <li>Digital downloads and eBooks.</li>
+                    <li>Items marked as “Final Sale”.</li>
+                    <li>Gift cards.</li>
+                    <li>Books with visible signs of heavy use.</li>
+                  </ul>
                 </div>
               </div>
 
@@ -98,10 +104,13 @@ export default function Returns() {
                   <HelpCircle className="w-6 h-6 text-primary" />
                 </div>
                 <div>
-                  <h4 className="font-bold mb-1">Non-Returnable Items</h4>
-                  <p className="text-muted-foreground text-sm">
-                    Digital e-books and items marked as "Final Sale" cannot be returned or refunded once accessed.
-                  </p>
+                  <h4 className="font-bold mb-1">3. The Process</h4>
+                  <ol className="text-muted-foreground text-sm list-decimal pl-5 space-y-2">
+                    <li>Log in to your account and find your order.</li>
+                    <li>Select “Return Item” and choose your reason.</li>
+                    <li>Print the prepaid shipping label provided.</li>
+                    <li>Drop off the package at any authorized carrier location.</li>
+                  </ol>
                 </div>
               </div>
             </div>
@@ -112,9 +121,9 @@ export default function Returns() {
             animate={{ opacity: 1, x: 0 }}
             className="glass-card p-10 bg-secondary/10 border-secondary/20"
           >
-            <h2 className="text-3xl font-black mb-6">Need Help?</h2>
+            <h2 className="text-3xl font-black mb-6">Need help with a return?</h2>
             <p className="text-muted-foreground mb-8">
-              Our support team is here to assist you with any questions regarding your return or refund status.
+              Our support team is available 24/7 to assist you with any return or exchange questions.
             </p>
             <div className="space-y-4">
               <Link 

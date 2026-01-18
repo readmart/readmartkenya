@@ -64,7 +64,7 @@ export default function Home() {
           "logo": "https://readmart.co.ke/assets/logo.jpg",
           "contactPoint": {
             "@type": "ContactPoint",
-            "telephone": "+254-700-000-000",
+            "telephone": "+254-794-129-958",
             "contactType": "customer service"
           }
         })}
@@ -222,13 +222,13 @@ export default function Home() {
 
       {/* CTA Section */}
       <section className="container mx-auto px-4">
-        <div className="glass-card bg-primary rounded-[3rem] p-12 md:p-24 text-center text-white relative overflow-hidden">
+        <div className="bg-primary rounded-[3rem] p-12 md:p-24 text-center text-white relative overflow-hidden shadow-2xl">
           <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10" />
           <div className="relative z-10">
             <h2 className="text-4xl md:text-6xl font-black mb-8 tracking-tighter leading-none">
               READY TO START YOUR <br /> NEXT CHAPTER?
             </h2>
-            <p className="text-xl mb-12 opacity-80 max-w-2xl mx-auto font-medium">
+            <p className="text-xl mb-12 text-white/80 max-w-2xl mx-auto font-medium">
               Join 10,000+ readers who trust us for their literary adventures.
             </p>
             <Link 

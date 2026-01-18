@@ -170,6 +170,106 @@ CREATE TABLE IF NOT EXISTS public.fulfillment_ledger (
     created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
+-- 7.3 Additional Tables for Digital Community & Management
+CREATE TABLE IF NOT EXISTS public.shipping_zones (
+    id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+    name text NOT NULL UNIQUE,
+    rate decimal(12,2) NOT NULL,
+    is_active boolean DEFAULT true,
+    created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS public.promos (
+    id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+    code text NOT NULL UNIQUE,
+    discount_type text CHECK (discount_type IN ('percentage', 'fixed')) NOT NULL,
+    discount_value decimal(12,2) NOT NULL,
+    min_order_amount decimal(12,2) DEFAULT 0.00,
+    is_active boolean DEFAULT true,
+    expires_at timestamp with time zone,
+    created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS public.cms_content (
+    id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+    type text NOT NULL, -- 'hero', 'banner', 'book_club', etc.
+    title text NOT NULL,
+    content text,
+    image_url text,
+    is_active boolean DEFAULT true,
+    metadata jsonb DEFAULT '{}'::jsonb,
+    created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS public.contact_messages (
+    id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+    name text NOT NULL,
+    email text NOT NULL,
+    subject text,
+    message text NOT NULL,
+    status text DEFAULT 'pending' CHECK (status IN ('pending', 'read', 'replied')),
+    created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS public.partnership_applications (
+    id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+    business_name text NOT NULL,
+    contact_person text NOT NULL,
+    email text NOT NULL,
+    phone text,
+    service_type text,
+    status text DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),
+    created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS public.events (
+    id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+    title text NOT NULL,
+    description text,
+    event_date timestamp with time zone NOT NULL,
+    location text,
+    image_url text,
+    is_active boolean DEFAULT true,
+    created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS public.ebook_metadata (
+    id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+    product_id uuid REFERENCES public.products(id) ON DELETE CASCADE NOT NULL UNIQUE,
+    file_path text NOT NULL,
+    format text DEFAULT 'pdf',
+    created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS public.wishlist_items (
+    id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+    user_id uuid NOT NULL,
+    product_id uuid REFERENCES public.products(id) ON DELETE CASCADE NOT NULL,
+    created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL,
+    UNIQUE(user_id, product_id)
+);
+
+CREATE TABLE IF NOT EXISTS public.book_club_memberships (
+    id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+    user_id uuid NOT NULL,
+    club_id uuid REFERENCES public.cms_content(id) ON DELETE CASCADE NOT NULL,
+    tier text DEFAULT 'basic',
+    is_active boolean DEFAULT true,
+    created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL,
+    UNIQUE(user_id, club_id)
+);
+
+CREATE TABLE IF NOT EXISTS public.notifications (
+    id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+    user_id uuid NOT NULL,
+    type text NOT NULL, -- 'order', 'promo', 'system', etc.
+    title text NOT NULL,
+    message text NOT NULL,
+    is_read boolean DEFAULT false,
+    metadata jsonb DEFAULT '{}'::jsonb,
+    created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
 -- 8. Enable RLS (Safety)
 ALTER TABLE public.categories ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.products ENABLE ROW LEVEL SECURITY;
@@ -183,9 +283,19 @@ ALTER TABLE public.author_applications ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.notification_logs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.partnership_services ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.fulfillment_ledger ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.shipping_zones ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.promos ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.cms_content ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.contact_messages ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.partnership_applications ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.ebook_metadata ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.wishlist_items ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.book_club_memberships ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
 
 -- 9. Seed Data
--- Clear existing to avoid conflicts (Optional, comment out if you want to keep existing data)
+-- Clear existing to avoid conflicts
 -- DELETE FROM public.order_items;
 -- DELETE FROM public.orders;
 -- DELETE FROM public.reviews;
@@ -203,13 +313,29 @@ ON CONFLICT (slug) DO NOTHING;
 
 -- Products
 WITH cat AS (SELECT id, slug FROM public.categories)
-INSERT INTO public.products (name, slug, description, price, category_id, stock_quantity) VALUES 
-('The Alchemist', 'the-alchemist', 'A classic tale of following your dreams.', 1200.00, (SELECT id FROM cat WHERE slug = 'fiction'), 50),
-('Clean Code', 'clean-code', 'A handbook of agile software craftsmanship.', 3500.00, (SELECT id FROM cat WHERE slug = 'technology'), 20),
-('Zero to One', 'zero-to-one', 'Notes on startups, or how to build the future.', 1800.00, (SELECT id FROM cat WHERE slug = 'business'), 30),
-('Thinking, Fast and Slow', 'thinking-fast-slow', 'Exploration of the mind and decision making.', 2200.00, (SELECT id FROM cat WHERE slug = 'non-fiction'), 15),
-('Design for Hackers', 'design-for-hackers', 'Reverse-engineering beauty for software developers.', 2800.00, (SELECT id FROM cat WHERE slug = 'art-design'), 10)
+INSERT INTO public.products (name, slug, description, price, category_id, stock_quantity, metadata) VALUES 
+('The Alchemist', 'the-alchemist', 'A classic tale of following your dreams.', 1200.00, (SELECT id FROM cat WHERE slug = 'fiction'), 50, '{"type": "physical", "author": "Paulo Coelho"}'),
+('Clean Code', 'clean-code', 'A handbook of agile software craftsmanship.', 3500.00, (SELECT id FROM cat WHERE slug = 'technology'), 20, '{"type": "physical", "author": "Robert C. Martin"}'),
+('Zero to One', 'zero-to-one', 'Notes on startups, or how to build the future.', 1800.00, (SELECT id FROM cat WHERE slug = 'business'), 30, '{"type": "physical", "author": "Peter Thiel"}'),
+('Thinking, Fast and Slow', 'thinking-fast-slow', 'Exploration of the mind and decision making.', 2200.00, (SELECT id FROM cat WHERE slug = 'non-fiction'), 15, '{"type": "physical", "author": "Daniel Kahneman"}'),
+('Design for Hackers', 'design-for-hackers', 'Reverse-engineering beauty for software developers.', 2800.00, (SELECT id FROM cat WHERE slug = 'art-design'), 10, '{"type": "physical", "author": "David Kadavy"}')
 ON CONFLICT (slug) DO NOTHING;
+
+-- Shipping Zones
+INSERT INTO public.shipping_zones (name, rate) VALUES 
+('Nairobi', 250.00),
+('Mombasa', 450.00),
+('Kisumu', 400.00),
+('Nakuru', 300.00),
+('Other Regions', 600.00)
+ON CONFLICT (name) DO NOTHING;
+
+-- CMS Content: Book Clubs & Banners
+INSERT INTO public.cms_content (type, title, content, image_url, metadata) VALUES 
+('book_club', 'The Classics Club', 'Exploring timeless literature from around the world.', 'https://images.unsplash.com/photo-1512820790803-83ca734da794', '{"tier": "basic"}'),
+('book_club', 'Tech Visionaries', 'Discussing the future of technology and society.', 'https://images.unsplash.com/photo-1518770660439-4636190af475', '{"tier": "premium"}'),
+('hero', 'EVERY PAGE TELLS A STORY', 'Discover a curated sanctuary for bibliophiles and art enthusiasts. Bridging the gap between creators and readers.', 'https://images.unsplash.com/photo-1544947950-fa07a98d237f', '{"button_text": "Shop Now"}')
+ON CONFLICT DO NOTHING;
 
 -- Settings
 INSERT INTO public.settings (id, site_name, tax_rate, default_currency)

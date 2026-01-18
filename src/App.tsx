@@ -61,7 +61,8 @@ function App() {
               <Route path="/book/:id" element={<BookDetail />} />
               <Route path="/book-club" element={<BookClub />} />
               <Route path="/events" element={<Events />} />
-              <Route path="/apply" element={<PartnershipApply />} />
+              <Route path="/partnership/apply" element={<PartnershipApply />} />
+              <Route path="/apply" element={<Navigate to="/partnership/apply" replace />} />
               <Route path="/author-apply" element={<AuthorApply />} />
               <Route path="/track-order" element={<TrackOrder />} />
 

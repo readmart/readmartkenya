@@ -67,6 +67,7 @@ export default function Navbar() {
     { name: 'Home', href: '/' },
     { name: 'Shop', href: '/shop' },
     { name: 'Book Club', href: '/book-club' },
+    { name: 'Help', href: '/help' },
   ];
 
   const dashboardLink = profile?.role === 'founder' 

@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { Truck, Globe, Clock, ShieldCheck, MapPin } from 'lucide-react';
+import { Truck, Clock, ShieldCheck, MapPin, Mail } from 'lucide-react';
 
 export default function Shipping() {
   const shippingMethods = [
@@ -17,13 +17,6 @@ export default function Shipping() {
       price: "KSh 500",
       description: "Priority shipping for when you just can't wait to start that next chapter."
     },
-    {
-      icon: <Globe className="w-6 h-6" />,
-      title: "International Shipping",
-      time: "7-14 Business Days",
-      price: "Calculated at Checkout",
-      description: "Bringing African literature to the global stage. Rates vary by destination."
-    }
   ];
 
   return (
@@ -36,12 +29,26 @@ export default function Shipping() {
         >
           <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 text-primary text-sm font-black uppercase tracking-widest mb-6">
             <Truck className="w-4 h-4" />
-            Logistics & Delivery
+            Shipping Information
           </div>
-          <h1 className="text-4xl md:text-6xl font-black mb-6">Fast, Reliable Shipping</h1>
+          <h1 className="text-4xl md:text-6xl font-black mb-6">Shipping Information</h1>
           <p className="text-xl text-muted-foreground max-w-2xl mx-auto font-medium">
-            We've partnered with the best logistics providers to ensure your books reach you safely and swiftly, no matter where you are.
+            Everything you need to know about getting your books delivered.
           </p>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="glass-card p-6 mb-12"
+        >
+          <h2 className="text-2xl font-black mb-2">Our Shipping Partners</h2>
+          <p className="text-muted-foreground">
+            We work with reliable carriers to ensure your books arrive safely and on time.
+          </p>
+          <div className="mt-4 text-sm text-muted-foreground">
+            No shipping carriers found.
+          </div>
         </motion.div>
 
         <div className="grid md:grid-cols-3 gap-8 mb-20">
@@ -76,31 +83,41 @@ export default function Shipping() {
             <div className="space-y-6">
               <div className="glass-card p-6">
                 <h4 className="font-bold mb-2 flex items-center gap-2">
-                  <MapPin className="w-4 h-4 text-primary" />
-                  Do you deliver to rural areas?
+                  <Clock className="w-4 h-4 text-primary" />
+                  When will my order ship?
                 </h4>
                 <p className="text-muted-foreground text-sm">
-                  Yes! We deliver to all major towns and rural areas across Kenya via G4S and other reliable couriers.
+                  Orders placed before 2 PM (local time) are processed the same day. Orders placed after 2 PM are processed the next business day.
+                </p>
+              </div>
+
+              <div className="glass-card p-6">
+                <h4 className="font-bold mb-2 flex items-center gap-2">
+                  <MapPin className="w-4 h-4 text-primary" />
+                  Can I change my shipping address?
+                </h4>
+                <p className="text-muted-foreground text-sm">
+                  You can change your shipping address within 2 hours of placing your order. Contact our support team for assistance.
                 </p>
               </div>
 
               <div className="glass-card p-6">
                 <h4 className="font-bold mb-2 flex items-center gap-2">
                   <ShieldCheck className="w-4 h-4 text-primary" />
-                  Is my package insured?
+                  Do you offer free shipping?
                 </h4>
                 <p className="text-muted-foreground text-sm">
-                  Every shipment is fully insured against loss or damage during transit, ensuring your peace of mind.
+                  Yes! Standard local shipping is free on all orders over KES 5,000.00 or when you buy 5 or more books. This is automatically applied at checkout.
                 </p>
               </div>
 
               <div className="glass-card p-6">
                 <h4 className="font-bold mb-2 flex items-center gap-2">
-                  <Clock className="w-4 h-4 text-primary" />
-                  When will my order ship?
+                  <ShieldCheck className="w-4 h-4 text-primary" />
+                  What if my package is lost or damaged?
                 </h4>
                 <p className="text-muted-foreground text-sm">
-                  Orders placed before 2 PM are typically processed and shipped the same business day.
+                  Contact our support team immediately. We'll work with the carrier to locate your package or send a replacement at no extra cost.
                 </p>
               </div>
             </div>
@@ -109,24 +126,29 @@ export default function Shipping() {
           <motion.div
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
-            className="glass-card p-10 bg-primary text-white flex flex-col justify-center text-center"
+            className="glass-card p-10 bg-secondary/10 border-secondary/20 flex flex-col justify-center text-center"
           >
-            <h2 className="text-3xl font-black mb-6">Track Your Order</h2>
-            <p className="mb-8 opacity-90">
-              Once your order has shipped, you'll receive a tracking number via email and SMS. Use it to follow your package's journey.
+            <h2 className="text-3xl font-black mb-6">Still have shipping questions?</h2>
+            <p className="text-muted-foreground mb-8">
+              Our dedicated shipping support team is here to help you with tracking, delivery issues, or local shipping inquiries across Kenya.
             </p>
-            <div className="flex flex-col sm:flex-row gap-4">
-              <input 
-                type="text" 
-                placeholder="Enter Tracking Number"
-                className="bg-white/10 border border-white/20 rounded-xl px-6 py-3 outline-none focus:bg-white/20 transition-all flex-1 text-white placeholder:text-white/50"
-              />
-              <button className="bg-white text-primary px-8 py-3 rounded-xl font-bold hover:bg-opacity-90 transition-all">
-                Track Now
-              </button>
+            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+              <a 
+                href="mailto:support@readmartke.com"
+                className="px-8 py-3 bg-primary text-white rounded-xl font-bold hover:opacity-90 transition-all inline-flex items-center gap-2 justify-center"
+              >
+                <Mail className="w-4 h-4" />
+                Email Support
+              </a>
+              <a 
+                href="/contact"
+                className="px-8 py-3 glass rounded-xl font-bold hover:bg-white/10 transition-all inline-flex items-center gap-2 justify-center"
+              >
+                Use Contact Form
+              </a>
             </div>
-            <p className="mt-6 text-xs opacity-75 italic">
-              * Tracking information may take up to 24 hours to appear.
+            <p className="mt-6 text-sm text-muted-foreground">
+              Direct email: <span className="font-bold">shipping@readmartke.com</span>
             </p>
           </motion.div>
         </div>

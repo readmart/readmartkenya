@@ -11,7 +11,7 @@ dns.setDefaultResultOrder('verbatim');
 export default defineConfig(() => ({ 
   server: { 
     host: "localhost", 
-    port: 3004, 
+    port: 3006, 
     strictPort: true, 
     proxy: { 
       '/api': { 

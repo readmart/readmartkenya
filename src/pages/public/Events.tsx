@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Calendar, MapPin, Clock, Ticket, Share2, Loader2 } from 'lucide-react';
-import { getEvents } from '@/api/community';
+import { getEvents, type CMSContent } from '@/api/community';
 import { toast } from 'sonner';
 
 export default function Events() {
-  const [events, setEvents] = useState<any[]>([]);
+  const [events, setEvents] = useState<CMSContent[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {

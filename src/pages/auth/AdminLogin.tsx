@@ -1,7 +1,7 @@
 import { motion } from 'framer-motion';
 import { useState, useEffect } from 'react';
 import { Shield, Mail, Lock, ArrowRight, AlertCircle, Loader2 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '@/lib/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -11,16 +11,23 @@ export default function AdminLogin() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
+  const location = useLocation();
   const { profile, loading: authLoading } = useAuth();
 
-  // Redirect if already logged in as admin/founder
+  const targetRole = location.state?.targetRole || 'admin';
+
+  // Redirect if already logged in as the target role
   useEffect(() => {
     if (!authLoading && profile) {
-      if (profile.role === 'founder' || profile.role === 'admin') {
-        navigate('/founder-dashboard');
+      if (targetRole === 'partner' && (profile.role === 'partner' || profile.role === 'founder' || profile.role === 'admin')) {
+        navigate('/partner-dashboard', { replace: true });
+      } else if (targetRole === 'author' && (profile.role === 'author' || profile.role === 'founder' || profile.role === 'admin')) {
+        navigate('/author-dashboard', { replace: true });
+      } else if ((profile.role === 'founder' || profile.role === 'admin')) {
+        navigate('/founder-dashboard', { replace: true });
       }
     }
-  }, [profile, authLoading, navigate]);
+  }, [profile, authLoading, navigate, targetRole]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -32,15 +39,12 @@ export default function AdminLogin() {
     const isDev = import.meta.env.DEV;
 
     try {
-      // If it's the founder email and we are in dev, we can offer a bypass if Supabase fails
       const { data, error: authError } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
 
       if (authError) {
-        // If Supabase auth fails (e.g. no API key or user doesn't exist)
-        // check if credentials match the hardcoded founder ones for dev convenience
         if (isDev && email === founderEmail) {
           console.log('Using dev bypass for founder login');
           localStorage.setItem('rm_dev_role', 'founder');
@@ -50,7 +54,7 @@ export default function AdminLogin() {
         throw authError;
       }
 
-      // Check if user has admin/founder role
+      // Check if user has required role
       const { data: profile, error: profileError } = await supabase
         .from('profiles')
         .select('role')
@@ -59,16 +63,26 @@ export default function AdminLogin() {
 
       if (profileError) throw profileError;
 
-      if (profile.role !== 'founder' && profile.role !== 'admin') {
-        await supabase.auth.signOut();
-        throw new Error('Access denied. Admin or Founder role required.');
+      if (targetRole === 'partner' && (profile.role === 'partner' || profile.role === 'admin' || profile.role === 'founder')) {
+        navigate('/partner-dashboard', { replace: true });
+        return;
       }
 
-      navigate(profile.role === 'founder' ? '/founder-dashboard' : '/');
+      if (targetRole === 'author' && (profile.role === 'author' || profile.role === 'admin' || profile.role === 'founder')) {
+        navigate('/author-dashboard', { replace: true });
+        return;
+      }
+
+      if (profile.role === 'founder' || profile.role === 'admin') {
+        navigate('/founder-dashboard', { replace: true });
+        return;
+      }
+
+      // Fallback
+      await supabase.auth.signOut();
+      throw new Error(`Access denied. ${targetRole.charAt(0).toUpperCase() + targetRole.slice(1)} role required.`);
     } catch (err: any) {
       setError(err.message || 'Failed to login');
-      
-      // If it failed due to missing API key, show a more helpful message
       if (err.message?.includes('API key')) {
         setError('Supabase API Key is missing or invalid. Please check your .env file or use the Demo buttons below.');
       }
@@ -81,10 +95,7 @@ export default function AdminLogin() {
   const handleDemoLogin = async (role: 'founder' | 'author' | 'partner') => {
     setLoading(true);
     try {
-      // Set the dev role in localStorage
       localStorage.setItem('rm_dev_role', role);
-      
-      // Refresh to apply changes
       window.location.reload();
     } catch (err: any) {
       setError(err.message);
@@ -92,6 +103,14 @@ export default function AdminLogin() {
       setLoading(false);
     }
   };
+
+  const portalName = targetRole === 'author' ? 'Author Portal' : 
+                     targetRole === 'partner' ? 'Partner Portal' : 
+                     'Admin Portal';
+  
+  const portalDesc = targetRole === 'author' ? 'Manage your books and royalties' : 
+                     targetRole === 'partner' ? 'Manage fulfillment and logistics' : 
+                     'Founder & Administrator Access';
 
   return (
     <div className="container mx-auto px-4 py-12 flex items-center justify-center min-h-[calc(100vh-200px)]">
@@ -104,8 +123,8 @@ export default function AdminLogin() {
           <div className="w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center text-primary mx-auto mb-6">
             <Shield className="w-8 h-8" />
           </div>
-          <h1 className="text-3xl font-bold mb-2">Admin Portal</h1>
-          <p className="text-muted-foreground">Founder & Administrator Access</p>
+          <h1 className="text-3xl font-bold mb-2">{portalName}</h1>
+          <p className="text-muted-foreground">{portalDesc}</p>
         </div>
 
         {error && (

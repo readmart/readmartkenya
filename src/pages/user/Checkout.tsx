@@ -25,6 +25,16 @@ export default function Checkout() {
   const [orderNumber, setOrderNumber] = useState('');
   const navigate = useNavigate();
 
+  const [formData, setFormData] = useState({
+    fullName: '',
+    email: '',
+    address: '',
+    city: '',
+    phone: '',
+  });
+
+  const kenyanPhoneRegex = /^(?:254|\+254|0)?(7|1)\d{8}$/;
+
   useEffect(() => {
     if (!loading && !user) {
       toast.error('Please login to continue to checkout');
@@ -45,16 +55,6 @@ export default function Checkout() {
   const shipping = cartTotal > 5000 ? 0 : 500;
   const tax = cartTotal * 0.16;
   const total = cartTotal + shipping + tax;
-
-  const [formData, setFormData] = useState({
-    fullName: '',
-    email: '',
-    address: '',
-    city: '',
-    phone: '',
-  });
-
-  const kenyanPhoneRegex = /^(?:254|\+254|0)?(7|1)\d{8}$/;
 
   const handleNext = () => {
     if (step === 'shipping') {

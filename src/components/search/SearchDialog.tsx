@@ -42,6 +42,7 @@ const STATIC_PAGES = [
   { title: 'Partnership', link: '/apply', category: 'Navigation' },
   { title: 'Become an Author', link: '/author-apply', category: 'Navigation' },
   { title: 'Contact Support', link: '/contact', category: 'Help' },
+  { title: 'Help Center', link: '/help', category: 'Help' },
   { title: 'Terms of Service', link: '/terms', category: 'Legal' },
   { title: 'Privacy Policy', link: '/privacy', category: 'Legal' },
   { title: 'Returns & Refunds', link: '/returns', category: 'Legal' },

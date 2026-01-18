@@ -1,6 +1,6 @@
 export const CONTACT_INFO = {
-  phone1: '+254 700 000 000',
-  phone2: '+254 711 111 111',
+  phone1: '+254 794 129 958',
+  phone2: '+254 741 658 548',
   email: 'support@readmartke.com',
   address: 'Nairobi, Kenya',
   workingHours: 'Mon-Fri: 8am - 5pm',

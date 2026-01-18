@@ -1,5 +1,48 @@
 import { supabase } from '@/lib/supabase/client';
 
+export interface CMSContent {
+  id: string;
+  type: 'banner' | 'hero' | 'event' | 'announcement' | 'book_club';
+  title: string;
+  content: string | null;
+  image_url: string | null;
+  link_url: string | null;
+  is_active: boolean;
+  metadata: any;
+  published_at: string;
+  created_at: string;
+}
+
+export interface BookClubMembership {
+  id: string;
+  user_id: string;
+  club_id: string;
+  tier: 'basic' | 'premium' | 'vip';
+  is_active: boolean;
+  created_at: string;
+  club?: CMSContent;
+}
+
+export interface Review {
+  id: string;
+  user_id: string;
+  product_id: string;
+  rating: number;
+  comment: string | null;
+  created_at: string;
+  profile?: {
+    full_name: string | null;
+    avatar_url: string | null;
+  };
+  product?: {
+    title: string;
+  };
+  // Mock data fields
+  user?: string;
+  book?: string;
+  date?: string;
+}
+
 // --- Wishlist Features ---
 
 /**
@@ -57,7 +100,7 @@ export async function getWishlist() {
 /**
  * Fetch available book clubs from CMS content
  */
-export async function getAvailableBookClubs() {
+export async function getAvailableBookClubs(): Promise<CMSContent[]> {
   try {
     const { data, error } = await supabase
       .from('cms_content')
@@ -66,7 +109,7 @@ export async function getAvailableBookClubs() {
       .eq('is_active', true);
 
     if (error) throw error;
-    return data;
+    return (data as CMSContent[]) || [];
   } catch (error) {
     console.warn('CMS Content (book_clubs) fetch failed, returning empty list');
     return [];
@@ -76,7 +119,7 @@ export async function getAvailableBookClubs() {
 /**
  * Join a book club
  */
-export async function joinBookClub(clubId: string, tier: 'basic' | 'premium' | 'vip' = 'basic') {
+export async function joinBookClub(clubId: string, tier: 'basic' | 'premium' | 'vip' = 'basic'): Promise<BookClubMembership> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Authentication required');
 
@@ -105,7 +148,7 @@ export async function joinBookClub(clubId: string, tier: 'basic' | 'premium' | '
       .single();
 
     if (error) throw error;
-    return data;
+    return data as BookClubMembership;
   } catch (error: any) {
     throw new Error(error.message || 'Failed to join book club');
   }
@@ -114,7 +157,7 @@ export async function joinBookClub(clubId: string, tier: 'basic' | 'premium' | '
 /**
  * Leave a book club (deactivate membership)
  */
-export async function leaveBookClub(clubId: string) {
+export async function leaveBookClub(clubId: string): Promise<boolean> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Authentication required');
 
@@ -135,7 +178,7 @@ export async function leaveBookClub(clubId: string) {
 /**
  * Get user's current book club membership
  */
-export async function getUserMembership() {
+export async function getUserMembership(): Promise<BookClubMembership | null> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
 
@@ -148,7 +191,7 @@ export async function getUserMembership() {
       .maybeSingle();
 
     if (error) throw error;
-    return data;
+    return data as BookClubMembership | null;
   } catch (error) {
     console.warn('Book club membership fetch failed, returning null');
     return null;
@@ -158,7 +201,7 @@ export async function getUserMembership() {
 /**
  * Get literary insights from CMS
  */
-export async function getInsights() {
+export async function getInsights(): Promise<CMSContent[]> {
   try {
     const { data, error } = await supabase
       .from('cms_content')
@@ -168,7 +211,7 @@ export async function getInsights() {
       .order('created_at', { ascending: false });
 
     if (error) throw error;
-    return data;
+    return (data as CMSContent[]) || [];
   } catch (error) {
     console.warn('CMS Content (announcements) fetch failed, returning empty list');
     return [];
@@ -178,7 +221,7 @@ export async function getInsights() {
 /**
  * Get upcoming events from CMS
  */
-export async function getEvents() {
+export async function getEvents(): Promise<CMSContent[]> {
   try {
     const { data, error } = await supabase
       .from('cms_content')
@@ -188,7 +231,7 @@ export async function getEvents() {
       .order('created_at', { ascending: true });
 
     if (error) throw error;
-    return data;
+    return (data as CMSContent[]) || [];
   } catch (error) {
     console.warn('CMS Content (events) fetch failed, returning empty list');
     return [];
@@ -198,7 +241,7 @@ export async function getEvents() {
 /**
  * Get recent community reviews
  */
-export async function getRecentReviews() {
+export async function getRecentReviews(): Promise<Review[]> {
   try {
     const { data, error } = await supabase
       .from('reviews')
@@ -214,12 +257,12 @@ export async function getRecentReviews() {
         throw error;
       }
       return [
-        { id: '1', user: 'Sarah W.', rating: 5, comment: 'The Alchemist changed my perspective on life!', book: 'The Alchemist', date: '2 days ago' },
-        { id: '2', user: 'John D.', rating: 4, comment: 'Great read, highly recommend for tech enthusiasts.', book: 'Life 3.0', date: '1 week ago' },
-        { id: '3', user: 'Grace M.', rating: 5, comment: 'Beautifully written, a must-read for everyone.', book: 'Creative Minds', date: '3 days ago' },
-      ];
+        { id: '1', user_id: '1', product_id: '1', rating: 5, comment: 'The Alchemist changed my perspective on life!', created_at: new Date().toISOString(), user: 'Sarah W.', book: 'The Alchemist', date: '2 days ago' },
+        { id: '2', user_id: '2', product_id: '2', rating: 4, comment: 'Great read, highly recommend for tech enthusiasts.', created_at: new Date().toISOString(), user: 'John D.', book: 'Life 3.0', date: '1 week ago' },
+        { id: '3', user_id: '3', product_id: '3', rating: 5, comment: 'Beautifully written, a must-read for everyone.', created_at: new Date().toISOString(), user: 'Grace M.', book: 'Creative Minds', date: '3 days ago' },
+      ] as Review[];
     }
-    return data || [];
+    return (data as Review[]) || [];
   } catch (error: any) {
     console.warn('Reviews fetch failed:', error.message);
     return [];

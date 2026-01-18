@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import { Facebook, Instagram, Youtube, Linkedin, Send, Phone, Mail, MapPin, MessageCircle } from 'lucide-react';
 import { useSettings } from '@/hooks/useSettings';
-import { SOCIAL_LINKS } from '@/lib/constants';
+import { SOCIAL_LINKS, CONTACT_INFO } from '@/lib/constants';
 
 // Custom SVG Icons for X (Twitter) and Threads
 const XIcon = ({ className }: { className?: string }) => (
@@ -39,24 +39,33 @@ export default function Footer() {
             <Link to="/" className="inline-block transition-transform hover:scale-105">
               <img src={settings.site_logo} alt={settings.site_name} className="h-12 w-auto rounded-xl shadow-lg" />
             </Link>
+            <p className="text-muted-foreground font-medium leading-relaxed">
+              Bringing books to homes, cafes, and hearts since 2022. Experience the magic of stories with ReadMart.
+            </p>
             <div className="space-y-4">
-              <a href={`tel:${settings.contact_phone}`} className="flex items-center gap-3 text-muted-foreground hover:text-primary transition-colors group">
+              <a href={`tel:${CONTACT_INFO.phone1}`} className="flex items-center gap-3 text-muted-foreground hover:text-primary transition-colors group">
                 <div className="p-2 glass rounded-lg group-hover:bg-primary/10 transition-all">
                   <Phone className="w-4 h-4" />
                 </div>
-                <span className="font-medium">{settings.contact_phone}</span>
+                <span className="font-medium">{CONTACT_INFO.phone1}</span>
               </a>
-              <a href={`mailto:${settings.contact_email}`} className="flex items-center gap-3 text-muted-foreground hover:text-primary transition-colors group">
+              <a href={`tel:${CONTACT_INFO.phone2}`} className="flex items-center gap-3 text-muted-foreground hover:text-primary transition-colors group">
+                <div className="p-2 glass rounded-lg group-hover:bg-primary/10 transition-all">
+                  <Phone className="w-4 h-4" />
+                </div>
+                <span className="font-medium">{CONTACT_INFO.phone2}</span>
+              </a>
+              <a href={`mailto:${CONTACT_INFO.email}`} className="flex items-center gap-3 text-muted-foreground hover:text-primary transition-colors group">
                 <div className="p-2 glass rounded-lg group-hover:bg-primary/10 transition-all">
                   <Mail className="w-4 h-4" />
                 </div>
-                <span className="font-medium">{settings.contact_email}</span>
+                <span className="font-medium">{CONTACT_INFO.email}</span>
               </a>
               <div className="flex items-center gap-3 text-muted-foreground">
                 <div className="p-2 glass rounded-lg">
                   <MapPin className="w-4 h-4" />
                 </div>
-                <span className="font-medium">{settings.address}</span>
+                <span className="font-medium">{CONTACT_INFO.address}</span>
               </div>
             </div>
           </div>
@@ -66,6 +75,7 @@ export default function Footer() {
             <h3 className="text-lg font-bold mb-6 text-foreground">Explore</h3>
             <nav>
               <ul className="space-y-4">
+                <li><Link to="/about" className="text-muted-foreground hover:text-primary transition-colors font-medium">About Us</Link></li>
                 <li><Link to="/shop?category=All" className="text-muted-foreground hover:text-primary transition-colors font-medium">All Books</Link></li>
                 <li><Link to="/shop?category=Art & Accessories" className="text-muted-foreground hover:text-primary transition-colors font-medium">Art & Accessories</Link></li>
                 <li><Link to="/book-club" className="text-muted-foreground hover:text-primary transition-colors font-medium">Book Club</Link></li>
@@ -74,31 +84,16 @@ export default function Footer() {
             </nav>
           </div>
 
-          {/* Column 3: Support & Portals */}
+          {/* Column 3: Support */}
           <div>
-            <h3 className="text-lg font-bold mb-6 text-foreground">Support & Portals</h3>
+            <h3 className="text-lg font-bold mb-6 text-foreground">Support</h3>
             <nav>
               <ul className="space-y-4">
+                <li><Link to="/shipping" className="text-muted-foreground hover:text-primary transition-colors font-medium">Shipping Info</Link></li>
                 <li><Link to="/track-order" className="text-muted-foreground hover:text-primary transition-colors font-medium">Track Your Order</Link></li>
-                <li><Link to="/partnership" className="text-muted-foreground hover:text-primary transition-colors font-medium">Become a Partner</Link></li>
-                <li>
-                  <Link 
-                    to="/login" 
-                    state={{ role: 'author' }}
-                    className="text-muted-foreground hover:text-primary transition-colors font-medium"
-                  >
-                    Author Portal
-                  </Link>
-                </li>
-                <li>
-                  <Link 
-                    to="/login" 
-                    state={{ role: 'partner' }}
-                    className="text-muted-foreground hover:text-primary transition-colors font-medium"
-                  >
-                    Partner Portal
-                  </Link>
-                </li>
+                <li><Link to="/returns" className="text-muted-foreground hover:text-primary transition-colors font-medium">Returns & Refunds</Link></li>
+                <li><Link to="/help" className="text-muted-foreground hover:text-primary transition-colors font-medium">Help Center</Link></li>
+                <li><Link to="/partnership/apply" className="text-muted-foreground hover:text-primary transition-colors font-medium">Become a Partner</Link></li>
               </ul>
             </nav>
           </div>

@@ -20,7 +20,10 @@ import {
   getUserMembership,
   getInsights,
   getEvents,
-  getRecentReviews
+  getRecentReviews,
+  type CMSContent,
+  type BookClubMembership,
+  type Review
 } from '@/api/community';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
@@ -30,11 +33,11 @@ type Tab = 'communities' | 'insights' | 'reviews' | 'events';
 
 export default function BookClub() {
   const [activeTab, setActiveTab] = useState<Tab>('communities');
-  const [clubs, setClubs] = useState<any[]>([]);
-  const [insights, setInsights] = useState<any[]>([]);
-  const [events, setEvents] = useState<any[]>([]);
-  const [reviews, setReviews] = useState<any[]>([]);
-  const [membership, setMembership] = useState<any>(null);
+  const [clubs, setClubs] = useState<CMSContent[]>([]);
+  const [insights, setInsights] = useState<CMSContent[]>([]);
+  const [events, setEvents] = useState<CMSContent[]>([]);
+  const [reviews, setReviews] = useState<Review[]>([]);
+  const [membership, setMembership] = useState<BookClubMembership | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isJoining, setIsJoining] = useState<string | null>(null);
   const { user } = useAuth();
@@ -79,8 +82,9 @@ export default function BookClub() {
       toast.success('Welcome to the club!');
       const newMembership = await getUserMembership();
       setMembership(newMembership);
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to join club');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to join club';
+      toast.error(message);
     } finally {
       setIsJoining(null);
     }
@@ -91,8 +95,9 @@ export default function BookClub() {
       await leaveBookClub(clubId);
       toast.success('You have left the club');
       setMembership(null);
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to leave club');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to leave club';
+      toast.error(message);
     }
   };
 

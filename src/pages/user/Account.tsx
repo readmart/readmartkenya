@@ -4,7 +4,7 @@ import {
   User, Package, Heart, Settings, LogOut, 
   ChevronRight, MapPin, Phone, Mail, CreditCard,
   Shield, Bell, Clock, Star, Trash2, ShoppingCart,
-  Loader2
+  Loader2, Briefcase, PenTool, ExternalLink
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useWishlist } from '@/contexts/WishlistContext';
@@ -13,15 +13,17 @@ import { useCurrency } from '@/contexts/CurrencyContext';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 
-const tabs = [
+const getTabs = (isPartner: boolean, isAuthor: boolean) => [
   { id: 'profile', label: 'Profile', icon: <User className="w-5 h-5" /> },
   { id: 'orders', label: 'Orders', icon: <Package className="w-5 h-5" /> },
   { id: 'ebooks', label: 'E-Books', icon: <BookOpen className="w-5 h-5" /> },
   { id: 'wishlist', label: 'Wishlist', icon: <Heart className="w-5 h-5" /> },
+  ...(isPartner ? [{ id: 'partner', label: 'Partner Portal', icon: <Briefcase className="w-5 h-5" /> }] : []),
+  ...(isAuthor ? [{ id: 'author', label: 'Author Portal', icon: <PenTool className="w-5 h-5" /> }] : []),
   { id: 'settings', label: 'Settings', icon: <Settings className="w-5 h-5" /> },
 ];
 
-import { BookOpen, Download, ExternalLink } from 'lucide-react';
+import { BookOpen, Download } from 'lucide-react';
 import { getMyEbooks, getEbookAccessUrl } from '@/api/ebooks';
 
 const mockOrders = [
@@ -33,7 +35,9 @@ export default function Account() {
   const [activeTab, setActiveTab] = useState('profile');
   const [ebooks, setEbooks] = useState<any[]>([]);
   const [isLoadingEbooks, setIsLoadingEbooks] = useState(false);
-  const { user, profile, logout } = useAuth();
+  const { user, profile, logout, isPartner, isAuthor } = useAuth();
+
+  const tabs = getTabs(isPartner, isAuthor);
 
   useEffect(() => {
     if (activeTab === 'ebooks') {
@@ -357,6 +361,64 @@ export default function Account() {
                         </Link>
                       </div>
                     )}
+                  </div>
+                </div>
+              )}
+
+              {activeTab === 'partner' && (
+                <div className="space-y-8">
+                  <header>
+                    <h1 className="text-4xl font-black uppercase tracking-tight mb-2">Partner Portal</h1>
+                    <p className="text-muted-foreground font-medium">Access your partnership dashboard and resources</p>
+                  </header>
+
+                  <div className="bg-primary/5 border border-primary/10 rounded-[2.5rem] p-8 md:p-12 text-center space-y-6">
+                    <div className="w-20 h-20 bg-primary/10 rounded-3xl flex items-center justify-center mx-auto">
+                      <Briefcase className="w-10 h-10 text-primary" />
+                    </div>
+                    <div className="max-w-md mx-auto space-y-4">
+                      <h3 className="text-2xl font-black">Welcome to the Partner Portal</h3>
+                      <p className="text-muted-foreground">
+                        You have been authorized as a ReadMart partner. Click the button below to access your management dashboard.
+                      </p>
+                    </div>
+                    <Link 
+                      to="/admin-login" 
+                      state={{ targetRole: 'partner' }}
+                      className="inline-flex items-center gap-3 bg-primary text-white px-10 py-5 rounded-2xl font-black hover:scale-105 transition-all shadow-xl shadow-primary/20"
+                    >
+                      GO TO DASHBOARD
+                      <ExternalLink className="w-5 h-5" />
+                    </Link>
+                  </div>
+                </div>
+              )}
+
+              {activeTab === 'author' && (
+                <div className="space-y-8">
+                  <header>
+                    <h1 className="text-4xl font-black uppercase tracking-tight mb-2">Author Portal</h1>
+                    <p className="text-muted-foreground font-medium">Manage your publications and track your performance</p>
+                  </header>
+
+                  <div className="bg-purple-500/5 border border-purple-500/10 rounded-[2.5rem] p-8 md:p-12 text-center space-y-6">
+                    <div className="w-20 h-20 bg-purple-500/10 rounded-3xl flex items-center justify-center mx-auto">
+                      <PenTool className="w-10 h-10 text-purple-500" />
+                    </div>
+                    <div className="max-w-md mx-auto space-y-4">
+                      <h3 className="text-2xl font-black">Welcome to the Author Portal</h3>
+                      <p className="text-muted-foreground">
+                        You have been authorized as a ReadMart author. Click the button below to access your manuscript and sales dashboard.
+                      </p>
+                    </div>
+                    <Link 
+                      to="/admin-login" 
+                      state={{ targetRole: 'author' }}
+                      className="inline-flex items-center gap-3 bg-purple-600 text-white px-10 py-5 rounded-2xl font-black hover:scale-105 transition-all shadow-xl shadow-purple-600/20"
+                    >
+                      GO TO DASHBOARD
+                      <ExternalLink className="w-5 h-5" />
+                    </Link>
                   </div>
                 </div>
               )}
