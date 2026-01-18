@@ -8,10 +8,16 @@ import { supabase } from '@/lib/supabase/client';
 export async function getGlobalAnalytics() {
   try {
     // Aggregate sales, users, and orders
+    // We try to get 'completed' or 'paid' orders for revenue
+    // Using a more robust query that handles potential enum issues by fetching all and filtering if needed
+    let salesData: any[] = [];
     const { data: sales, error: salesError } = await supabase
       .from('orders')
-      .select('total_amount, created_at')
-      .eq('status', 'completed');
+      .select('total_amount, created_at, status');
+    
+    if (!salesError && sales) {
+      salesData = sales.filter(o => o.status === 'completed' || o.status === 'paid');
+    }
 
     const { count: userCount, error: userError } = await supabase
       .from('profiles')
@@ -28,9 +34,9 @@ export async function getGlobalAnalytics() {
     if (salesError || userError || orderError || productError) {
       const err = salesError || userError || orderError || productError;
       
-      // If it's a 400 error (Bad Request), it might be a schema mismatch or missing table
-      if (err?.code === '42P01' || err?.code === 'PGRST116' || err?.code === '400') {
-        console.warn('Analytics tables might not be fully initialized:', err.message);
+      // If it's a 400 error (Bad Request) or RLS issue (which might manifest as 406 or aborted)
+      if (err?.code === '42P01' || err?.code === 'PGRST116' || err?.code === '400' || err?.code === '406') {
+        console.warn('Analytics tables might not be fully accessible or initialized:', err.message);
         return {
           totalRevenue: 0,
           totalUsers: 0,
@@ -47,15 +53,23 @@ export async function getGlobalAnalytics() {
         details: err?.details,
         hint: err?.hint
       });
-      throw err;
+      // Instead of throwing, we return defaults to keep the UI running
+      return {
+        totalRevenue: 0,
+        totalUsers: 0,
+        totalOrders: 0,
+        totalProducts: 0,
+        salesData: [],
+        isInitialized: false
+      };
     }
 
     return {
-      totalRevenue: sales?.reduce((acc, curr) => acc + Number(curr.total_amount), 0) || 0,
+      totalRevenue: salesData.reduce((acc, curr) => acc + Number(curr.total_amount), 0) || 0,
       totalUsers: userCount || 0,
       totalOrders: orderCount || 0,
       totalProducts: productCount || 0,
-      salesData: sales || [],
+      salesData: salesData,
       isInitialized: true
     };
   } catch (error: any) {

@@ -31,16 +31,43 @@ CREATE TABLE IF NOT EXISTS public.products (
 );
 
 -- 3. Ensure Orders exist
+DO $$ 
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'order_status') THEN
+        CREATE TYPE order_status AS ENUM ('pending', 'paid', 'processing', 'completed', 'cancelled', 'failed');
+    ELSE
+        -- Add missing values to existing enum
+        BEGIN
+            ALTER TYPE order_status ADD VALUE 'paid';
+        EXCEPTION WHEN duplicate_object THEN null;
+        END;
+        BEGIN
+            ALTER TYPE order_status ADD VALUE 'completed';
+        EXCEPTION WHEN duplicate_object THEN null;
+        END;
+        BEGIN
+            ALTER TYPE order_status ADD VALUE 'failed';
+        EXCEPTION WHEN duplicate_object THEN null;
+        END;
+    END IF;
+END $$;
+
 CREATE TABLE IF NOT EXISTS public.orders (
     id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
     user_id uuid NOT NULL,
-    status text DEFAULT 'pending' CHECK (status IN ('pending', 'processing', 'completed', 'cancelled')),
+    status text DEFAULT 'pending', 
     total_amount decimal(12,2) NOT NULL,
     shipping_address jsonb,
     payment_id text,
     payment_metadata jsonb DEFAULT '{}'::jsonb,
     created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
 );
+
+-- Ensure status column is compatible (convert enum to text if necessary or vice-versa)
+-- For now, we use text with a check constraint for maximum flexibility in seed
+ALTER TABLE public.orders DROP CONSTRAINT IF EXISTS orders_status_check;
+ALTER TABLE public.orders ADD CONSTRAINT orders_status_check 
+    CHECK (status IN ('pending', 'paid', 'processing', 'completed', 'cancelled', 'failed'));
 
 -- 4. Ensure Order Items exist
 CREATE TABLE IF NOT EXISTS public.order_items (
