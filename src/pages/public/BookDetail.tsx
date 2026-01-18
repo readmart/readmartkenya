@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useParams, Link } from 'react-router-dom';
-import { ShoppingCart, Heart, Share2, Star, ChevronLeft, Check, Truck, ShieldCheck, RotateCcw, ThumbsUp, Loader2 } from 'lucide-react';
+import { useParams, Link, useNavigate } from 'react-router-dom';
+import { ShoppingCart, Heart, Share2, Star, ChevronLeft, Check, Truck, ShieldCheck, RotateCcw, ThumbsUp, Loader2, Zap } from 'lucide-react';
 import { useCart } from '@/contexts/CartContext';
 import { useWishlist } from '@/contexts/WishlistContext';
 import { useCurrency } from '@/contexts/CurrencyContext';
@@ -16,10 +16,11 @@ const mockReviews = [
 
 export default function BookDetail() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('details');
   const [book, setBook] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const { addToCart } = useCart();
+  const { addToCart, buyNow } = useCart();
   const { addToWishlist, removeFromWishlist, isInWishlist } = useWishlist();
   const { formatPrice, currency } = useCurrency();
 
@@ -95,6 +96,18 @@ export default function BookDetail() {
       category: book.category?.name || 'General'
     });
     toast.success(`${book.title} added to cart!`);
+  };
+
+  const handleBuyNow = () => {
+    buyNow({
+      id: book.id,
+      title: book.title,
+      author: book.metadata?.author || 'ReadMart Original',
+      price: book.price,
+      image: book.image_url || book.metadata?.image_url,
+      category: book.category?.name || 'General'
+    });
+    navigate('/checkout');
   };
 
   const toggleWishlist = () => {
@@ -211,14 +224,22 @@ export default function BookDetail() {
             </div>
           </div>
 
-          <div className="flex gap-4 pt-4">
+          <div className="flex flex-col sm:flex-row gap-4 pt-4">
             <button 
               onClick={handleAddToCart}
               disabled={(book.stock_quantity || 0) <= 0}
-              className={`flex-1 ${ (book.stock_quantity || 0) <= 0 ? 'bg-muted cursor-not-allowed' : 'bg-primary hover:shadow-2xl hover:shadow-primary/30 hover:-translate-y-1' } text-white h-16 rounded-2xl font-black text-lg transition-all flex items-center justify-center gap-3`}
+              className={`flex-1 ${ (book.stock_quantity || 0) <= 0 ? 'bg-muted cursor-not-allowed' : 'bg-white/5 hover:bg-white/10' } text-foreground h-16 rounded-2xl font-black text-lg transition-all flex items-center justify-center gap-3 border border-white/10`}
             >
               <ShoppingCart className="w-6 h-6" />
               {(book.stock_quantity || 0) <= 0 ? 'OUT OF STOCK' : 'ADD TO CART'}
+            </button>
+            <button 
+              onClick={handleBuyNow}
+              disabled={(book.stock_quantity || 0) <= 0}
+              className={`flex-[1.5] ${ (book.stock_quantity || 0) <= 0 ? 'bg-muted cursor-not-allowed' : 'bg-primary hover:shadow-2xl hover:shadow-primary/30 hover:-translate-y-1' } text-white h-16 rounded-2xl font-black text-lg transition-all flex items-center justify-center gap-3`}
+            >
+              <Zap className="w-6 h-6 fill-white" />
+              {(book.stock_quantity || 0) <= 0 ? 'OUT OF STOCK' : 'BUY IT NOW'}
             </button>
             <button className="w-16 h-16 glass rounded-2xl flex items-center justify-center hover:bg-white/10 transition-all">
               <Share2 className="w-6 h-6" />

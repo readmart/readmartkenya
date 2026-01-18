@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion';
-import { ShoppingCart, Heart, Star } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { ShoppingCart, Heart, Star, Zap } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
 import { useCart } from '@/contexts/CartContext';
 import { useWishlist } from '@/contexts/WishlistContext';
 import { useCurrency } from '@/contexts/CurrencyContext';
@@ -17,7 +17,8 @@ interface BookCardProps {
 }
 
 export default function BookCard({ id, title, author, price, image, rating, category }: BookCardProps) {
-  const { addToCart } = useCart();
+  const navigate = useNavigate();
+  const { addToCart, buyNow } = useCart();
   const { addToWishlist, removeFromWishlist, isInWishlist } = useWishlist();
   const { formatPrice } = useCurrency();
 
@@ -26,6 +27,13 @@ export default function BookCard({ id, title, author, price, image, rating, cate
     e.stopPropagation();
     addToCart({ id, title, author, price, image, category });
     toast.success(`${title} added to cart!`);
+  };
+
+  const handleBuyNow = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    buyNow({ id, title, author, price, image, category });
+    navigate('/checkout');
   };
 
   const toggleWishlist = (e: React.MouseEvent) => {
@@ -81,14 +89,24 @@ export default function BookCard({ id, title, author, price, image, rating, cate
         </Link>
         <p className="text-sm text-muted-foreground mb-4">{author}</p>
         
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-2">
           <span className="text-xl font-bold text-primary">{formatPrice(price)}</span>
-          <button 
-            onClick={handleAddToCart}
-            className="p-3 bg-primary text-white rounded-2xl hover:bg-primary/90 transition-colors shadow-lg shadow-primary/20"
-          >
-            <ShoppingCart className="w-5 h-5" />
-          </button>
+          <div className="flex gap-2">
+            <button 
+              onClick={handleAddToCart}
+              className="p-3 bg-white/5 text-foreground rounded-2xl hover:bg-white/10 transition-colors border border-white/10"
+              title="Add to Cart"
+            >
+              <ShoppingCart className="w-5 h-5" />
+            </button>
+            <button 
+              onClick={handleBuyNow}
+              className="p-3 bg-primary text-white rounded-2xl hover:bg-primary/90 transition-colors shadow-lg shadow-primary/20"
+              title="Buy Now"
+            >
+              <Zap className="w-5 h-5 fill-white" />
+            </button>
+          </div>
         </div>
       </div>
     </motion.div>

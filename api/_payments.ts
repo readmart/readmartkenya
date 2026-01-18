@@ -89,31 +89,33 @@ export const initiateK2StkPush = async (params: K2StkPushRequest) => {
     throw new Error('ReadMart Payments (K2) API key or Till Number is not configured');
   }
 
+  // Ensure phone number is in format +254...
   let numericPhone = params.phone.replace(/\D/g, '');
   if (numericPhone.startsWith('0')) {
     numericPhone = '254' + numericPhone.substring(1);
-  }
-  if (!numericPhone.startsWith('254') && numericPhone.length === 9) {
+  } else if (!numericPhone.startsWith('254')) {
     numericPhone = '254' + numericPhone;
   }
   const formattedPhone = `+${numericPhone}`;
 
   const payload = {
-    payment_channel: 'm-pesa',
+    payment_channel: 'M-PESA STK Push',
     till_number: tillNumber,
     subscriber: {
       first_name: params.firstName || 'ReadMart',
-      last_name: params.lastName || 'Payments',
+      last_name: params.lastName || 'Customer',
       phone_number: formattedPhone,
       email: params.email || '',
     },
     amount: {
       currency: params.currency || 'KES',
-      value: params.amount.toString(),
+      value: Math.round(params.amount), // Ensure it's an integer for K2
     },
     metadata: {
       order_id: params.orderId,
-      customer_reference: params.orderId,
+      customer_id: params.email || params.orderId,
+      reference: params.orderId,
+      notes: `Order #${params.orderId.slice(0, 8).toUpperCase()}`
     },
     _links: {
       callback_url: params.callbackUrl || getK2CallbackUrl(params.orderId),
@@ -192,7 +194,15 @@ export const extractK2WebhookData = (payload: any) => {
   const resource = event.resource || data.resource || payload.resource || {};
   const metadata = data.metadata || payload.metadata || resource.metadata || {};
 
-  const isSuccess = (data.status === 'Success' || resource.status === 'Success' || payload.status === 'Success');
+  const isSuccess = (
+    data.status === 'Success' || 
+    resource.status === 'Success' || 
+    payload.status === 'Success' ||
+    data.status === 'Completed' ||
+    resource.status === 'Completed' ||
+    data.status === 'Received' ||
+    resource.status === 'Received'
+  );
   const amountObj = resource.amount || data.amount || payload.amount || {};
   const amount = typeof amountObj === 'object' ? amountObj.value : amountObj;
   const phone = resource.phone_number || resource.sender_phone_number || resource.subscriber?.phone_number || metadata.phone;

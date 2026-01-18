@@ -4,7 +4,7 @@ import {
   User, Package, Heart, Settings, LogOut, 
   ChevronRight, MapPin, Phone, Mail, CreditCard,
   Shield, Bell, Clock, Star, Trash2, ShoppingCart,
-  Loader2, Briefcase, PenTool, ExternalLink
+  Loader2, Briefcase, PenTool, ExternalLink, ShieldCheck
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useWishlist } from '@/contexts/WishlistContext';
@@ -135,6 +135,31 @@ export default function Account() {
                   </header>
 
                   <div className="grid md:grid-cols-2 gap-8">
+                    {profile?.is_member && (
+                      <div className="md:col-span-2 glass p-8 rounded-[2rem] border-primary/20 bg-primary/5 flex flex-col md:flex-row items-center justify-between gap-6">
+                        <div className="flex items-center gap-6">
+                          <div className="w-16 h-16 rounded-2xl bg-primary text-white flex items-center justify-center shadow-lg shadow-primary/20">
+                            <ShieldCheck className="w-8 h-8" />
+                          </div>
+                          <div>
+                            <h3 className="text-xl font-black uppercase tracking-tight text-primary">Premium Member</h3>
+                            <p className="text-sm font-bold text-muted-foreground mt-1">
+                              {profile.membership_expires_at ? (
+                                <>Valid until {new Date(profile.membership_expires_at).toLocaleDateString()}</>
+                              ) : (
+                                <>Lifetime Access</>
+                              )}
+                            </p>
+                          </div>
+                        </div>
+                        <Link 
+                          to="/book-club"
+                          className="bg-primary text-white px-8 py-4 rounded-2xl font-black text-xs uppercase tracking-widest hover:scale-105 transition-all shadow-xl shadow-primary/20 flex items-center gap-2"
+                        >
+                          Explore Benefits <ExternalLink className="w-4 h-4" />
+                        </Link>
+                      </div>
+                    )}
                     <div className="space-y-4">
                       <label className="text-xs font-black uppercase tracking-widest text-muted-foreground ml-1">Full Name</label>
                       <div className="glass p-4 rounded-2xl flex items-center gap-4 border-white/5">

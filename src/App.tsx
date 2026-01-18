@@ -13,6 +13,7 @@ const BookClub = lazy(() => lazyRetry(() => import('@/pages/public/BookClub')));
 const Events = lazy(() => lazyRetry(() => import('@/pages/public/Events')));
 const PartnershipApply = lazy(() => lazyRetry(() => import('@/pages/public/PartnershipApply')));
 const AuthorApply = lazy(() => lazyRetry(() => import('@/pages/public/AuthorApply')));
+const Membership = lazy(() => lazyRetry(() => import('@/pages/public/Membership')));
 const TrackOrder = lazy(() => lazyRetry(() => import('@/pages/public/TrackOrder')));
 
 // Auth Pages
@@ -64,6 +65,7 @@ function App() {
               <Route path="/partnership/apply" element={<PartnershipApply />} />
               <Route path="/apply" element={<Navigate to="/partnership/apply" replace />} />
               <Route path="/author-apply" element={<AuthorApply />} />
+              <Route path="/membership" element={<Membership />} />
               <Route path="/track-order" element={<TrackOrder />} />
 
               {/* Auth Routes */}

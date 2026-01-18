@@ -21,7 +21,7 @@ export default function Checkout() {
   const [step, setStep] = useState<CheckoutStep>('shipping');
   const { formatPrice } = useCurrency();
   const { cartItems, cartTotal, clearCart } = useCart();
-  const { user, loading } = useAuth();
+  const { user, profile, loading } = useAuth();
   const { settings } = useSettings();
   const [isProcessing, setIsProcessing] = useState(false);
   const [orderNumber, setOrderNumber] = useState('');
@@ -44,6 +44,17 @@ export default function Checkout() {
     }
   }, [user, loading, navigate]);
 
+  useEffect(() => {
+    if (user || profile) {
+      setFormData(prev => ({
+        ...prev,
+        fullName: profile?.full_name || '',
+        email: user?.email || '',
+        phone: user?.phone || ''
+      }));
+    }
+  }, [user, profile]);
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[calc(100vh-200px)]">
@@ -53,6 +64,32 @@ export default function Checkout() {
   }
 
   if (!user) return null;
+
+  if (cartItems.length === 0 && step !== 'confirmation') {
+    return (
+      <div className="container mx-auto px-4 py-24 text-center">
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="glass p-12 rounded-[3rem] inline-block"
+        >
+          <div className="w-24 h-24 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-8">
+            <ShoppingBag className="w-12 h-12 text-primary" />
+          </div>
+          <h2 className="text-4xl font-black mb-4">Your cart is empty</h2>
+          <p className="text-muted-foreground text-lg mb-10 max-w-md mx-auto">
+            Add some books to your cart before checking out.
+          </p>
+          <Link 
+            to="/shop"
+            className="inline-flex items-center gap-2 bg-primary text-white px-10 py-4 rounded-2xl font-black text-lg shadow-xl shadow-primary/20 hover:scale-105 transition-transform"
+          >
+            Go to Shop <ArrowRight className="w-5 h-5" />
+          </Link>
+        </motion.div>
+      </div>
+    );
+  }
   
   const taxRate = settings?.tax_rate || 16;
   const shipping = cartTotal > 5000 ? 0 : 500;
@@ -177,28 +214,6 @@ export default function Checkout() {
       setIsProcessing(false);
     }
   };
-
-  if (cartItems.length === 0 && step !== 'confirmation') {
-    return (
-      <div className="container mx-auto px-4 py-24 text-center">
-        <div className="glass p-12 rounded-[3rem] inline-block">
-          <div className="w-20 h-20 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-6">
-            <ShoppingBag className="w-10 h-10 text-primary" />
-          </div>
-          <h2 className="text-3xl font-black mb-4">Your cart is empty</h2>
-          <p className="text-muted-foreground mb-8">Add some books to your cart before checking out.</p>
-          <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-            <motion.a 
-              href="/shop"
-              className="bg-primary text-white px-10 py-4 rounded-2xl font-black text-lg shadow-xl shadow-primary/20 block"
-            >
-              Go Shopping
-            </motion.a>
-          </motion.div>
-        </div>
-      </div>
-    );
-  }
 
   const steps = [
     { id: 'shipping', label: 'Shipping', icon: <Truck className="w-5 h-5" /> },

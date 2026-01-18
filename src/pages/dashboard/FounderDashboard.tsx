@@ -10,7 +10,7 @@ import {
   Truck, Tag, Calendar, MessageSquare,
   Handshake, Users2, Settings, RefreshCw, Eye, Power,
   ChevronDown, Upload, X, PenTool, Building2,
-  AlertTriangle, Layers, AlertCircle
+  AlertTriangle, Layers, AlertCircle, ShieldCheck
 } from 'lucide-react';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useCurrency } from '@/contexts/CurrencyContext';
@@ -2130,6 +2130,7 @@ export default function FounderDashboard() {
                         <tr>
                           <th className="px-10 py-6">User Profile</th>
                           <th className="px-10 py-6">Authority Level</th>
+                          <th className="px-10 py-6">Membership</th>
                           <th className="px-10 py-6">Active Status</th>
                           <th className="px-10 py-6 text-right">Security Operations</th>
                         </tr>
@@ -2157,6 +2158,25 @@ export default function FounderDashboard() {
                               }`}>
                                 {user.role}
                               </span>
+                            </td>
+                            <td className="px-10 py-6">
+                              {user.is_member ? (
+                                <div className="flex flex-col">
+                                  <span className="text-[10px] font-black uppercase tracking-widest text-primary flex items-center gap-2">
+                                    <ShieldCheck className="w-3 h-3" />
+                                    Premium Member
+                                  </span>
+                                  {user.membership_expires_at && (
+                                    <span className="text-[9px] text-muted-foreground font-bold mt-1">
+                                      Expires: {new Date(user.membership_expires_at).toLocaleDateString()}
+                                    </span>
+                                  )}
+                                </div>
+                              ) : (
+                                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                                  Standard User
+                                </span>
+                              )}
                             </td>
                             <td className="px-10 py-6">
                               <div className="flex items-center gap-3">
@@ -2483,10 +2503,70 @@ export default function FounderDashboard() {
                             <div className={`absolute top-1 w-6 h-6 bg-white rounded-full transition-all ${settings?.maintenance_mode ? 'right-1' : 'left-1'}`} />
                           </button>
                         </div>
+
+                        <div className="flex items-center justify-between p-6 bg-primary/5 border border-primary/10 rounded-3xl">
+                          <div>
+                            <p className="font-black text-primary uppercase tracking-widest">Membership Payment Wall</p>
+                            <p className="text-xs text-muted-foreground mt-1">Gate exclusive content behind a paywall</p>
+                          </div>
+                          <button 
+                            type="button"
+                            onClick={() => setSettings(prev => prev ? {...prev, membership_wall_active: !prev.membership_wall_active} : null)}
+                            className={`w-16 h-8 rounded-full relative group transition-all ${settings?.membership_wall_active ? 'bg-primary' : 'bg-slate-200'}`}
+                          >
+                            <div className={`absolute top-1 w-6 h-6 bg-white rounded-full transition-all ${settings?.membership_wall_active ? 'right-1' : 'left-1'}`} />
+                          </button>
+                        </div>
                       </div>
                     </div>
                     
                     <div className="space-y-8">
+                      <div className="glass p-10 rounded-[3rem] space-y-8 border-slate-200 bg-white shadow-sm">
+                        <h4 className="text-xl font-black flex items-center gap-3 text-slate-900">
+                          <Shield className="w-6 h-6 text-primary" />
+                          Membership Infrastructure
+                        </h4>
+                        <div className="space-y-6">
+                          <div className="space-y-3">
+                            <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Membership Price ({settings?.default_currency || 'KES'})</label>
+                            <input 
+                              type="number" 
+                              value={settings?.membership_price || 1000} 
+                              onChange={(e) => setSettings(prev => prev ? {...prev, membership_price: Number(e.target.value)} : null)}
+                              className="w-full bg-white border border-slate-200 rounded-2xl px-6 py-4 font-black focus:ring-2 focus:ring-primary outline-none text-slate-900" 
+                            />
+                          </div>
+                          <div className="space-y-3">
+                            <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Duration (Days)</label>
+                            <input 
+                              type="number" 
+                              value={settings?.membership_duration_days || 30} 
+                              onChange={(e) => setSettings(prev => prev ? {...prev, membership_duration_days: Number(e.target.value)} : null)}
+                              className="w-full bg-white border border-slate-200 rounded-2xl px-6 py-4 font-black focus:ring-2 focus:ring-primary outline-none text-slate-900" 
+                            />
+                          </div>
+                          <div className="space-y-3">
+                            <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Wall Title</label>
+                            <input 
+                              type="text" 
+                              value={settings?.membership_title || ''} 
+                              onChange={(e) => setSettings(prev => prev ? {...prev, membership_title: e.target.value} : null)}
+                              className="w-full bg-white border border-slate-200 rounded-2xl px-6 py-4 font-black focus:ring-2 focus:ring-primary outline-none text-slate-900" 
+                              placeholder="e.g. ReadMart Premium Member"
+                            />
+                          </div>
+                          <div className="space-y-3">
+                            <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Wall Description</label>
+                            <textarea 
+                              value={settings?.membership_description || ''} 
+                              onChange={(e) => setSettings(prev => prev ? {...prev, membership_description: e.target.value} : null)}
+                              className="w-full bg-white border border-slate-200 rounded-2xl px-6 py-4 font-black outline-none min-h-[100px] resize-none text-slate-900" 
+                              placeholder="Describe the benefits of joining..."
+                            />
+                          </div>
+                        </div>
+                      </div>
+
                       <div className="glass p-10 rounded-[3rem] space-y-8 border-slate-200 bg-white shadow-sm">
                         <h4 className="text-xl font-black flex items-center gap-3 text-slate-900">
                           <RefreshCw className="w-6 h-6 text-primary" />

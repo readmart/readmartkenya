@@ -28,6 +28,7 @@ import {
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { Link } from 'react-router-dom';
+import { PaymentWall } from '@/components/membership/PaymentWall';
 
 type Tab = 'communities' | 'insights' | 'reviews' | 'events';
 
@@ -130,24 +131,25 @@ export default function BookClub() {
         </motion.div>
       </div>
 
-      {/* Tabs Navigation */}
-      <div className="flex flex-wrap justify-center gap-4 mb-12">
-        {(['communities', 'insights', 'reviews', 'events'] as Tab[]).map((tab) => (
-          <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
-            className={`px-8 py-4 rounded-2xl font-black uppercase tracking-widest text-xs transition-all ${
-              activeTab === tab 
-                ? 'bg-primary text-white shadow-xl shadow-primary/20 scale-105' 
-                : 'glass hover:bg-white/10'
-            }`}
-          >
-            {tab}
-          </button>
-        ))}
-      </div>
+      <PaymentWall>
+        {/* Tabs Navigation */}
+        <div className="flex flex-wrap justify-center gap-4 mb-12">
+          {(['communities', 'insights', 'reviews', 'events'] as Tab[]).map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`px-8 py-4 rounded-2xl font-black uppercase tracking-widest text-xs transition-all ${
+                activeTab === tab 
+                  ? 'bg-primary text-white shadow-xl shadow-primary/20 scale-105' 
+                  : 'glass hover:bg-white/10'
+              }`}
+            >
+              {tab}
+            </button>
+          ))}
+        </div>
 
-      <AnimatePresence mode="wait">
+        <AnimatePresence mode="wait">
         <motion.div
           key={activeTab}
           initial={{ opacity: 0, y: 20 }}
@@ -360,7 +362,8 @@ export default function BookClub() {
             </div>
           )}
         </motion.div>
-      </AnimatePresence>
+        </AnimatePresence>
+      </PaymentWall>
     </div>
   );
 }

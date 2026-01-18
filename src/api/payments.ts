@@ -51,3 +51,35 @@ export async function checkPaymentStatus(orderId: string) {
     return null;
   }
 }
+
+/**
+ * Initiates a Membership payment
+ */
+export async function initiateMembershipPayment(phoneNumber: string, amount: number) {
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    
+    const response = await fetch('/api/payments/init', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session?.access_token}`
+      },
+      body: JSON.stringify({
+        type: 'membership',
+        phone: phoneNumber,
+        amount
+      })
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Failed to initiate membership payment');
+    }
+
+    return await response.json();
+  } catch (error: any) {
+    console.error('Membership Payment Error:', error);
+    return { error: error.message || 'Failed to initiate membership payment' };
+  }
+}

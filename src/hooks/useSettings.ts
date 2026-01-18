@@ -17,6 +17,11 @@ export interface SiteSettings {
   twitter_url?: string;
   linkedin_url?: string;
   announcement_text?: string;
+  membership_wall_active?: boolean;
+  membership_price?: number;
+  membership_duration_days?: number;
+  membership_title?: string;
+  membership_description?: string;
 }
 
 const defaultSettings: SiteSettings = {
@@ -35,6 +40,11 @@ const defaultSettings: SiteSettings = {
   twitter_url: 'https://x.com/readmartke',
   linkedin_url: 'https://linkedin.com/company/readmartke',
   announcement_text: '',
+  membership_wall_active: false,
+  membership_price: 1000,
+  membership_duration_days: 30,
+  membership_title: 'ReadMart Premium Member',
+  membership_description: 'Get exclusive access to book clubs, insights, and early bird events.',
 };
 
 export function useSettings() {

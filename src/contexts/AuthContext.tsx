@@ -9,6 +9,9 @@ export interface Profile {
   full_name: string | null;
   avatar_url: string | null;
   role: UserRole;
+  is_member?: boolean;
+  membership_expires_at?: string;
+  membership_started_at?: string;
 }
 
 export interface AuthContextType {

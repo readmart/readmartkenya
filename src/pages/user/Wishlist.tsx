@@ -2,19 +2,26 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useWishlist } from '@/contexts/WishlistContext';
 import { useCart } from '@/contexts/CartContext';
 import { useCurrency } from '@/contexts/CurrencyContext';
-import { Trash2, ShoppingCart, Heart, ArrowRight } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Trash2, ShoppingCart, Heart, ArrowRight, Zap } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 
 export default function Wishlist() {
+  const navigate = useNavigate();
   const { wishlistItems, removeFromWishlist, clearWishlist } = useWishlist();
-  const { addToCart } = useCart();
+  const { addToCart, buyNow } = useCart();
   const { formatPrice } = useCurrency();
 
   const handleMoveToCart = (item: any) => {
     addToCart(item);
     removeFromWishlist(item.id);
     toast.success(`${item.title} moved to cart!`);
+  };
+
+  const handleBuyNow = (item: any) => {
+    buyNow(item);
+    removeFromWishlist(item.id);
+    navigate('/checkout');
   };
 
   if (wishlistItems.length === 0) {
@@ -97,11 +104,18 @@ export default function Wishlist() {
 
               <div className="flex flex-col sm:flex-row items-center gap-4 w-full md:w-auto">
                 <button 
-                  onClick={() => handleMoveToCart(item)}
-                  className="w-full md:w-auto flex items-center justify-center gap-3 bg-primary text-white px-8 py-4 rounded-2xl font-black shadow-lg shadow-primary/20 hover:scale-105 transition-transform"
+                  onClick={() => handleBuyNow(item)}
+                  className="w-full sm:w-auto px-8 py-4 bg-primary text-white rounded-2xl font-black text-sm flex items-center justify-center gap-2 hover:scale-105 transition-all shadow-lg shadow-primary/20"
                 >
-                  <ShoppingCart className="w-5 h-5" />
-                  Move to Cart
+                  <Zap className="w-4 h-4 fill-white" />
+                  BUY NOW
+                </button>
+                <button 
+                  onClick={() => handleMoveToCart(item)}
+                  className="w-full sm:w-auto px-8 py-4 glass rounded-2xl font-black text-sm flex items-center justify-center gap-2 hover:bg-white/10 transition-all border border-white/10"
+                >
+                  <ShoppingCart className="w-4 h-4" />
+                  MOVE TO CART
                 </button>
                 <button 
                   onClick={() => removeFromWishlist(item.id)}

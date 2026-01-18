@@ -55,84 +55,129 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         ].includes(eventType) || eventType?.includes('payment');
 
         if (isTransactionEvent) {
-          const finalStatus = (isSuccess || status === 'Success' || status === 'Completed') ? 'paid' : 'failed';
+          const finalStatus = isSuccess ? 'paid' : 'failed';
+          const isMembership = orderId.startsWith('MEMB-');
           
-          console.log(`Updating order ${orderId} status to ${finalStatus}`);
-          const updatePayload: any = { 
-            status: finalStatus,
-            payment_metadata: payload 
-          };
-          
-          if (transactionId) {
-            updatePayload.payment_id = transactionId;
-          }
-          
-          const { data: updatedOrders, error: orderError } = await supabase
-            .from('orders')
-            .update(updatePayload)
-            .eq('id', orderId)
-            .select();
-
-          if (orderError) throw orderError;
-
-          if (updatedOrders && updatedOrders.length > 0) {
-            const order = updatedOrders[0];
+          if (isMembership) {
+            console.log(`Processing membership payment for order ${orderId}, status: ${finalStatus}`);
             
-            // Log transaction
-            await supabase.from('transactions').insert([{
-              order_id: order.id,
-              user_id: order.user_id,
-              amount: amount || order.total_amount,
-              status: isSuccess ? 'completed' : 'failed',
-              provider_reference: transactionId,
-              metadata: payload
-            }]);
+            // 1. Update membership_payments table
+            const { data: membershipPayments, error: membError } = await supabase
+              .from('membership_payments')
+              .update({ 
+                status: isSuccess ? 'completed' : 'failed',
+                payment_id: transactionId,
+                metadata: payload
+              })
+              .eq('payment_id', transactionId) // Or use a custom metadata field if needed
+              .select();
 
-            if (isSuccess) {
-              await calculateOrderCommissions(order.id);
+            if (membError) console.error('Membership update error:', membError);
+
+            if (isSuccess && membershipPayments?.[0]) {
+              const payment = membershipPayments[0];
+              const userId = payment.user_id;
+
+              // 2. Update profile to member status
+              const { data: settings } = await supabase.from('settings').select('membership_duration_days').maybeSingle();
+              const duration = settings?.membership_duration_days || 30;
               
-              // Notifications
-              if (order.user_id) {
-                await createNotification({
-                  userId: order.user_id,
-                  type: 'order',
-                  title: 'Payment Received!',
-                  message: `Your payment of KES ${order.total_amount} for order #${order.id.slice(0, 8).toUpperCase()} was successful.`,
-                  link: `/account?tab=orders`
-                });
-              }
+              const expiresAt = new Date();
+              expiresAt.setDate(expiresAt.getDate() + duration);
 
-              // Email
-              try {
-                // Fetch items with product type and ebook metadata
-                const { data: items } = await supabase
-                  .from('order_items')
-                  .select(`
-                    *,
-                    product:products(
-                      type,
-                      ebook_metadata(password)
-                    )
-                  `)
-                  .eq('order_id', order.id);
+              await supabase.from('profiles').update({
+                is_member: true,
+                membership_started_at: new Date().toISOString(),
+                membership_expires_at: expiresAt.toISOString()
+              }).eq('id', userId);
 
-                const email = order.shipping_address?.email;
-                if (email) {
-                  const processedItems = (items as any[])?.map(item => ({
-                    ...item,
-                    is_ebook: item.product?.type === 'ebook',
-                    ebook_password: item.product?.ebook_metadata?.[0]?.password || item.product?.ebook_metadata?.password
-                  }));
+              // 3. Create notification
+              await createNotification({
+                userId,
+                type: 'system',
+                title: 'Membership Activated!',
+                message: `Welcome to ReadMart Premium! Your membership is now active until ${expiresAt.toLocaleDateString()}.`,
+                link: '/account'
+              });
+            }
+          } else {
+            console.log(`Updating order ${orderId} status to ${finalStatus}`);
+            const updatePayload: any = { 
+              status: finalStatus,
+              payment_metadata: payload 
+            };
+            
+            if (transactionId) {
+              updatePayload.payment_id = transactionId;
+            }
+            
+            const { data: updatedOrders, error: orderError } = await supabase
+              .from('orders')
+              .update(updatePayload)
+              .eq('id', orderId)
+              .select();
 
-                  const html = renderOrderConfirmationEmail({ order, items: processedItems || [] });
-                  await sendEmail({
-                    to: email,
-                    subject: `Order Confirmed - #${order.id.slice(0, 8).toUpperCase()}`,
-                    html
+            if (orderError) throw orderError;
+
+            if (updatedOrders && updatedOrders.length > 0) {
+              const order = updatedOrders[0];
+              
+              // Log transaction
+              await supabase.from('transactions').insert([{
+                order_id: order.id,
+                user_id: order.user_id,
+                amount: amount || order.total_amount,
+                status: isSuccess ? 'completed' : 'failed',
+                provider_reference: transactionId,
+                metadata: payload
+              }]);
+
+              if (isSuccess) {
+                await calculateOrderCommissions(order.id);
+                
+                // Notifications
+                if (order.user_id) {
+                  await createNotification({
+                    userId: order.user_id,
+                    type: 'order',
+                    title: 'Payment Received!',
+                    message: `Your payment of KES ${order.total_amount} for order #${order.id.slice(0, 8).toUpperCase()} was successful.`,
+                    link: `/account?tab=orders`
                   });
                 }
-              } catch (e) {
-                console.error('Email failed:', e);
+
+                // Email
+                try {
+                  // Fetch items with product type and ebook metadata
+                  const { data: items } = await supabase
+                    .from('order_items')
+                    .select(`
+                      *,
+                      product:products(
+                        type,
+                        ebook_metadata(password)
+                      )
+                    `)
+                    .eq('order_id', order.id);
+
+                  const email = order.shipping_address?.email;
+                  if (email) {
+                    const processedItems = (items as any[])?.map(item => ({
+                      ...item,
+                      is_ebook: item.product?.type === 'ebook',
+                      ebook_password: item.product?.ebook_metadata?.[0]?.password || item.product?.ebook_metadata?.password
+                    }));
+
+                    const html = renderOrderConfirmationEmail({ order, items: processedItems || [] });
+                    await sendEmail({
+                      to: email,
+                      subject: `Order Confirmed - #${order.id.slice(0, 8).toUpperCase()}`,
+                      html
+                    });
+                  }
+                } catch (e) {
+                  console.error('Email failed:', e);
+                }
               }
             }
           }
@@ -145,31 +190,43 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // --- INIT PAYMENT ---
     if (url.includes('init')) {
       if (method !== 'POST') return json(res, 405, { error: 'Method not allowed' });
-      const { orderId, phone, amount, firstName, lastName, email } = req.body;
+      const { orderId, phone, amount, firstName, lastName, email, type } = req.body;
       
-      if (!orderId || !phone || !amount) return badRequest(res, 'Missing payment details');
+      const isMembership = type === 'membership';
+      if (!isMembership && (!orderId || !phone || !amount)) return badRequest(res, 'Missing payment details');
+      if (isMembership && (!phone || !amount)) return badRequest(res, 'Missing phone or amount for membership');
 
       try {
+        const { data: { user } } = await supabase.auth.getUser(req.headers.authorization?.split(' ')[1] || '');
+        const finalOrderId = orderId || `MEMB-${user?.id?.slice(0, 8)}-${Date.now()}`;
+
         const k2Result = await initiateK2StkPush({
           phone,
           amount,
-          orderId,
+          orderId: finalOrderId,
           firstName,
           lastName,
           email,
         });
 
-        // Update order with payment request location for polling
+        // Update appropriate table with payment request location for polling
         const paymentId = k2Result.location || (k2Result as any).id;
-        const updatePayload: any = { 
-          payment_metadata: k2Result 
-        };
         
-        if (paymentId) {
-          updatePayload.payment_id = paymentId;
+        if (isMembership && user) {
+          await supabase.from('membership_payments').insert([{
+            user_id: user.id,
+            amount,
+            status: 'pending',
+            payment_id: paymentId,
+            metadata: { ...k2Result, type: 'membership' }
+          }]);
+        } else if (orderId) {
+          const updatePayload: any = { 
+            payment_metadata: k2Result 
+          };
+          if (paymentId) updatePayload.payment_id = paymentId;
+          await supabase.from('orders').update(updatePayload).eq('id', orderId);
         }
-
-        await supabase.from('orders').update(updatePayload).eq('id', orderId);
 
         return json(res, 200, k2Result);
       } catch (err: any) {
