@@ -586,10 +586,15 @@ export async function updateOrderStatus(id: string, status: string) {
  * Update site settings
  */
 export async function updateSiteSettings(updates: any) {
+  // Use upsert to handle both creation and update of the global settings row
   const { error } = await supabase
     .from('settings')
-    .update(updates)
-    .eq('id', 'global'); // Assuming single settings row
+    .upsert({ 
+      id: 'global', // We use a fixed ID for the single settings row
+      ...updates,
+      updated_at: new Date().toISOString()
+    })
+    .eq('id', 'global');
 
   if (error) throw error;
   return true;

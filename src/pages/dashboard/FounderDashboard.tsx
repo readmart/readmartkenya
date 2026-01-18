@@ -61,11 +61,13 @@ type DashboardTab =
   | 'clubs' 
   | 'users' 
   | 'team' 
-  | 'settings';
+  | 'settings'
+  | 'global-logic';
 
 export default function FounderDashboard() {
   const [activeTab, setActiveTab] = useState<DashboardTab>('overview');
   const [inventorySearch, setInventorySearch] = useState('');
+  const [userSearch, setUserSearch] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalType, setModalType] = useState<string>('');
   const [modalData, setModalData] = useState<any>(null);
@@ -115,33 +117,37 @@ export default function FounderDashboard() {
      description: ''
    });
 
-   const [teamForm, setTeamForm] = useState<{
-     full_name: string;
-     email: string;
-     role: string;
-     is_active: boolean;
-   }>({
-     full_name: '',
-     email: '',
-     role: 'manager',
-     is_active: true
-   });
+  const [teamForm, setTeamForm] = useState<{
+    full_name: string;
+    email: string;
+    role: string;
+    is_active: boolean;
+    bio?: string;
+  }>({
+    full_name: '',
+    email: '',
+    role: 'manager',
+    is_active: true,
+    bio: ''
+  });
 
-   const [eventForm, setEventForm] = useState<{
-     title: string;
-     published_at: string;
-     metadata: {
-       location: string;
-       registrations_count: number;
-     }
-   }>({
-     title: '',
-     published_at: '',
-     metadata: {
-       location: '',
-       registrations_count: 0
-     }
-   });
+  const [eventForm, setEventForm] = useState<{
+    title: string;
+    published_at: string;
+    image_url?: string;
+    metadata: {
+      location: string;
+      registrations_count: number;
+    }
+  }>({
+    title: '',
+    published_at: '',
+    image_url: '',
+    metadata: {
+      location: '',
+      registrations_count: 0
+    }
+  });
 
    const [clubForm, setClubForm] = useState<{
      title: string;
@@ -286,6 +292,7 @@ export default function FounderDashboard() {
           setTeam(await getTeamMembers());
           break;
         case 'settings':
+        case 'global-logic':
           setSettings(await getSiteSettings());
           break;
       }
@@ -541,6 +548,16 @@ export default function FounderDashboard() {
     return days.map(day => ({ name: day, sales: grouped[day] || 0 }));
   }, [analytics]);
 
+  const filteredUsers = useMemo(() => {
+    if (!userSearch) return users;
+    const search = userSearch.toLowerCase();
+    return users.filter(user => 
+      user.full_name?.toLowerCase().includes(search) || 
+      user.email?.toLowerCase().includes(search) ||
+      user.role?.toLowerCase().includes(search)
+    );
+  }, [users, userSearch]);
+
   const tabs = [
     { id: 'overview', label: 'Overview', icon: <TrendingUp className="w-4 h-4" />, color: 'from-blue-500 to-indigo-500' },
     { id: 'products', label: 'Products', icon: <Package className="w-4 h-4" />, color: 'from-emerald-500 to-teal-500' },
@@ -555,7 +572,8 @@ export default function FounderDashboard() {
     { id: 'clubs', label: 'Clubs', icon: <Users2 className="w-4 h-4" />, color: 'from-orange-500 to-amber-500' },
     { id: 'users', label: 'Users', icon: <Users className="w-4 h-4" />, color: 'from-violet-500 to-purple-500' },
     { id: 'team', label: 'Team', icon: <Shield className="w-4 h-4" />, color: 'from-blue-600 to-indigo-600' },
-    { id: 'settings', label: 'Settings', icon: <Settings className="w-4 h-4" />, color: 'from-slate-600 to-slate-800' },
+    { id: 'settings', label: 'Settings', icon: <Settings className="w-4 h-4" />, color: 'from-indigo-600 to-violet-700' },
+    { id: 'global-logic', label: 'Global Logic', icon: <RefreshCw className="w-4 h-4" />, color: 'from-amber-500 to-orange-600' },
   ];
 
   return (
@@ -598,43 +616,64 @@ export default function FounderDashboard() {
 
         {/* Navigation Tabs */}
         <div className="lg:hidden mb-12">
-          <div className="relative">
-            <select 
-              value={activeTab}
-              onChange={(e) => setActiveTab(e.target.value as DashboardTab)}
-              className="w-full bg-white border border-slate-200 rounded-2xl px-6 py-5 font-black outline-none appearance-none focus:ring-2 focus:ring-primary text-lg text-slate-900"
-            >
-              {tabs.map(tab => (
-                <option key={tab.id} value={tab.id} className="bg-white text-slate-900">
-                  {tab.label}
-                </option>
-              ))}
-            </select>
-            <ChevronDown className="absolute right-6 top-1/2 -translate-y-1/2 w-6 h-6 text-primary pointer-events-none" />
+          <div className="relative group">
+            <div className={`absolute inset-0 bg-gradient-to-r ${tabs.find(t => t.id === activeTab)?.color} blur-xl opacity-20 group-hover:opacity-40 transition-opacity rounded-2xl`} />
+            <div className="relative">
+              <select 
+                value={activeTab}
+                onChange={(e) => setActiveTab(e.target.value as DashboardTab)}
+                className={`w-full bg-white border-2 rounded-2xl px-6 py-5 font-black outline-none appearance-none focus:ring-4 transition-all text-lg text-slate-900 shadow-xl ${
+                  activeTab ? `border-primary/20 ring-primary/10` : 'border-slate-200'
+                }`}
+              >
+                {tabs.map(tab => (
+                  <option key={tab.id} value={tab.id} className="bg-white text-slate-900 font-bold py-4">
+                    {tab.label}
+                  </option>
+                ))}
+              </select>
+              <div className={`absolute right-6 top-1/2 -translate-y-1/2 p-2 rounded-xl bg-gradient-to-br ${tabs.find(t => t.id === activeTab)?.color} text-white shadow-lg`}>
+                <ChevronDown className="w-5 h-5" />
+              </div>
+            </div>
           </div>
         </div>
 
-        <nav className="hidden lg:flex gap-2 mb-12 overflow-x-auto pb-4 scrollbar-hide no-scrollbar">
+        <nav className="hidden lg:flex gap-3 mb-12 overflow-x-auto pb-6 scrollbar-hide no-scrollbar px-2">
           {tabs.map(tab => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id as DashboardTab)}
-              className={`flex items-center gap-3 px-6 py-4 rounded-2xl font-black whitespace-nowrap transition-all duration-300 relative group ${
+              className={`flex items-center gap-3 px-8 py-5 rounded-[2rem] font-black whitespace-nowrap transition-all duration-500 relative group overflow-visible ${
                 activeTab === tab.id 
-                  ? 'text-white' 
-                  : 'text-muted-foreground hover:text-slate-900 glass hover:bg-slate-100 border-slate-200 bg-white'
+                  ? 'text-white shadow-2xl scale-105' 
+                  : 'text-muted-foreground hover:text-slate-900 glass hover:bg-slate-50 border-slate-200 bg-white hover:scale-102'
               }`}
             >
               {activeTab === tab.id && (
-                <motion.div 
-                  layoutId="activeTab"
-                  className={`absolute inset-0 bg-gradient-to-r ${tab.color} rounded-2xl -z-10 shadow-lg shadow-primary/20`}
-                />
+                <>
+                  <motion.div 
+                    layoutId="activeTabGlow"
+                    className={`absolute inset-0 bg-gradient-to-r ${tab.color} rounded-[2rem] blur-xl opacity-40 -z-20 scale-110`}
+                  />
+                  <motion.div 
+                    layoutId="activeTab"
+                    className={`absolute inset-0 bg-gradient-to-r ${tab.color} rounded-[2rem] -z-10 shadow-2xl ring-4 ring-white/20`}
+                  />
+                </>
               )}
-              <span className={`${activeTab === tab.id ? 'scale-110' : 'group-hover:scale-110'} transition-transform`}>
+              <span className={`${activeTab === tab.id ? 'scale-125 rotate-[360deg]' : 'group-hover:scale-110'} transition-all duration-700`}>
                 {tab.icon}
               </span>
-              {tab.label}
+              <span className="relative">
+                {tab.label}
+                {activeTab === tab.id && (
+                  <motion.span 
+                    layoutId="activeTabDot"
+                    className="absolute -top-1 -right-3 w-2 h-2 bg-white rounded-full shadow-glow"
+                  />
+                )}
+              </span>
             </button>
           ))}
         </nav>
@@ -1757,22 +1796,34 @@ export default function FounderDashboard() {
 
               {activeTab === 'users' && (
                 <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-8">
-                  <div className="flex justify-between items-center">
+                  <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
                     <div>
                       <h3 className="text-3xl font-black mb-2 text-slate-900">Demographic Insight</h3>
                       <p className="text-muted-foreground">Security, Safety, and Demographic Intelligence</p>
                     </div>
-                    <button 
-                      onClick={() => { 
-                        setModalType('user'); 
-                        setModalData(null);
-                        setUserForm({ full_name: '', email: '', role: 'customer', is_active: true });
-                        setIsModalOpen(true); 
-                      }}
-                      className="bg-primary text-white px-8 py-4 rounded-2xl font-black text-sm shadow-lg shadow-primary/20"
-                    >
-                      Register Protocol User
-                    </button>
+                    <div className="flex flex-col sm:flex-row gap-4 w-full md:w-auto">
+                      <div className="relative flex-1 sm:min-w-[300px]">
+                        <Search className="absolute left-6 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                        <input 
+                          type="text" 
+                          placeholder="Search users by name, email, or role..."
+                          value={userSearch}
+                          onChange={(e) => setUserSearch(e.target.value)}
+                          className="w-full bg-white border border-slate-200 pl-16 pr-6 py-4 font-black outline-none focus:ring-2 focus:ring-primary shadow-sm rounded-2xl"
+                        />
+                      </div>
+                      <button 
+                        onClick={() => { 
+                          setModalType('user'); 
+                          setModalData(null);
+                          setUserForm({ full_name: '', email: '', role: 'customer', is_active: true });
+                          setIsModalOpen(true); 
+                        }}
+                        className="bg-primary text-white px-8 py-4 rounded-2xl font-black text-sm shadow-lg shadow-primary/20 hover:scale-[1.02] transition-all whitespace-nowrap"
+                      >
+                        Register Protocol User
+                      </button>
+                    </div>
                   </div>
 
                   <div className="glass rounded-[3rem] overflow-hidden border-slate-200 bg-white shadow-sm">
@@ -1786,7 +1837,7 @@ export default function FounderDashboard() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
-                        {users.map((user) => (
+                        {filteredUsers.map((user) => (
                           <tr key={user.id} className="hover:bg-slate-100 transition-all group">
                             <td className="px-10 py-6">
                               <div className="flex items-center gap-6">
@@ -1941,63 +1992,11 @@ export default function FounderDashboard() {
               {activeTab === 'settings' && (
                 <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-12">
                   <div>
-                    <h3 className="text-3xl font-black mb-2 text-slate-900">Global Logic</h3>
-                    <p className="text-muted-foreground">Sovereign Control and Global Configuration</p>
+                    <h3 className="text-3xl font-black mb-2 text-slate-900">Platform Settings</h3>
+                    <p className="text-muted-foreground">Identity and Connectivity Governance</p>
                   </div>
 
-                  <form onSubmit={handleSaveSettings} className="grid lg:grid-cols-2 gap-12">
-                    {/* Fundamental Constants */}
-                    <div className="space-y-8">
-                      <div className="glass p-10 rounded-[3rem] space-y-8 border-slate-200 bg-white shadow-sm">
-                        <h4 className="text-xl font-black flex items-center gap-3 text-slate-900">
-                          <DollarSign className="w-6 h-6 text-primary" />
-                          Fundamental Math
-                        </h4>
-                        <div className="grid sm:grid-cols-2 gap-8">
-                          <div className="space-y-3">
-                            <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Base Tax Rate (%)</label>
-                            <input 
-                              type="number" 
-                              value={settings?.tax_rate || 16} 
-                              onChange={(e) => setSettings({...settings, tax_rate: Number(e.target.value)})}
-                              className="w-full bg-white border border-slate-200 rounded-2xl px-6 py-4 font-black focus:ring-2 focus:ring-primary outline-none text-slate-900" 
-                            />
-                          </div>
-                          <div className="space-y-3">
-                            <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Default Currency</label>
-                            <select 
-                              value={settings?.default_currency || 'KES'}
-                              onChange={(e) => setSettings({...settings, default_currency: e.target.value})}
-                              className="w-full bg-white border border-slate-200 rounded-2xl px-6 py-4 font-black focus:ring-2 focus:ring-primary outline-none appearance-none text-slate-900"
-                            >
-                              <option value="KES">KES (Kenya Shilling)</option>
-                              <option value="USD">USD (US Dollar)</option>
-                            </select>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="glass p-10 rounded-[3rem] space-y-8 border-slate-200 bg-white shadow-sm">
-                        <h4 className="text-xl font-black flex items-center gap-3 text-red-500">
-                          <Power className="w-6 h-6" />
-                          Critical Overrides
-                        </h4>
-                        <div className="flex items-center justify-between p-6 bg-red-50 border border-red-100 rounded-3xl">
-                          <div>
-                            <p className="font-black text-red-500 uppercase tracking-widest">Maintenance Mode</p>
-                            <p className="text-xs text-muted-foreground mt-1">Suspend all customer operations immediately</p>
-                          </div>
-                          <button 
-                            type="button"
-                            onClick={() => setSettings({...settings, maintenance_mode: !settings?.maintenance_mode})}
-                            className={`w-16 h-8 rounded-full relative group transition-all ${settings?.maintenance_mode ? 'bg-red-500' : 'bg-slate-200'}`}
-                          >
-                            <div className={`absolute top-1 w-6 h-6 bg-white rounded-full transition-all ${settings?.maintenance_mode ? 'right-1' : 'left-1'}`} />
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-
+                  <form onSubmit={handleSaveSettings} className="grid lg:grid-cols-1 gap-12">
                     {/* Site Identity */}
                     <div className="glass p-10 rounded-[3rem] space-y-10 border-slate-200 bg-white shadow-sm">
                       <h4 className="text-xl font-black flex items-center gap-3 text-slate-900">
@@ -2044,12 +2043,164 @@ export default function FounderDashboard() {
                             />
                           </div>
                         </div>
+
+                        {/* Social Connectivity */}
+                        <div className="pt-8 border-t border-slate-100 space-y-6">
+                          <h5 className="text-xs font-black uppercase tracking-widest text-slate-400">Social Connectivity Hub</h5>
+                          <div className="grid sm:grid-cols-2 gap-6">
+                            <div className="space-y-2">
+                              <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Instagram Intelligence</label>
+                              <input 
+                                type="text" 
+                                placeholder="https://instagram.com/..."
+                                value={settings?.instagram_url || ''} 
+                                onChange={(e) => setSettings({...settings, instagram_url: e.target.value})}
+                                className="w-full bg-white border border-slate-200 rounded-2xl px-6 py-4 font-black outline-none text-slate-900" 
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Facebook Node</label>
+                              <input 
+                                type="text" 
+                                placeholder="https://facebook.com/..."
+                                value={settings?.facebook_url || ''} 
+                                onChange={(e) => setSettings({...settings, facebook_url: e.target.value})}
+                                className="w-full bg-white border border-slate-200 rounded-2xl px-6 py-4 font-black outline-none text-slate-900" 
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">X (Twitter) Signal</label>
+                              <input 
+                                type="text" 
+                                placeholder="https://x.com/..."
+                                value={settings?.twitter_url || ''} 
+                                onChange={(e) => setSettings({...settings, twitter_url: e.target.value})}
+                                className="w-full bg-white border border-slate-200 rounded-2xl px-6 py-4 font-black outline-none text-slate-900" 
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">LinkedIn Network</label>
+                              <input 
+                                type="text" 
+                                placeholder="https://linkedin.com/..."
+                                value={settings?.linkedin_url || ''} 
+                                onChange={(e) => setSettings({...settings, linkedin_url: e.target.value})}
+                                className="w-full bg-white border border-slate-200 rounded-2xl px-6 py-4 font-black outline-none text-slate-900" 
+                              />
+                            </div>
+                          </div>
+                        </div>
                       </div>
                       <button 
                         type="submit"
                         className="w-full py-5 bg-primary text-white rounded-[2rem] font-black shadow-xl shadow-primary/20 hover:scale-[1.02] transition-all"
                       >
-                        Commit Global Configuration
+                        Commit Identity Settings
+                      </button>
+                    </div>
+                  </form>
+                </motion.div>
+              )}
+
+              {activeTab === 'global-logic' && (
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-12">
+                  <div>
+                    <h3 className="text-3xl font-black mb-2 text-slate-900">Global Logic</h3>
+                    <p className="text-muted-foreground">Sovereign Control and Global Configuration</p>
+                  </div>
+
+                  <form onSubmit={handleSaveSettings} className="grid lg:grid-cols-2 gap-12">
+                    {/* Fundamental Constants */}
+                    <div className="space-y-8">
+                      <div className="glass p-10 rounded-[3rem] space-y-8 border-slate-200 bg-white shadow-sm">
+                        <h4 className="text-xl font-black flex items-center gap-3 text-slate-900">
+                          <DollarSign className="w-6 h-6 text-primary" />
+                          Fundamental Math
+                        </h4>
+                        <div className="grid sm:grid-cols-2 gap-8">
+                          <div className="space-y-3">
+                            <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Base Tax Rate (%)</label>
+                            <input 
+                              type="number" 
+                              value={settings?.tax_rate || 16} 
+                              onChange={(e) => setSettings({...settings, tax_rate: Number(e.target.value)})}
+                              className="w-full bg-white border border-slate-200 rounded-2xl px-6 py-4 font-black focus:ring-2 focus:ring-primary outline-none text-slate-900" 
+                            />
+                          </div>
+                          <div className="space-y-3">
+                            <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Default Currency</label>
+                            <select 
+                              value={settings?.default_currency || 'KES'}
+                              onChange={(e) => setSettings({...settings, default_currency: e.target.value})}
+                              className="w-full bg-white border border-slate-200 rounded-2xl px-6 py-4 font-black focus:ring-2 focus:ring-primary outline-none appearance-none text-slate-900"
+                            >
+                              <option value="KES">KES (Kenya Shilling)</option>
+                              <option value="USD">USD (US Dollar)</option>
+                            </select>
+                          </div>
+                        </div>
+
+                        <div className="space-y-3 pt-4">
+                          <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Global Announcement Intelligence</label>
+                          <textarea 
+                            value={settings?.announcement_text || ''} 
+                            onChange={(e) => setSettings({...settings, announcement_text: e.target.value})}
+                            className="w-full bg-white border border-slate-200 rounded-2xl px-6 py-4 font-black outline-none min-h-[100px] resize-none text-slate-900" 
+                            placeholder="Display a global notification to all users..."
+                          />
+                        </div>
+                      </div>
+
+                      <div className="glass p-10 rounded-[3rem] space-y-8 border-slate-200 bg-white shadow-sm">
+                        <h4 className="text-xl font-black flex items-center gap-3 text-red-500">
+                          <Power className="w-6 h-6" />
+                          Critical Overrides
+                        </h4>
+                        <div className="flex items-center justify-between p-6 bg-red-50 border border-red-100 rounded-3xl">
+                          <div>
+                            <p className="font-black text-red-500 uppercase tracking-widest">Maintenance Mode</p>
+                            <p className="text-xs text-muted-foreground mt-1">Suspend all customer operations immediately</p>
+                          </div>
+                          <button 
+                            type="button"
+                            onClick={() => setSettings({...settings, maintenance_mode: !settings?.maintenance_mode})}
+                            className={`w-16 h-8 rounded-full relative group transition-all ${settings?.maintenance_mode ? 'bg-red-500' : 'bg-slate-200'}`}
+                          >
+                            <div className={`absolute top-1 w-6 h-6 bg-white rounded-full transition-all ${settings?.maintenance_mode ? 'right-1' : 'left-1'}`} />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-8">
+                      <div className="glass p-10 rounded-[3rem] space-y-8 border-slate-200 bg-white shadow-sm">
+                        <h4 className="text-xl font-black flex items-center gap-3 text-slate-900">
+                          <RefreshCw className="w-6 h-6 text-primary" />
+                          System Synchronization
+                        </h4>
+                        <p className="text-sm text-muted-foreground font-medium">Force a global refresh of all cached analytics and inventory data across the ecosystem.</p>
+                        <button 
+                          type="button"
+                          onClick={() => {
+                            toast.promise(fetchTabData(), {
+                              loading: 'Synchronizing global intelligence...',
+                              success: 'System synchronized successfully',
+                              error: 'Synchronization failed'
+                            });
+                          }}
+                          className="w-full py-4 glass rounded-2xl font-black text-xs hover:bg-slate-100 transition-all uppercase tracking-widest border border-slate-200 text-slate-600 bg-white"
+                        >
+                          Execute Global Sync
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="lg:col-span-2">
+                      <button 
+                        type="submit"
+                        className="w-full py-5 bg-primary text-white rounded-[2rem] font-black shadow-xl shadow-primary/20 hover:scale-[1.02] transition-all"
+                      >
+                        Commit Global Logic Configuration
                       </button>
                     </div>
                   </form>
@@ -2441,43 +2592,53 @@ export default function FounderDashboard() {
                  )}
 
                  {modalType === 'event' && (
-                   <form id="eventForm" onSubmit={(e) => { e.preventDefault(); handleGenericSave('cms_content', { ...eventForm, type: 'event', is_active: true }); }} className="space-y-6">
-                     <div className="space-y-2">
-                       <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Event Designation</label>
-                       <input 
-                         type="text" 
-                         required
-                         className="w-full bg-white border border-slate-200 rounded-2xl px-6 py-4 font-black outline-none text-slate-900" 
-                         placeholder="e.g. Writers Workshop 2026" 
-                         value={eventForm.title}
-                         onChange={(e) => setEventForm({...eventForm, title: e.target.value})}
-                       />
-                     </div>
-                     <div className="grid grid-cols-2 gap-6">
-                       <div className="space-y-2">
-                         <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Temporal Data (Date)</label>
-                         <input 
-                           type="date" 
-                           required
-                           className="w-full bg-white border border-slate-200 rounded-2xl px-6 py-4 font-black outline-none text-slate-900" 
-                           value={eventForm.published_at}
-                           onChange={(e) => setEventForm({...eventForm, published_at: e.target.value})}
-                         />
-                       </div>
-                       <div className="space-y-2">
-                         <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Location Node</label>
-                         <input 
-                           type="text" 
-                           required
-                           className="w-full bg-white border border-slate-200 rounded-2xl px-6 py-4 font-black outline-none text-slate-900" 
-                           placeholder="ReadMart Hub / Zoom" 
-                           value={eventForm.metadata.location}
-                           onChange={(e) => setEventForm({...eventForm, metadata: { ...eventForm.metadata, location: e.target.value }})}
-                         />
-                       </div>
-                     </div>
-                   </form>
-                 )}
+                  <form id="eventForm" onSubmit={(e) => { e.preventDefault(); handleGenericSave('cms_content', { ...eventForm, type: 'event', is_active: true }); }} className="space-y-6">
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Event Designation</label>
+                      <input 
+                        type="text" 
+                        required
+                        className="w-full bg-white border border-slate-200 rounded-2xl px-6 py-4 font-black outline-none text-slate-900" 
+                        placeholder="e.g. Writers Workshop 2026" 
+                        value={eventForm.title}
+                        onChange={(e) => setEventForm({...eventForm, title: e.target.value})}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Image Source (URL)</label>
+                      <input 
+                        type="url" 
+                        className="w-full bg-white border border-slate-200 rounded-2xl px-6 py-4 font-black outline-none text-slate-900" 
+                        placeholder="https://..." 
+                        value={eventForm.image_url}
+                        onChange={(e) => setEventForm({...eventForm, image_url: e.target.value})}
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-6">
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Temporal Data (Date)</label>
+                        <input 
+                          type="date" 
+                          required
+                          className="w-full bg-white border border-slate-200 rounded-2xl px-6 py-4 font-black outline-none text-slate-900" 
+                          value={eventForm.published_at}
+                          onChange={(e) => setEventForm({...eventForm, published_at: e.target.value})}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Location Node</label>
+                        <input 
+                          type="text" 
+                          required
+                          className="w-full bg-white border border-slate-200 rounded-2xl px-6 py-4 font-black outline-none text-slate-900" 
+                          placeholder="ReadMart Hub / Zoom" 
+                          value={eventForm.metadata.location}
+                          onChange={(e) => setEventForm({...eventForm, metadata: { ...eventForm.metadata, location: e.target.value }})}
+                        />
+                      </div>
+                    </div>
+                  </form>
+                )}
 
                  {modalType === 'club' && (
                    <form id="clubForm" onSubmit={(e) => { e.preventDefault(); handleGenericSave('book_clubs', clubForm); }} className="space-y-6">
@@ -2504,47 +2665,56 @@ export default function FounderDashboard() {
                    </form>
                  )}
 
-                 {modalType === 'team' && (
-                   <form id="teamForm" onSubmit={(e) => { e.preventDefault(); handleGenericSave('profiles', teamForm); }} className="space-y-6">
-                     <div className="space-y-2">
-                       <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Full Legal Name</label>
-                       <input 
-                         type="text" 
-                         required
-                         className="w-full bg-white border border-slate-200 rounded-2xl px-6 py-4 font-black outline-none text-slate-900" 
-                         placeholder="Enter name..." 
-                         value={teamForm.full_name}
-                         onChange={(e) => setTeamForm({...teamForm, full_name: e.target.value})}
-                       />
-                     </div>
-                     <div className="space-y-2">
-                       <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Corporate Email</label>
-                       <input 
-                         type="email" 
-                         required
-                         className="w-full bg-white border border-slate-200 rounded-2xl px-6 py-4 font-black outline-none text-slate-900" 
-                         placeholder="name@readmart.com" 
-                         value={teamForm.email}
-                         onChange={(e) => setTeamForm({...teamForm, email: e.target.value})}
-                       />
-                     </div>
-                     <div className="space-y-2">
-                       <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Command Role</label>
-                       <div className="relative">
-                         <select 
-                           className="w-full bg-white border border-slate-200 rounded-2xl px-6 py-4 font-black outline-none appearance-none focus:ring-2 focus:ring-primary text-slate-900"
-                           value={teamForm.role}
-                           onChange={(e) => setTeamForm({...teamForm, role: e.target.value})}
-                         >
-                           <option value="manager">Ops Manager</option>
-                           <option value="admin">System Admin</option>
-                           <option value="founder">Co-Founder</option>
-                         </select>
-                         <ChevronDown className="absolute right-6 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
-                       </div>
-                     </div>
-                   </form>
-                 )}
+                {modalType === 'team' && (
+                  <form id="teamForm" onSubmit={(e) => { e.preventDefault(); handleGenericSave('profiles', teamForm); }} className="space-y-6">
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Full Legal Name</label>
+                      <input 
+                        type="text" 
+                        required
+                        className="w-full bg-white border border-slate-200 rounded-2xl px-6 py-4 font-black outline-none text-slate-900" 
+                        placeholder="Enter name..." 
+                        value={teamForm.full_name}
+                        onChange={(e) => setTeamForm({...teamForm, full_name: e.target.value})}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Corporate Email</label>
+                      <input 
+                        type="email" 
+                        required
+                        className="w-full bg-white border border-slate-200 rounded-2xl px-6 py-4 font-black outline-none text-slate-900" 
+                        placeholder="name@readmart.com" 
+                        value={teamForm.email}
+                        onChange={(e) => setTeamForm({...teamForm, email: e.target.value})}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Operational Mandate (Bio)</label>
+                      <textarea 
+                        className="w-full bg-white border border-slate-200 rounded-2xl px-6 py-4 font-black outline-none min-h-[100px] resize-none text-slate-900" 
+                        placeholder="Team member mission..." 
+                        value={teamForm.bio}
+                        onChange={(e) => setTeamForm({...teamForm, bio: e.target.value})}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Command Role</label>
+                      <div className="relative">
+                        <select 
+                          className="w-full bg-white border border-slate-200 rounded-2xl px-6 py-4 font-black outline-none appearance-none focus:ring-2 focus:ring-primary text-slate-900"
+                          value={teamForm.role}
+                          onChange={(e) => setTeamForm({...teamForm, role: e.target.value})}
+                        >
+                          <option value="manager">Ops Manager</option>
+                          <option value="admin">System Admin</option>
+                          <option value="founder">Co-Founder</option>
+                        </select>
+                        <ChevronDown className="absolute right-6 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+                      </div>
+                    </div>
+                  </form>
+                )}
               </div>
 
               <div className="flex gap-4 mt-10">
