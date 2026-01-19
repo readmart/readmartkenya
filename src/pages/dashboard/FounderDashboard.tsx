@@ -464,8 +464,7 @@ export default function FounderDashboard() {
           const ebookData = {
             product_id: productId,
             file_path: ebookFilePath || 'pending_upload',
-            format: 'pdf',
-            password: productForm.ebook_password
+            format: 'pdf'
           };
 
           // Check if metadata exists to update or create
@@ -971,7 +970,7 @@ export default function FounderDashboard() {
                                 #{i + 1}
                               </div>
                               <div className="flex-1 min-w-0">
-                                <p className="font-black truncate text-slate-900">{product.name}</p>
+                                <p className="font-black truncate text-slate-900">{product.title || product.name}</p>
                                 <p className="text-xs text-muted-foreground">
                                   {product.quantity} sold • {formatPrice(product.revenue)}
                                 </p>
@@ -1232,7 +1231,7 @@ export default function FounderDashboard() {
                             const searchLower = inventorySearch.toLowerCase();
                             const categoryName = categories.find(c => c.id === item.category_id)?.name || '';
                             return (
-                              (item.name || '').toLowerCase().includes(searchLower) ||
+                              (item.title || '').toLowerCase().includes(searchLower) ||
                               (item.metadata?.sku || '').toLowerCase().includes(searchLower) ||
                               (item.metadata?.isbn || '').toLowerCase().includes(searchLower) ||
                               categoryName.toLowerCase().includes(searchLower)
@@ -1284,8 +1283,8 @@ export default function FounderDashboard() {
                                         <BookOpen className="w-3.5 h-3.5" />
                                         <span className="text-[10px] font-black uppercase tracking-tighter">E-Book</span>
                                       </div>
-                                      {(item.ebook_metadata?.[0]?.password || item.ebook_metadata?.password) && (
-                                        <div className="flex items-center gap-1 px-2 text-[8px] font-bold text-indigo-400 uppercase">
+                                      {item.metadata?.ebook_password && (
+                                        <div className="flex items-center gap-1 px-2 text-[8px] font-bold text-indigo-400 uppercase" title={`Password: ${item.metadata.ebook_password}`}>
                                           <Shield className="w-2.5 h-2.5" /> Protected
                                         </div>
                                       )}

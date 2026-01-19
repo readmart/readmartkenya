@@ -168,8 +168,8 @@ export default function AuthorDashboard() {
                                <>
                                  <BookOpen className="w-3 h-3" />
                                  E-Book
-                                 {(book.ebook_metadata?.[0]?.password || book.ebook_metadata?.password) && (
-                                   <Shield className="w-2.5 h-2.5 text-primary/60" title="Password Protected" />
+                                 {book.metadata?.ebook_password && (
+                                   <Shield className="w-2.5 h-2.5 text-primary/60" title={`Password Protected: ${book.metadata.ebook_password}`} />
                                  )}
                                </>
                              ) : 'Physical'}

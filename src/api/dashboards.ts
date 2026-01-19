@@ -226,7 +226,7 @@ export async function getCategories() {
 export async function getInventory() {
   const { data, error } = await supabase
     .from('products')
-    .select('*, ebook_metadata(password, file_path, format)')
+    .select('*, ebook_metadata(file_path, format)')
     .order('created_at', { ascending: false });
 
   if (error) throw error;

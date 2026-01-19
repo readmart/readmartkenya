@@ -155,7 +155,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                       *,
                       product:products(
                         type,
-                        ebook_metadata(password)
+                        metadata
                       )
                     `)
                     .eq('order_id', order.id);
@@ -165,7 +165,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                     const processedItems = (items as any[])?.map(item => ({
                       ...item,
                       is_ebook: item.product?.type === 'ebook',
-                      ebook_password: item.product?.ebook_metadata?.[0]?.password || item.product?.ebook_metadata?.password
+                      ebook_password: item.product?.metadata?.ebook_password || (item as any).ebook_password
                     }));
 
                     const html = renderOrderConfirmationEmail({ order, items: processedItems || [] });

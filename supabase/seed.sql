@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS public.categories (
 -- 2. Ensure Products exist
 CREATE TABLE IF NOT EXISTS public.products (
     id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
-    name text NOT NULL,
+    title text NOT NULL,
     slug text NOT NULL UNIQUE,
     description text,
     price decimal(12,2) NOT NULL,

@@ -34,7 +34,7 @@ create table public.categories (
 -- Create Products table (Catalog Domain)
 create table public.products (
   id uuid default gen_random_uuid() primary key,
-  name text not null,
+  title text not null,
   slug text not null unique,
   description text,
   price decimal(12,2) not null,

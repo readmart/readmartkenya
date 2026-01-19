@@ -160,7 +160,7 @@ export const renderOrderConfirmationEmail = (data: any) => {
   
   const itemsHtml = items.map((item: any) => {
     const isEbook = item.product_snapshot?.type === 'ebook' || item.is_ebook;
-    const password = item.ebook_password || (item.ebook_metadata?.password);
+    const password = item.product?.metadata?.ebook_password || item.product_snapshot?.metadata?.ebook_password || item.ebook_password;
     
     return `
     <tr>
