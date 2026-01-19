@@ -92,6 +92,8 @@ export default function Checkout() {
   }
   
   const shipping = cartTotal > 5000 ? 0 : 500;
+  const taxRate = settings?.tax_rate ?? 16;
+  const tax = cartTotal * (taxRate / (100 + taxRate));
   const total = cartTotal + shipping;
 
   const handleNext = () => {
@@ -118,8 +120,8 @@ export default function Checkout() {
         phone: formData.phone,
         address: formData.address,
         city: formData.city,
-        subtotal_amount: cartTotal,
-        tax_amount: 0,
+        subtotal_amount: cartTotal - tax,
+        tax_amount: tax,
         shipping_amount: shipping,
         total_amount: total,
         payment_method: 'm-pesa',

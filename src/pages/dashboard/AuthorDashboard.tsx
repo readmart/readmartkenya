@@ -126,7 +126,7 @@ export default function AuthorDashboard() {
               </div>
             </div>
             <div className="h-[300px] w-full relative">
-              <ResponsiveContainer width="100%" height="100%" debounce={100}>
+              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0} debounce={100}>
                 <BarChart data={performanceData}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.1)" />
                   <XAxis dataKey="month" stroke="rgba(255,255,255,0.5)" />

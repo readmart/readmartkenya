@@ -98,7 +98,7 @@ export default function SearchDialog({ isOpen, onClose }: SearchDialogProps) {
         // 1. Search Products
         const { data: products } = await supabase
           .from('products')
-          .select('id, title, author, cover_image, price')
+          .select('id, title, metadata, image_url, price')
           .ilike('title', `%${query}%`)
           .limit(5);
 
@@ -107,8 +107,8 @@ export default function SearchDialog({ isOpen, onClose }: SearchDialogProps) {
             id: p.id,
             type: 'product',
             title: p.title,
-            subtitle: `by ${p.author}`,
-            image: p.cover_image,
+            subtitle: `by ${p.metadata?.author || 'ReadMart'}`,
+            image: p.image_url,
             link: `/book/${p.id}`
           });
         });

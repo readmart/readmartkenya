@@ -3,12 +3,10 @@ import { Trash2, Plus, Minus, ArrowRight, ShoppingBag } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useCart } from '@/contexts/CartContext';
 import { useCurrency } from '@/contexts/CurrencyContext';
-import { useSettings } from '@/hooks/useSettings';
 
 export default function Cart() {
   const { cartItems, updateQuantity, removeFromCart, cartTotal } = useCart();
   const { formatPrice } = useCurrency();
-  const { settings } = useSettings();
 
   const shipping = cartTotal > 5000 ? 0 : 500; // Example: free shipping over 5000 KES
   const total = cartTotal + shipping;

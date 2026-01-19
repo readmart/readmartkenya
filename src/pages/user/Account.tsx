@@ -293,7 +293,7 @@ export default function Account() {
                           </div>
                           <div className="flex-grow text-center md:text-left">
                             <h3 className="text-xl font-black mb-1">{ebook.products?.title || 'Untitled E-Book'}</h3>
-                            <p className="text-muted-foreground text-sm mb-4">{ebook.products?.author || 'Unknown Author'}</p>
+                            <p className="text-muted-foreground text-sm mb-4">{ebook.products?.metadata?.author || 'Unknown Author'}</p>
                             <div className="flex flex-wrap gap-2 justify-center md:justify-start">
                               <span className="text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full bg-primary/10 text-primary border border-primary/20">
                                 PDF

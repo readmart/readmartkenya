@@ -16,7 +16,7 @@ export async function getMyEbooks() {
       products!inner (
         id,
         title,
-        author,
+        metadata,
         image_url,
         type
       ),

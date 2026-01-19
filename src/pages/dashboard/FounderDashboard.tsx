@@ -970,7 +970,7 @@ export default function FounderDashboard() {
                                 #{i + 1}
                               </div>
                               <div className="flex-1 min-w-0">
-                                <p className="font-black truncate text-slate-900">{product.title || product.name}</p>
+                                <p className="font-black truncate text-slate-900">{product.title}</p>
                                 <p className="text-xs text-muted-foreground">
                                   {product.quantity} sold • {formatPrice(product.revenue)}
                                 </p>
@@ -994,7 +994,7 @@ export default function FounderDashboard() {
                     >
                       <h3 className="text-2xl font-black mb-8 text-slate-900">Order Governance</h3>
                       <div className="h-[250px]">
-                        <ResponsiveContainer width="100%" height="100%">
+                        <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0} debounce={100}>
                           <PieChart>
                             <Pie
                               data={Object.entries(analytics?.orderStatusCount || {}).map(([name, value]) => ({ name, value }))}
@@ -1028,7 +1028,7 @@ export default function FounderDashboard() {
                     >
                       <h3 className="text-2xl font-black mb-8 text-slate-900">Category Mix</h3>
                       <div className="h-[250px]">
-                        <ResponsiveContainer width="100%" height="100%">
+                        <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0} debounce={100}>
                           <PieChart>
                             <Pie
                               data={analytics?.categoryStats || []}

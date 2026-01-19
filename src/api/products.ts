@@ -13,7 +13,7 @@ export async function getProducts(options: {
   let query = supabase
     .from('products')
     .select('*, category:categories(name)')
-    .eq('is_published', true);
+    .eq('is_active', true);
 
   if (options.category && options.category !== 'All') {
     // If it's a UUID, search by ID, otherwise search by category name
@@ -25,7 +25,7 @@ export async function getProducts(options: {
   }
 
   if (options.search) {
-    query = query.or(`name.ilike.%${options.search}%,title.ilike.%${options.search}%`);
+    query = query.ilike('title', `%${options.search}%`);
   }
 
   if (options.minPrice !== undefined) {

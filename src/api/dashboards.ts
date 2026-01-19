@@ -108,7 +108,7 @@ export async function getGlobalAnalytics() {
 
     const { data: lowStockProducts, error: lowStockError } = await supabase
       .from('products')
-      .select('id, name, stock_quantity')
+      .select('id, title, stock_quantity')
       .lt('stock_quantity', 10)
       .limit(10);
 
@@ -125,8 +125,8 @@ export async function getGlobalAnalytics() {
     // 6. Revenue by Category - Optimized processing
     const { data: categoryRevenueData, error: catRevError } = await supabase
       .from('order_items')
-      .select('product_snapshot, quantity')
-      .gte('created_at', thirtyDaysAgo.toISOString());
+      .select('product_snapshot, quantity, orders!inner(created_at)')
+      .gte('orders.created_at', thirtyDaysAgo.toISOString());
 
     if (catRevError) console.error('Category Revenue Fetch Error:', catRevError);
 
@@ -143,7 +143,7 @@ export async function getGlobalAnalytics() {
       .sort((a, b) => b.value - a.value);
 
     // 7. Fetch Top Products (most sold) - Enhanced accuracy
-    const productSales: Record<string, { name: string, quantity: number, revenue: number }> = {};
+    const productSales: Record<string, { title: string, quantity: number, revenue: number }> = {};
     categoryRevenueData?.forEach(item => {
       const snapshot = item.product_snapshot as any;
       const pid = snapshot?.id;
@@ -151,7 +151,7 @@ export async function getGlobalAnalytics() {
       
       if (!productSales[pid]) {
         productSales[pid] = {
-          name: snapshot?.name || 'Unknown Product', 
+          title: snapshot?.title || 'Unknown Product', 
           quantity: 0, 
           revenue: 0 
         };
@@ -226,7 +226,24 @@ export async function getCategories() {
 export async function getInventory() {
   const { data, error } = await supabase
     .from('products')
-    .select('*, ebook_metadata(file_path, format)')
+    .select(`
+      id,
+      title,
+      slug,
+      description,
+      price,
+      stock_quantity,
+      category_id,
+      image_url,
+      sku,
+      is_active,
+      metadata,
+      created_at,
+      updated_at,
+      author_id,
+      type,
+      ebook_metadata(file_path, format)
+    `)
     .order('created_at', { ascending: false });
 
   if (error) throw error;

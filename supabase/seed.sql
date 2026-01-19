@@ -313,7 +313,7 @@ ON CONFLICT (slug) DO NOTHING;
 
 -- Products
 WITH cat AS (SELECT id, slug FROM public.categories)
-INSERT INTO public.products (name, slug, description, price, category_id, stock_quantity, metadata) VALUES 
+INSERT INTO public.products (title, slug, description, price, category_id, stock_quantity, metadata) VALUES 
 ('The Alchemist', 'the-alchemist', 'A classic tale of following your dreams.', 1200.00, (SELECT id FROM cat WHERE slug = 'fiction'), 50, '{"type": "physical", "author": "Paulo Coelho"}'),
 ('Clean Code', 'clean-code', 'A handbook of agile software craftsmanship.', 3500.00, (SELECT id FROM cat WHERE slug = 'technology'), 20, '{"type": "physical", "author": "Robert C. Martin"}'),
 ('Zero to One', 'zero-to-one', 'Notes on startups, or how to build the future.', 1800.00, (SELECT id FROM cat WHERE slug = 'business'), 30, '{"type": "physical", "author": "Peter Thiel"}'),
@@ -363,8 +363,8 @@ BEGIN
 
     INSERT INTO public.order_items (order_id, product_id, quantity, price_at_purchase, product_snapshot)
     VALUES 
-    (order1_id, prod1_id, 1, 1200.00, '{"name": "The Alchemist", "price": 1200.00}'),
-    (order1_id, prod2_id, 1, 3500.00, '{"name": "Clean Code", "price": 3500.00}');
+    (order1_id, prod1_id, 1, 1200.00, '{"title": "The Alchemist", "price": 1200.00}'),
+    (order1_id, prod2_id, 1, 3500.00, '{"title": "Clean Code", "price": 3500.00}');
 
     -- Create Sample Order 2 (Completed)
     INSERT INTO public.orders (user_id, status, total_amount, created_at)
@@ -372,7 +372,7 @@ BEGIN
     RETURNING id INTO order2_id;
 
     INSERT INTO public.order_items (order_id, product_id, quantity, price_at_purchase, product_snapshot)
-    VALUES (order2_id, (SELECT id FROM public.products WHERE slug = 'zero-to-one'), 1, 1800.00, '{"name": "Zero to One", "price": 1800.00}');
+    VALUES (order2_id, (SELECT id FROM public.products WHERE slug = 'zero-to-one'), 1, 1800.00, '{"title": "Zero to One", "price": 1800.00}');
 
     -- Create Sample Reviews
     INSERT INTO public.reviews (user_id, product_id, rating, comment, created_at)
