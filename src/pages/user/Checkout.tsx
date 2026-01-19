@@ -120,6 +120,9 @@ export default function Checkout() {
         phone: formData.phone,
         address: formData.address,
         city: formData.city,
+        subtotal_amount: cartTotal,
+        tax_amount: tax,
+        shipping_amount: shipping,
         total_amount: total,
         payment_method: 'm-pesa',
         items: cartItems.map(item => ({

@@ -13,6 +13,9 @@ export interface OrderData {
   phone: string;
   address: string;
   city: string;
+  subtotal_amount: number;
+  tax_amount: number;
+  shipping_amount: number;
   total_amount: number;
   items: OrderItem[];
   payment_method: string;
@@ -27,6 +30,9 @@ export async function createOrder(orderData: OrderData) {
     .from('orders')
     .insert({
       user_id: user.id,
+      subtotal_amount: orderData.subtotal_amount,
+      tax_amount: orderData.tax_amount,
+      shipping_amount: orderData.shipping_amount,
       total_amount: orderData.total_amount,
       shipping_address: {
         full_name: orderData.full_name,

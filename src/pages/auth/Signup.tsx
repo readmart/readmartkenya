@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Mail, Lock, ArrowRight, User, Loader2, Chrome } from 'lucide-react';
+import { Mail, Lock, ArrowRight, User, Loader2 } from 'lucide-react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '@/lib/supabase/client';
 import { createSession } from '@/api/auth';
@@ -56,30 +56,6 @@ export default function Signup() {
       toast.error(error.message || 'Signup failed. Please try again.');
     } finally {
       setIsLoading(false);
-    }
-  };
-
-  const handleOAuthLogin = async (provider: 'google') => {
-    try {
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider,
-        options: {
-          redirectTo: `${window.location.origin}${redirect}`,
-          queryParams: {
-            access_type: 'offline',
-            prompt: 'select_account',
-          },
-        },
-      });
-      if (error) {
-        if (error.message.includes('provider is not enabled')) {
-          toast.error('Google Sign-In is not enabled. Please enable it in your Supabase Dashboard > Authentication > Providers.');
-          return;
-        }
-        throw error;
-      }
-    } catch (error: any) {
-      toast.error(error.message || `Failed to login with ${provider}`);
     }
   };
 
@@ -156,23 +132,6 @@ export default function Signup() {
             )}
           </button>
         </form>
-
-        <div className="relative my-8 text-center">
-          <div className="absolute inset-0 flex items-center">
-            <div className="w-full border-t border-white/10"></div>
-          </div>
-          <span className="relative px-4 bg-transparent text-sm text-muted-foreground">Or continue with</span>
-        </div>
-
-        <div className="grid grid-cols-1 gap-4">
-          <button 
-            onClick={() => handleOAuthLogin('google')}
-            className="glass h-12 rounded-xl flex items-center justify-center gap-2 hover:bg-white/10 transition-colors w-full"
-          >
-            <Chrome className="w-5 h-5" />
-            Continue with Google
-          </button>
-        </div>
 
         <p className="text-center mt-8 text-sm text-muted-foreground">
           Already have an account?{' '}
