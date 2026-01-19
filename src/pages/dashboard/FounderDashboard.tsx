@@ -51,6 +51,7 @@ import type { SiteSettings } from '@/hooks/useSettings';
 type DashboardTab = 
   | 'overview' 
   | 'products' 
+  | 'categories'
   | 'orders' 
   | 'shipping' 
   | 'promos' 
@@ -97,6 +98,12 @@ export default function FounderDashboard() {
      isbn: '',
      type: 'physical' as 'physical' | 'ebook',
      ebook_password: ''
+   });
+
+   const [categoryForm, setCategoryForm] = useState({
+     name: '',
+     slug: '',
+     parent_id: '' as string | null
    });
 
    const [promoForm, setPromoForm] = useState<{
@@ -230,6 +237,19 @@ export default function FounderDashboard() {
   const { formatPrice } = useCurrency();
 
   useEffect(() => {
+    const initCategories = async () => {
+      try {
+        const cats = await getCategories();
+        console.log('Categories loaded on mount:', cats.length);
+        setCategories(cats);
+      } catch (err) {
+        console.error('Failed to load initial categories:', err);
+      }
+    };
+    initCategories();
+  }, []);
+
+  useEffect(() => {
     setSelectedIds([]);
     fetchTabData();
   }, [activeTab]);
@@ -253,6 +273,9 @@ export default function FounderDashboard() {
           ]);
           setInventory(inv);
           setCategories(cats);
+          break;
+        case 'categories':
+          setCategories(await getCategories());
           break;
         case 'orders':
           setOrders(await getOrders());
@@ -394,17 +417,18 @@ export default function FounderDashboard() {
         .replace(/\s+/g, '-');
 
       const payload = {
-        name: productForm.title,
+        title: productForm.title,
         slug,
         description: productForm.description,
         price: Number(productForm.price),
         stock_quantity: Number(productForm.stock_quantity),
         category_id: productForm.category,
-        type: productForm.type,
+        image_url: imageUrl,
+        sku: productForm.sku,
         metadata: {
-          image_url: imageUrl,
-          sku: productForm.sku,
           isbn: productForm.isbn,
+          type: productForm.type,
+          ebook_password: productForm.ebook_password,
           updated_at: new Date().toISOString()
         }
       };
@@ -484,6 +508,34 @@ export default function FounderDashboard() {
       fetchTabData();
     } catch (error: any) {
       toast.error(error.message || 'Failed to save product');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleCategorySave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
+    try {
+      const slug = categoryForm.slug || categoryForm.name.toLowerCase().replace(/\s+/g, '-').replace(/[^\w-]/g, '');
+      const payload = {
+        name: categoryForm.name,
+        slug,
+        parent_id: categoryForm.parent_id || null
+      };
+
+      if (modalData) {
+        await updateRecord('categories', modalData.id, payload);
+        toast.success('Category updated successfully');
+      } else {
+        await createRecord('categories', payload);
+        toast.success('Category created successfully');
+      }
+
+      setIsModalOpen(false);
+      fetchTabData();
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to save category');
     } finally {
       setIsLoading(false);
     }
@@ -686,6 +738,7 @@ export default function FounderDashboard() {
   const tabs = [
     { id: 'overview', label: 'Overview', icon: <TrendingUp className="w-4 h-4" />, color: 'from-blue-500 to-indigo-500' },
     { id: 'products', label: 'Products', icon: <Package className="w-4 h-4" />, color: 'from-emerald-500 to-teal-500' },
+    { id: 'categories', label: 'Categories', icon: <Layers className="w-4 h-4" />, color: 'from-cyan-600 to-blue-600' },
     { id: 'orders', label: 'Orders', icon: <ShoppingBag className="w-4 h-4" />, color: 'from-amber-500 to-orange-500' },
     { id: 'shipping', label: 'Shipping', icon: <Truck className="w-4 h-4" />, color: 'from-cyan-500 to-blue-500' },
     { id: 'promos', label: 'Promos', icon: <Tag className="w-4 h-4" />, color: 'from-rose-500 to-pink-500' },
@@ -1018,7 +1071,7 @@ export default function FounderDashboard() {
                             <div key={product.id} className="flex items-center justify-between p-3 rounded-2xl bg-red-50 border border-red-100">
                               <div className="flex items-center gap-3">
                                 <AlertCircle className="w-4 h-4 text-red-500" />
-                                <span className="text-xs font-bold text-slate-900 truncate max-w-[120px]">{product.name}</span>
+                                <span className="text-xs font-bold text-slate-900 truncate max-w-[120px]">{product.title}</span>
                               </div>
                               <span className="text-[10px] font-black bg-red-500 text-white px-2 py-1 rounded-lg">
                                 {product.stock_quantity} left
@@ -1203,7 +1256,7 @@ export default function FounderDashboard() {
                               <td className="px-10 py-6">
                                 <div className="flex items-center gap-6">
                                   <div className="relative shrink-0">
-                                    <img src={item.metadata?.image_url || 'https://images.unsplash.com/photo-1544947950-fa07a98d237f?auto=format&fit=crop&q=80&w=800'} alt={item.name} className="w-16 h-20 rounded-xl bg-slate-100 object-cover shadow-lg group-hover:scale-105 transition-transform" />
+                                    <img src={item.image_url || 'https://images.unsplash.com/photo-1544947950-fa07a98d237f?auto=format&fit=crop&q=80&w=800'} alt={item.title} className="w-16 h-20 rounded-xl bg-slate-100 object-cover shadow-lg group-hover:scale-105 transition-transform" />
                                     {item.stock_quantity < 10 && (
                                       <div className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 rounded-full flex items-center justify-center border-4 border-white">
                                         <div className="w-1.5 h-1.5 bg-white rounded-full animate-ping" />
@@ -1211,9 +1264,9 @@ export default function FounderDashboard() {
                                     )}
                                   </div>
                                   <div>
-                                    <p className="font-black text-lg mb-1 text-slate-900">{item.name}</p>
+                                    <p className="font-black text-lg mb-1 text-slate-900">{item.title}</p>
                                     <div className="flex flex-wrap gap-4 text-xs font-bold text-muted-foreground">
-                                      <span>SKU: {item.metadata?.sku || 'N/A'}</span>
+                                      <span>SKU: {item.sku || 'N/A'}</span>
                                       {item.metadata?.isbn && <span>ISBN: {item.metadata.isbn}</span>}
                                       <span>ID: {item.id.slice(0, 8)}</span>
                                     </div>
@@ -1268,16 +1321,16 @@ export default function FounderDashboard() {
                                       setModalType('product');
                                       setModalData(item);
                                       setProductForm({
-                                        title: item.name,
+                                        title: item.title,
                                         category: item.category_id,
                                         price: item.price,
                                         stock_quantity: item.stock_quantity,
                                         description: item.description || '',
-                                        image_url: item.metadata?.image_url || '',
-                                        sku: item.metadata?.sku || '',
+                                        image_url: item.image_url || '',
+                                        sku: item.sku || '',
                                         isbn: item.metadata?.isbn || '',
                                         type: item.type || 'physical',
-                                        ebook_password: item.ebook_metadata?.[0]?.password || item.ebook_metadata?.password || ''
+                                        ebook_password: item.metadata?.ebook_password || ''
                                       });
                                       setIsModalOpen(true);
                                     }}
@@ -1296,6 +1349,106 @@ export default function FounderDashboard() {
                               </td>
                             </tr>
                           ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+
+              {activeTab === 'categories' && (
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-8">
+                  <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+                    <div>
+                      <h3 className="text-3xl font-black mb-2 text-slate-900">Category Intelligence</h3>
+                      <p className="text-muted-foreground font-medium">Manage product taxonomies and relationships</p>
+                    </div>
+                    <button 
+                      onClick={() => { 
+                        setModalType('category'); 
+                        setModalData(null);
+                        setCategoryForm({ name: '', slug: '', parent_id: '' });
+                        setIsModalOpen(true); 
+                      }}
+                      className="bg-primary text-white px-8 py-3 rounded-2xl font-black text-sm flex items-center gap-2 shadow-lg shadow-primary/20 hover:scale-105 transition-all"
+                    >
+                      <Plus className="w-5 h-5" /> Add Category
+                    </button>
+                  </div>
+
+                  <div className="glass rounded-[3rem] overflow-hidden border-slate-200 bg-white shadow-sm">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left">
+                        <thead className="bg-white border-b border-slate-100 text-[10px] uppercase font-black tracking-[0.2em] text-muted-foreground">
+                          <tr>
+                            <th className="px-10 py-6 text-center w-20">Icon</th>
+                            <th className="px-10 py-6">Category Name</th>
+                            <th className="px-10 py-6">Slug Signature</th>
+                            <th className="px-10 py-6">Sub-Categories</th>
+                            <th className="px-10 py-6 text-right">Operations</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {categories.length > 0 ? (
+                            categories.map(cat => (
+                              <tr key={cat.id} className="hover:bg-slate-100/50 transition-colors group">
+                                <td className="px-10 py-6">
+                                  <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center text-primary mx-auto group-hover:scale-110 transition-transform">
+                                    <Layers className="w-5 h-5" />
+                                  </div>
+                                </td>
+                                <td className="px-10 py-6">
+                                  <p className="font-black text-lg text-slate-900">{cat.name}</p>
+                                  {cat.parent_id && (
+                                    <p className="text-[10px] text-muted-foreground uppercase tracking-widest mt-1">
+                                      Parent: {categories.find(c => c.id === cat.parent_id)?.name || 'N/A'}
+                                    </p>
+                                  )}
+                                </td>
+                                <td className="px-10 py-6 font-mono text-sm font-bold text-muted-foreground">{cat.slug}</td>
+                                <td className="px-10 py-6">
+                                  <span className="px-4 py-2 bg-slate-100 rounded-full text-[10px] font-black uppercase tracking-widest text-slate-600">
+                                    {categories.filter(c => c.parent_id === cat.id).length} Children
+                                  </span>
+                                </td>
+                                <td className="px-10 py-6 text-right">
+                                  <div className="flex justify-end gap-3">
+                                    <button 
+                                      onClick={() => {
+                                        setModalType('category');
+                                        setModalData(cat);
+                                        setCategoryForm({
+                                          name: cat.name,
+                                          slug: cat.slug,
+                                          parent_id: cat.parent_id || ''
+                                        });
+                                        setIsModalOpen(true);
+                                      }}
+                                      className="p-4 glass rounded-2xl hover:bg-primary hover:text-white transition-all border-slate-200 text-slate-600 bg-white"
+                                    >
+                                      <Edit className="w-5 h-5" />
+                                    </button>
+                                    <button 
+                                      onClick={() => handleDelete('categories', cat.id)}
+                                      className="p-4 glass rounded-2xl hover:bg-red-500 hover:text-white transition-all border-slate-200 text-slate-600 bg-white"
+                                    >
+                                      <Trash2 className="w-5 h-5" />
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            ))
+                          ) : (
+                            <tr>
+                              <td colSpan={5} className="px-10 py-20 text-center">
+                                <div className="opacity-50">
+                                  <Layers className="w-12 h-12 mx-auto mb-4 animate-bounce text-slate-300" />
+                                  <p className="font-black uppercase tracking-widest text-slate-400">No Categories Found</p>
+                                  <p className="text-xs text-muted-foreground mt-2">Initialize your product taxonomies to begin</p>
+                                </div>
+                              </td>
+                            </tr>
+                          )}
                         </tbody>
                       </table>
                     </div>
@@ -2644,6 +2797,58 @@ export default function FounderDashboard() {
               </div>
 
               <div className="space-y-6 max-h-[60vh] overflow-y-auto pr-4 no-scrollbar">
+                {modalType === 'category' && (
+                  <form id="categoryForm" onSubmit={handleCategorySave} className="space-y-6">
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Category Name</label>
+                      <input 
+                        type="text" 
+                        required
+                        className="w-full bg-white border border-slate-200 rounded-2xl px-6 py-4 font-black outline-none focus:ring-2 focus:ring-primary text-slate-900" 
+                        placeholder="e.g. Science Fiction" 
+                        value={categoryForm.name}
+                        onChange={(e) => setCategoryForm({...categoryForm, name: e.target.value})}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Slug (Optional)</label>
+                      <input 
+                        type="text" 
+                        className="w-full bg-white border border-slate-200 rounded-2xl px-6 py-4 font-black outline-none focus:ring-2 focus:ring-primary text-slate-900" 
+                        placeholder="e.g. science-fiction" 
+                        value={categoryForm.slug}
+                        onChange={(e) => setCategoryForm({...categoryForm, slug: e.target.value})}
+                      />
+                      <p className="text-[10px] text-muted-foreground italic">Leave empty to auto-generate from name</p>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Parent Category</label>
+                      <div className="relative">
+                        <select 
+                          className="w-full bg-white border border-slate-200 rounded-2xl px-6 py-4 font-black outline-none focus:ring-2 focus:ring-primary appearance-none text-slate-900"
+                          value={categoryForm.parent_id || ''}
+                          onChange={(e) => setCategoryForm({...categoryForm, parent_id: e.target.value || null})}
+                        >
+                          <option value="">No Parent (Top Level)</option>
+                          {categories
+                            .filter(cat => cat.id !== modalData?.id) // Prevent self-parenting
+                            .map(cat => (
+                              <option key={cat.id} value={cat.id}>{cat.name}</option>
+                            ))}
+                        </select>
+                        <ChevronDown className="absolute right-6 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+                      </div>
+                    </div>
+                    <button 
+                      type="submit" 
+                      disabled={isLoading}
+                      className="w-full py-5 bg-primary text-white rounded-[2rem] font-black shadow-xl shadow-primary/20 hover:scale-[1.02] transition-all disabled:opacity-50"
+                    >
+                      {isLoading ? 'Processing...' : modalData ? 'Update Taxonomy' : 'Initialize Category'}
+                    </button>
+                  </form>
+                )}
+
                 {modalType === 'product' && (
                   <form id="productForm" onSubmit={handleProductSave} className="space-y-6">
                     <div className="space-y-2">
