@@ -10,10 +10,8 @@ export default function Cart() {
   const { formatPrice } = useCurrency();
   const { settings } = useSettings();
 
-  const taxRate = settings?.tax_rate || 16;
   const shipping = cartTotal > 5000 ? 0 : 500; // Example: free shipping over 5000 KES
-  const tax = cartTotal * (taxRate / 100);
-  const total = cartTotal + shipping + tax;
+  const total = cartTotal + shipping;
 
   if (cartItems.length === 0) {
     return (
@@ -112,10 +110,6 @@ export default function Cart() {
                 <span className="text-muted-foreground">Shipping</span>
                 <span className="font-semibold">{formatPrice(shipping)}</span>
               </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Estimated Tax (16%)</span>
-                <span className="font-semibold">{formatPrice(tax)}</span>
-              </div>
               <div className="pt-4 border-t border-white/10 flex justify-between items-end">
                 <span className="text-lg font-bold">Total</span>
                 <span className="text-3xl font-bold text-primary">{formatPrice(total)}</span>
@@ -132,7 +126,7 @@ export default function Cart() {
 
             <div className="pt-4">
               <p className="text-xs text-center text-muted-foreground">
-                Taxes and shipping calculated at checkout. Free shipping on orders over $50.
+                Shipping calculated at checkout. Free shipping on orders over {formatPrice(5000)}.
               </p>
             </div>
           </div>

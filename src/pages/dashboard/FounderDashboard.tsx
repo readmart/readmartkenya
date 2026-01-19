@@ -2528,6 +2528,16 @@ export default function FounderDashboard() {
                         </h4>
                         <div className="space-y-6">
                           <div className="space-y-3">
+                            <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Global Tax Rate (%)</label>
+                            <input 
+                              type="number" 
+                              value={settings?.tax_rate || 0} 
+                              onChange={(e) => setSettings(prev => prev ? {...prev, tax_rate: Number(e.target.value)} : null)}
+                              className="w-full bg-white border border-slate-200 rounded-2xl px-6 py-4 font-black focus:ring-2 focus:ring-primary outline-none text-slate-900" 
+                            />
+                            <p className="text-[10px] text-muted-foreground mt-1 italic">Note: Taxes are hidden from customers and included in the price.</p>
+                          </div>
+                          <div className="space-y-3">
                             <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Membership Price ({settings?.default_currency || 'KES'})</label>
                             <input 
                               type="number" 
