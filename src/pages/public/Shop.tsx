@@ -12,9 +12,21 @@ export default function Shop() {
   const [searchParams] = useSearchParams();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
+  const [selectedGenre, setSelectedGenre] = useState('All Genres');
   const [products, setProducts] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>(['All']);
   const [isLoading, setIsLoading] = useState(true);
+
+  const genres = [
+    'All Genres',
+    'Fiction',
+    'Non-Fiction',
+    'Technology',
+    'Business',
+    'Art & Design',
+    'Personal Development',
+    'Children\'s Books'
+  ];
 
   useEffect(() => {
     async function loadData() {
@@ -26,11 +38,9 @@ export default function Shop() {
         ]);
         setProducts(productsData);
         
-        // Ensure specific categories requested by user are present
-        const dbCategories = categoriesData.map((c: any) => c.name);
-        const requiredCategories = ['All', 'Art Books', 'Accessories', 'Stationery'];
-        const finalCategories = [...new Set([...requiredCategories, ...dbCategories])];
-        setCategories(finalCategories);
+        // Use user requested categories
+        const requiredCategories = ['All', 'Books', 'Art', 'Accessories'];
+        setCategories(requiredCategories);
       } catch (error) {
         console.error('Failed to load shop data:', error);
       } finally {
@@ -47,8 +57,7 @@ export default function Shop() {
     }
   }, [searchParams]);
 
-  const [priceRange, setPriceRange] = useState(10000);
-  const [minRating, setMinRating] = useState(0);
+  const [priceRange, setPriceRange] = useState(50000);
   const [sortBy, setSortBy] = useState('Newest First');
   const [selectedConditions, setSelectedConditions] = useState<string[]>([]);
   const [selectedFormats, setSelectedFormats] = useState<string[]>([]);
@@ -61,23 +70,33 @@ export default function Shop() {
         const author = book.metadata?.author || 'Unknown';
         const condition = book.metadata?.condition || 'New';
         const format = book.metadata?.format || 'Physical';
+        const genre = book.category?.name || 'Uncategorized';
         
         const matchesSearch = title.toLowerCase().includes(searchQuery.toLowerCase()) || 
                               author.toLowerCase().includes(searchQuery.toLowerCase());
         
-        const matchesCategory = selectedCategory === 'All' 
-          ? true 
-          : book.category?.name === selectedCategory;
+        // Category matching logic
+        let matchesCategory = true;
+        if (selectedCategory !== 'All') {
+          if (selectedCategory === 'Books') {
+            // If Books is selected, we filter by selectedGenre if it's not 'All Genres'
+            if (selectedGenre !== 'All Genres') {
+              matchesCategory = genre === selectedGenre;
+            } else {
+              // Otherwise, assume it's a book if it's not Art or Accessories
+              matchesCategory = !['Art', 'Accessories'].includes(genre);
+            }
+          } else {
+            matchesCategory = genre === selectedCategory;
+          }
+        }
         
-        const matchesPrice = priceRange >= 10000 || book.price <= priceRange;
+        const matchesPrice = priceRange >= 50000 || book.price <= priceRange;
         
-        const rating = book.metadata?.rating || 0;
-        const matchesRating = rating >= minRating;
-
         const matchesCondition = selectedConditions.length === 0 || selectedConditions.includes(condition);
         const matchesFormat = selectedFormats.length === 0 || selectedFormats.includes(format);
 
-        return matchesSearch && matchesCategory && matchesPrice && matchesRating && matchesCondition && matchesFormat;
+        return matchesSearch && matchesCategory && matchesPrice && matchesCondition && matchesFormat;
       })
       .sort((a, b) => {
         if (sortBy === 'Price: Low to High') return a.price - b.price;
@@ -85,7 +104,7 @@ export default function Shop() {
         if (sortBy === 'Most Popular') return (b.metadata?.rating || 0) - (a.metadata?.rating || 0);
         return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
       });
-  }, [products, searchQuery, selectedCategory, priceRange, minRating, sortBy]);
+  }, [products, searchQuery, selectedCategory, selectedGenre, priceRange, sortBy, selectedConditions, selectedFormats]);
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -153,18 +172,46 @@ export default function Shop() {
               <input 
                 type="range" 
                 min="0"
-                max="10000"
-                step="100"
+                max="50000"
+                step="500"
                 value={priceRange}
                 onChange={(e) => setPriceRange(parseInt(e.target.value))}
                 className="w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer accent-primary" 
               />
               <div className="flex justify-between mt-2 text-xs text-muted-foreground font-bold">
                 <span>Min</span>
-                <span>{formatPrice(10000)}+</span>
+                <span>{formatPrice(50000)}+</span>
               </div>
             </div>
           </div>
+
+          {selectedCategory === 'Books' && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+            >
+              <h3 className="font-black mb-4 flex items-center justify-between uppercase text-sm tracking-widest">
+                Genres <ChevronDown className="h-4 w-4" />
+              </h3>
+              <div className="space-y-2 max-h-48 overflow-y-auto pr-2 scrollbar-hide">
+                {genres.map(genre => (
+                  <label key={genre} className="flex items-center gap-3 cursor-pointer group">
+                    <input 
+                      type="radio" 
+                      name="genre"
+                      checked={selectedGenre === genre}
+                      onChange={() => setSelectedGenre(genre)}
+                      className="w-4 h-4 rounded-full border-white/20 bg-white/10 text-primary focus:ring-primary" 
+                    />
+                    <span className={`text-sm transition-colors ${selectedGenre === genre ? 'text-primary font-bold' : 'text-muted-foreground group-hover:text-foreground'}`}>
+                      {genre}
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </motion.div>
+          )}
 
           <div>
             <h3 className="font-black mb-4 flex items-center justify-between uppercase text-sm tracking-widest">
@@ -220,33 +267,11 @@ export default function Shop() {
             </div>
           </div>
 
-          <div>
-            <h3 className="font-black mb-4 flex items-center justify-between uppercase text-sm tracking-widest">
-              Min Rating <ChevronDown className="h-4 w-4" />
-            </h3>
-            <div className="space-y-2">
-              {[4, 3, 2, 0].map(star => (
-                <label key={star} className="flex items-center gap-3 cursor-pointer group">
-                  <input 
-                    type="radio" 
-                    name="rating"
-                    checked={minRating === star}
-                    onChange={() => setMinRating(star)}
-                    className="w-4 h-4 rounded-full border-white/20 bg-white/10 text-primary focus:ring-primary" 
-                  />
-                  <span className={`text-sm transition-colors ${minRating === star ? 'text-primary font-bold' : 'text-muted-foreground group-hover:text-foreground'}`}>
-                    {star === 0 ? 'All Ratings' : `${star}+ Stars`}
-                  </span>
-                </label>
-              ))}
-            </div>
-          </div>
-
           <button 
             onClick={() => {
               setSelectedCategory('All');
-              setPriceRange(10000);
-              setMinRating(0);
+              setSelectedGenre('All Genres');
+              setPriceRange(50000);
               setSelectedConditions([]);
               setSelectedFormats([]);
               setSearchQuery('');
@@ -326,8 +351,8 @@ export default function Shop() {
                     onClick={() => {
                       setSearchQuery('');
                       setSelectedCategory('All');
-                      setPriceRange(10000);
-                      setMinRating(0);
+                      setSelectedGenre('All Genres');
+                      setPriceRange(50000);
                       setSelectedConditions([]);
                       setSelectedFormats([]);
                     }}
@@ -412,18 +437,38 @@ export default function Shop() {
                     <input 
                       type="range" 
                       min="0"
-                      max="10000"
-                      step="100"
+                      max="50000"
+                      step="500"
                       value={priceRange}
                       onChange={(e) => setPriceRange(parseInt(e.target.value))}
                       className="w-full h-2 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-primary" 
                     />
                     <div className="flex justify-between mt-2 text-xs text-slate-400 font-bold">
                       <span>Min</span>
-                      <span>{formatPrice(10000)}+</span>
+                      <span>{formatPrice(50000)}+</span>
                     </div>
                   </div>
                 </div>
+
+                {selectedCategory === 'Books' && (
+                  <div>
+                    <h3 className="font-black mb-4 uppercase text-xs tracking-widest text-slate-500">Genres</h3>
+                    <div className="space-y-2 max-h-40 overflow-y-auto pr-2">
+                      {genres.map(genre => (
+                        <label key={genre} className="flex items-center gap-3 cursor-pointer group">
+                          <input 
+                            type="radio" 
+                            name="genre-mobile"
+                            checked={selectedGenre === genre}
+                            onChange={() => setSelectedGenre(genre)}
+                            className="w-4 h-4 rounded-full border-slate-300 bg-slate-50 text-primary focus:ring-primary/20" 
+                          />
+                          <span className={`text-sm transition-colors ${selectedGenre === genre ? 'text-primary font-bold' : 'text-slate-600 group-hover:text-slate-900'}`}>{genre}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 <div>
                   <h3 className="font-black mb-4 uppercase text-xs tracking-widest text-slate-500">Condition</h3>
@@ -466,26 +511,6 @@ export default function Shop() {
                           className="w-4 h-4 rounded border-white/20 bg-white/10 text-primary" 
                         />
                         <span className={`text-sm ${selectedFormats.includes(format) ? 'text-primary font-bold' : 'text-muted-foreground'}`}>{format}</span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-
-                <div>
-                  <h3 className="font-black mb-4 uppercase text-xs tracking-widest">Min Rating</h3>
-                  <div className="space-y-2">
-                    {[4, 3, 2, 0].map(star => (
-                      <label key={star} className="flex items-center gap-3">
-                        <input 
-                          type="radio" 
-                          name="rating-mobile"
-                          checked={minRating === star}
-                          onChange={() => setMinRating(star)}
-                          className="w-4 h-4 rounded-full border-white/20 bg-white/10 text-primary" 
-                        />
-                        <span className={`text-sm ${minRating === star ? 'text-primary font-bold' : 'text-muted-foreground'}`}>
-                          {star === 0 ? 'All Ratings' : `${star}+ Stars`}
-                        </span>
                       </label>
                     ))}
                   </div>
