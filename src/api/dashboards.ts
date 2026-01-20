@@ -10,9 +10,9 @@ function calculateTrend(current: number, previous: number): string {
 }
 
 /**
- * Utility to verify administrative privileges
+ * Utility to verify roles
  */
-async function verifyAdmin() {
+async function verifyRole(allowedRoles: string[]) {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) throw new Error('Authentication required');
 
@@ -22,10 +22,24 @@ async function verifyAdmin() {
     .eq('id', session.user.id)
     .single();
 
-  if (roleError || !profile || (profile.role !== 'founder' && profile.role !== 'admin')) {
-    throw new Error('Unauthorized access: Administrative privileges required');
+  if (roleError || !profile || !allowedRoles.includes(profile.role)) {
+    throw new Error('Unauthorized access: Required privileges missing');
   }
   return session;
+}
+
+/**
+ * Utility to verify administrative privileges
+ */
+async function verifyAdmin() {
+  return verifyRole(['founder', 'admin']);
+}
+
+/**
+ * Utility to verify partner privileges
+ */
+async function verifyPartner() {
+  return verifyRole(['founder', 'admin', 'partner']);
 }
 
 // --- Founder Services ---
@@ -260,7 +274,6 @@ export async function getShippingZones() {
  * Fetch all records from a table with optional ordering
  */
 async function getAllRecords(table: string, orderBy: string = 'created_at') {
-  await verifyAdmin();
   const { data, error } = await supabase
     .from(table)
     .select('*')
@@ -282,7 +295,7 @@ export async function getInventory() {
 }
 
 export async function getOrders() {
-  await verifyAdmin();
+  await verifyPartner();
   return getAllRecords('orders');
 }
 
@@ -361,6 +374,25 @@ export async function getAuthorSalesReport(authorId: string) {
   
   if (error) throw error;
   return data;
+}
+
+export async function getPartnerPayouts(partnerId: string) {
+  await verifyPartner();
+  
+  // Fetch from fulfillment_ledger. 
+  // TODO: Link partnerId to partner_service_id to filter payouts specific to this partner
+  console.log('Fetching payouts for partner:', partnerId);
+
+  const { data, error } = await supabase
+    .from('fulfillment_ledger')
+    .select(`
+      *,
+      order:orders(customer_name, status)
+    `)
+    .order('created_at', { ascending: false });
+
+  if (error) throw error;
+  return data || [];
 }
 
 export async function getPartnerships() {
