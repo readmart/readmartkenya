@@ -98,7 +98,7 @@ export default function SearchDialog({ isOpen, onClose }: SearchDialogProps) {
         // 1. Search Products
         const { data: products } = await supabase
           .from('products')
-          .select('id, title, metadata, image_url, price')
+          .select('id, title, author, metadata, image_url, price')
           .ilike('title', `%${query}%`)
           .limit(5);
 
@@ -107,16 +107,17 @@ export default function SearchDialog({ isOpen, onClose }: SearchDialogProps) {
             id: p.id,
             type: 'product',
             title: p.title,
-            subtitle: `by ${p.metadata?.author || 'ReadMart'}`,
-            image: p.image_url,
+            subtitle: `by ${p.author || p.metadata?.author || 'ReadMart'}`,
+            image: p.image_url || p.metadata?.image_url,
             link: `/book/${p.id}`
           });
         });
 
         // 2. Search Events
         const { data: events } = await supabase
-          .from('events')
-          .select('id, title, date')
+          .from('cms_content')
+          .select('id, title, metadata')
+          .eq('type', 'event')
           .ilike('title', `%${query}%`)
           .limit(3);
 
@@ -125,7 +126,7 @@ export default function SearchDialog({ isOpen, onClose }: SearchDialogProps) {
             id: e.id,
             type: 'event',
             title: e.title,
-            subtitle: new Date(e.date).toLocaleDateString(),
+            subtitle: e.metadata?.date ? new Date(e.metadata.date).toLocaleDateString() : 'Upcoming Event',
             link: `/events`
           });
         });

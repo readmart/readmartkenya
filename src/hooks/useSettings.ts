@@ -54,18 +54,31 @@ export function useSettings() {
   useEffect(() => {
     async function fetchSettings() {
       try {
-        const { data, error } = await supabase
+        // Try site_settings first
+        const { data: siteData, error: siteError } = await supabase
+          .from('site_settings')
+          .select('*')
+          .maybeSingle();
+
+        if (!siteError && siteData) {
+          setSettings(siteData);
+          setIsLoading(false);
+          return;
+        }
+
+        // Fallback to settings
+        const { data: legacyData, error: legacyError } = await supabase
           .from('settings')
           .select('*')
           .maybeSingle();
 
-        if (error) {
-          console.warn('Site settings table not found or error fetching, using defaults:', error.message);
+        if (legacyError) {
+          console.warn('Site settings table not found or error fetching, using defaults:', legacyError.message);
           return;
         }
         
-        if (data) {
-          setSettings(data);
+        if (legacyData) {
+          setSettings(legacyData);
         }
       } catch (error) {
         console.error('Unexpected error fetching site settings:', error);

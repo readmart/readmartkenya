@@ -63,7 +63,7 @@ export default function Shop() {
     return products
       .filter((book) => {
         const title = book.title || '';
-        const author = book.metadata?.author || 'Unknown';
+        const author = book.author || book.metadata?.author || 'Unknown';
         const condition = book.metadata?.condition || 'New';
         const format = book.metadata?.format || 'Physical';
         const genre = book.category?.name || 'Uncategorized';
@@ -324,7 +324,7 @@ export default function Shop() {
                         <BookCard 
                           id={book.id}
                           title={book.title}
-                          author={book.metadata?.author || 'ReadMart Original'}
+                          author={book.author || book.metadata?.author || 'ReadMart Original'}
                           price={book.price}
                           rating={book.metadata?.rating || 5.0}
                           category={book.category?.name || 'General'}

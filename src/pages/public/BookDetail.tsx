@@ -49,7 +49,7 @@ export default function BookDetail() {
       "name": book.title,
       "author": {
         "@type": "Person",
-        "name": book.metadata?.author || 'ReadMart Author'
+        "name": book.author || book.metadata?.author || 'ReadMart Author'
       },
       "description": book.description,
       "image": book.image_url || book.metadata?.image_url,
@@ -90,7 +90,7 @@ export default function BookDetail() {
     addToCart({
       id: book.id,
       title: book.title,
-      author: book.metadata?.author || 'ReadMart Original',
+      author: book.author || book.metadata?.author || 'ReadMart Original',
       price: book.price,
       image: book.image_url || book.metadata?.image_url,
       category: book.category?.name || 'General'
@@ -102,7 +102,7 @@ export default function BookDetail() {
     buyNow({
       id: book.id,
       title: book.title,
-      author: book.metadata?.author || 'ReadMart Original',
+      author: book.author || book.metadata?.author || 'ReadMart Original',
       price: book.price,
       image: book.image_url || book.metadata?.image_url,
       category: book.category?.name || 'General'
@@ -180,7 +180,7 @@ export default function BookDetail() {
             </div>
             
             <h1 className="text-5xl md:text-6xl font-black tracking-tight leading-tight">{book.title}</h1>
-            <p className="text-2xl text-muted-foreground">by <span className="text-foreground font-black underline decoration-primary/30 underline-offset-4">{book.metadata?.author || 'ReadMart Original'}</span></p>
+            <p className="text-2xl text-muted-foreground">by <span className="text-foreground font-black underline decoration-primary/30 underline-offset-4">{book.author || book.metadata?.author || 'ReadMart Original'}</span></p>
           </div>
 
           <div className="flex items-end gap-4">
@@ -322,7 +322,7 @@ export default function BookDetail() {
                   exit={{ opacity: 0, y: -10 }}
                   className="space-y-4"
                 >
-                  <h3 className="text-xl font-black uppercase tracking-tight">{book.metadata?.author || 'ReadMart Original'}</h3>
+                  <h3 className="text-xl font-black uppercase tracking-tight">{book.author || book.metadata?.author || 'ReadMart Original'}</h3>
                   <p className="text-muted-foreground leading-relaxed font-medium">
                     A featured contributor to the ReadMart collection, specializing in curated works that inspire and educate our community.
                   </p>

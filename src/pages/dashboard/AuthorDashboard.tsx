@@ -9,7 +9,7 @@ import {
 } from 'recharts';
 import { useCurrency } from '@/contexts/CurrencyContext';
 import { useAuth } from '@/contexts/AuthContext';
-import { getAuthorSalesReport, getInventory } from '@/api/dashboards';
+import { getAuthorSalesReport, getInventory, getSiteSettings } from '@/api/dashboards';
 import { toast } from 'sonner';
 
 export default function AuthorDashboard() {
@@ -17,6 +17,7 @@ export default function AuthorDashboard() {
   const { user } = useAuth();
   const [salesReport, setSalesReport] = useState<any[]>([]);
   const [myBooks, setMyBooks] = useState<any[]>([]);
+  const [settings, setSettings] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -29,14 +30,14 @@ export default function AuthorDashboard() {
     if (!user) return;
     setIsLoading(true);
     try {
-      const [sales, books] = await Promise.all([
+      const [sales, books, siteSettings] = await Promise.all([
         getAuthorSalesReport(user.id),
-        getInventory() // This fetches all, but we should ideally filter by author_id
+        getInventory(user.id),
+        getSiteSettings()
       ]);
       setSalesReport(sales);
-      // Filter inventory to only show books belonging to the current author
-      // (In a real scenario, getInventory would already be filtered or take author_id)
       setMyBooks(books); 
+      setSettings(siteSettings);
     } catch (error) {
       toast.error('Failed to fetch dashboard data');
     } finally {
@@ -45,16 +46,17 @@ export default function AuthorDashboard() {
   };
 
   const stats = useMemo(() => {
-    const totalSales = salesReport.reduce((acc, curr) => acc + Number(curr.price * curr.quantity), 0);
+    const totalSales = salesReport.reduce((acc, curr) => acc + (Number(curr.price_at_purchase || curr.price || 0) * Number(curr.quantity || 0)), 0);
     const uniqueBooks = new Set(myBooks.map(b => b.id)).size;
+    const royaltyRate = settings?.author_commission_rate || 70;
     
     return [
       { label: 'Published Books', value: uniqueBooks.toString(), icon: <BookOpen />, color: 'text-blue-500' },
-      { label: 'Total Royalties', value: formatPrice(totalSales * 0.7), icon: <DollarSign />, color: 'text-green-500' }, // Assuming 70% royalty
+      { label: 'Total Royalties', value: formatPrice(totalSales * (royaltyRate / 100)), icon: <DollarSign />, color: 'text-green-500' },
       { label: 'Total Sales', value: salesReport.length.toString(), icon: <TrendingUp />, color: 'text-orange-500' },
       { label: 'Reader Reviews', value: '0', icon: <MessageSquare />, color: 'text-purple-500' },
     ];
-  }, [salesReport, myBooks, formatPrice]);
+  }, [salesReport, myBooks, formatPrice, settings]);
 
   const performanceData = useMemo(() => {
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];

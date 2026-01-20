@@ -109,7 +109,7 @@ export const calculateOrderCommissions = async (orderId: string) => {
       const price = item.price_at_purchase || item.price || 0;
       const amount = Number(price) * Number(item.quantity);
       
-      // Calculate platform commission (default 10% if not found)
+      // 1. Calculate platform commission
       const commissionRate = platformService?.commission_rate || 10;
       const commissionAmount = (amount * (Number(commissionRate) / 100));
 
@@ -124,6 +124,27 @@ export const calculateOrderCommissions = async (orderId: string) => {
           rate: commissionRate 
         }
       });
+
+      // 2. Calculate Author Payout if product has an author
+      const productSnapshot = item.product_snapshot || {};
+      if (productSnapshot.author_id) {
+        // Fetch author commission rate from settings (default 70%)
+        const { data: settings } = await supabase.from('site_settings').select('author_commission_rate').single();
+        const authorRate = settings?.author_commission_rate || 70;
+        const authorAmount = (amount * (Number(authorRate) / 100));
+
+        ledgerEntries.push({
+          order_id: orderId,
+          partner_id: productSnapshot.author_id,
+          amount: authorAmount,
+          payout_status: 'pending',
+          metadata: {
+            item_id: item.product_id,
+            type: 'author_royalty',
+            rate: authorRate
+          }
+        });
+      }
     }
 
     if (ledgerEntries.length > 0) {

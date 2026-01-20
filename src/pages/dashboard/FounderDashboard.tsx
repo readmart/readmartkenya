@@ -20,7 +20,7 @@ import { useCurrency } from '@/contexts/CurrencyContext';
 import { 
   getGlobalAnalytics, getInventory, getOrders, getAllUsers, 
   getSiteSettings, updateSiteSettings, getInquiries, 
-  getPartnerships, getAuthors, updateProduct, deleteRecord,
+  getPartnerships, getAuthors, getApprovedAuthors, updateProduct, deleteRecord,
   createProduct, updateOrderStatus, updateUserStatus,
   getCategories, getShippingZones, getPromos, togglePromoStatus,
   getCMSContent, updateCMSContent, createCMSContent,
@@ -58,6 +58,7 @@ export default function FounderDashboard() {
     inquiries: [],
     partnerships: [],
     authors: [],
+    approvedAuthors: [],
     categories: [],
     shippingZones: [],
     promos: [],
@@ -92,7 +93,7 @@ export default function FounderDashboard() {
       const [
         analytics, inventory, orders, users, 
         settings, inquiries, partnerships, 
-        authors, categories, shippingZones, promos,
+        authors, approvedAuthors, categories, shippingZones, promos,
         cmsContent
       ] = await Promise.all([
         getGlobalAnalytics(),
@@ -103,17 +104,16 @@ export default function FounderDashboard() {
         getInquiries(),
         getPartnerships(),
         getAuthors(),
+        getApprovedAuthors(),
         getCategories(),
         getShippingZones(),
         getPromos(),
         getCMSContent()
       ]);
-
-      setData({
-        analytics, inventory, orders, users, 
-        settings, inquiries, partnerships, 
-        authors, categories, shippingZones, promos,
-        cmsContent
+      setData({ 
+        analytics, inventory, orders, users, settings, 
+        inquiries, partnerships, authors, approvedAuthors,
+        categories, shippingZones, promos, cmsContent 
       });
     } catch (error) {
       console.error('Failed to fetch dashboard data:', error);
@@ -199,7 +199,14 @@ export default function FounderDashboard() {
             transition={{ duration: 0.2 }}
           >
             {activeTab === 'analytics' && <AnalyticsView data={data.analytics} formatPrice={formatPrice} />}
-            {activeTab === 'inventory' && <InventoryView data={data.inventory} categories={data.categories} onUpdate={fetchAllData} />}
+            {activeTab === 'inventory' && (
+              <InventoryView 
+                data={data.inventory} 
+                categories={data.categories} 
+                approvedAuthors={data.approvedAuthors}
+                onUpdate={fetchAllData} 
+              />
+            )}
             {activeTab === 'orders' && <OrdersView data={data.orders} formatPrice={formatPrice} onUpdate={fetchAllData} />}
             {activeTab === 'users' && <UsersView data={data.users} onUpdate={fetchAllData} />}
             {activeTab === 'settings' && <SettingsView settings={data.settings} onUpdate={fetchAllData} />}
@@ -364,13 +371,14 @@ function AnalyticsView({ data, formatPrice }: any) {
   );
 }
 
-function InventoryView({ data, categories, onUpdate }: any) {
+function InventoryView({ data, categories, approvedAuthors, onUpdate }: any) {
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<any>(null);
   const [formData, setFormData] = useState({
     title: '',
     author: '',
+    author_id: '',
     price: '',
     sale_price: '',
     stock_quantity: '0',
@@ -399,6 +407,7 @@ function InventoryView({ data, categories, onUpdate }: any) {
     setFormData({
       title: item.title || '',
       author: item.author || '',
+      author_id: item.author_id || '',
       price: item.price || '',
       sale_price: item.sale_price || '',
       stock_quantity: item.stock_quantity || '0',
@@ -419,6 +428,7 @@ function InventoryView({ data, categories, onUpdate }: any) {
     setFormData({
       title: '',
       author: '',
+      author_id: '',
       price: '',
       sale_price: '',
       stock_quantity: '0',
@@ -454,6 +464,9 @@ function InventoryView({ data, categories, onUpdate }: any) {
     try {
       const productPayload = {
         ...formData,
+        price: parseFloat(formData.price) || 0,
+        sale_price: formData.sale_price ? parseFloat(formData.sale_price) : null,
+        stock_quantity: parseInt(formData.stock_quantity) || 0,
         is_ebook: formData.type === 'ebook',
         ebook_metadata: formData.type === 'ebook' ? {
           file_path: formData.ebook_url,
@@ -628,13 +641,34 @@ function InventoryView({ data, categories, onUpdate }: any) {
                     </div>
                     <div>
                       <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Primary Author/Creator</label>
-                      <input 
-                        required
-                        type="text" 
-                        value={formData.author}
-                        onChange={(e) => setFormData({...formData, author: e.target.value})}
-                        className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-2 focus:ring-primary/20 font-bold" 
-                      />
+                      {approvedAuthors?.length > 0 ? (
+                        <select 
+                          required
+                          value={formData.author_id}
+                          onChange={(e) => {
+                            const selectedAuthor = approvedAuthors.find((a: any) => a.id === e.target.value);
+                            setFormData({
+                              ...formData, 
+                              author_id: e.target.value,
+                              author: selectedAuthor?.full_name || ''
+                            });
+                          }}
+                          className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-2 focus:ring-primary/20 font-bold"
+                        >
+                          <option value="">Select an Author</option>
+                          {approvedAuthors.map((author: any) => (
+                            <option key={author.id} value={author.id}>{author.full_name}</option>
+                          ))}
+                        </select>
+                      ) : (
+                        <input 
+                          required
+                          type="text" 
+                          value={formData.author}
+                          onChange={(e) => setFormData({...formData, author: e.target.value})}
+                          className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-2 focus:ring-primary/20 font-bold" 
+                        />
+                      )}
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                       <div>
