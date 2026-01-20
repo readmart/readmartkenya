@@ -32,7 +32,7 @@ export default function Shop() {
     async function loadData() {
       setIsLoading(true);
       try {
-        const [productsData, categoriesData] = await Promise.all([
+        const [productsData] = await Promise.all([
           getProducts(),
           getCategories()
         ]);
