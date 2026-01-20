@@ -32,10 +32,7 @@ export default function Shop() {
     async function loadData() {
       setIsLoading(true);
       try {
-        const [productsData] = await Promise.all([
-          getProducts(),
-          getCategories()
-        ]);
+        const productsData = await getProducts();
         setProducts(productsData);
         
         // Use user requested categories

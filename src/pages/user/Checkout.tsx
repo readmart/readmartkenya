@@ -13,6 +13,7 @@ import { useSettings } from '@/hooks/useSettings';
 import { toast } from 'sonner';
 import { createOrder } from '@/api/orders';
 import { initiateSTKPush, checkPaymentStatus } from '@/api/payments';
+import { getShippingZones } from '@/api/dashboards';
 import { supabase } from '@/lib/supabase/client';
 
 type CheckoutStep = 'shipping' | 'payment' | 'confirmation';
@@ -25,6 +26,8 @@ export default function Checkout() {
   const { settings } = useSettings();
   const [isProcessing, setIsProcessing] = useState(false);
   const [orderNumber, setOrderNumber] = useState('');
+  const [shippingZones, setShippingZones] = useState<any[]>([]);
+  const [selectedZoneId, setSelectedZoneId] = useState<string>('');
   const navigate = useNavigate();
 
   const [formData, setFormData] = useState({
@@ -36,6 +39,21 @@ export default function Checkout() {
   });
 
   const kenyanPhoneRegex = /^(?:254|\+254|0)?(7|1)\d{8}$/;
+
+  useEffect(() => {
+    async function loadShippingZones() {
+      try {
+        const zones = await getShippingZones();
+        setShippingZones(zones);
+        if (zones.length > 0) {
+          setSelectedZoneId(zones[0].id);
+        }
+      } catch (error) {
+        console.error('Error loading shipping zones:', error);
+      }
+    }
+    loadShippingZones();
+  }, []);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -91,15 +109,20 @@ export default function Checkout() {
     );
   }
   
-  const shipping = cartTotal > 5000 ? 0 : 500;
+  const selectedZone = shippingZones.find(z => z.id === selectedZoneId);
+  const shippingAmount = selectedZone?.rate || 0;
   const taxRate = settings?.tax_rate ?? 16;
-  const tax = cartTotal * (taxRate / (100 + taxRate));
-  const total = cartTotal + shipping;
+  const estimatedTax = cartTotal * (taxRate / 100);
+  const estimatedTotal = cartTotal + shippingAmount + estimatedTax;
 
   const handleNext = () => {
     if (step === 'shipping') {
       if (!formData.fullName || !formData.address || !formData.city) {
         toast.error('Please fill in all shipping details');
+        return;
+      }
+      if (!selectedZoneId) {
+        toast.error('Please select a shipping zone');
         return;
       }
       if (!kenyanPhoneRegex.test(formData.phone)) {
@@ -114,16 +137,16 @@ export default function Checkout() {
     setIsProcessing(true);
     try {
       // 1. Create the order in Supabase
+      // The backend trigger handles tax_amount and total_amount calculation
       const order = await createOrder({
         full_name: formData.fullName,
         email: formData.email,
         phone: formData.phone,
         address: formData.address,
         city: formData.city,
-        subtotal_amount: cartTotal - tax,
-        tax_amount: tax,
-        shipping_amount: shipping,
-        total_amount: total,
+        subtotal_amount: cartTotal,
+        shipping_amount: shippingAmount,
+        shipping_zone_id: selectedZoneId,
         payment_method: 'm-pesa',
         items: cartItems.map(item => ({
           product_id: item.id,
@@ -135,8 +158,8 @@ export default function Checkout() {
 
       setOrderNumber(order.id.slice(0, 8).toUpperCase());
 
-      // 2. Initiate M-Pesa STK Push
-      const result = await initiateSTKPush(order.id, formData.phone, total);
+      // 2. Initiate M-Pesa STK Push using the backend-calculated total
+      const result = await initiateSTKPush(order.id, formData.phone, order.total_amount);
       
       if (result.error) {
         toast.error(result.error);
@@ -300,6 +323,26 @@ export default function Checkout() {
                       placeholder="Nairobi"
                     />
                   </div>
+                  <div className="md:col-span-2 space-y-2">
+                    <label className="text-sm font-medium">Shipping Zone</label>
+                    <select
+                      value={selectedZoneId}
+                      onChange={e => setSelectedZoneId(e.target.value)}
+                      className="glass w-full px-4 py-3 rounded-xl outline-none focus:ring-2 focus:ring-primary bg-transparent"
+                    >
+                      <option value="" disabled className="bg-background">Select a shipping zone</option>
+                      {shippingZones.map(zone => (
+                        <option key={zone.id} value={zone.id} className="bg-background">
+                          {zone.name} - {formatPrice(zone.rate)}
+                        </option>
+                      ))}
+                    </select>
+                    {selectedZone?.description && (
+                      <p className="text-xs text-muted-foreground mt-1 px-1">
+                        {selectedZone.description}
+                      </p>
+                    )}
+                  </div>
                 </div>
                 <button 
                   onClick={handleNext}
@@ -396,7 +439,7 @@ export default function Checkout() {
                     </>
                   ) : (
                     <>
-                      Authorize {formatPrice(total)}
+                      Authorize {formatPrice(estimatedTotal)}
                       <ArrowRight className="w-5 h-5" />
                     </>
                   )}
@@ -455,15 +498,15 @@ export default function Checkout() {
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Shipping</span>
-                <span className="font-bold">{formatPrice(shipping)}</span>
+                <span className="font-bold">{formatPrice(shippingAmount)}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">VAT ({taxRate}%)</span>
-                <span className="font-bold">{formatPrice(tax)}</span>
+                <span className="font-bold">{formatPrice(estimatedTax)}</span>
               </div>
               <div className="flex justify-between items-end pt-4 border-t border-white/10">
                 <span className="text-lg font-bold">Total</span>
-                <span className="text-2xl font-black text-primary">{formatPrice(total)}</span>
+                <span className="text-2xl font-black text-primary">{formatPrice(estimatedTotal)}</span>
               </div>
             </div>
           </div>
