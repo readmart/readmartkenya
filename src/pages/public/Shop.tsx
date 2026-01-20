@@ -5,7 +5,6 @@ import { Search, Filter, ChevronDown, X, Loader2 } from 'lucide-react';
 import BookCard from '@/components/shop/BookCard';
 import { useCurrency } from '@/contexts/CurrencyContext';
 import { getProducts } from '@/api/products';
-import { getCategories } from '@/api/dashboards';
 
 export default function Shop() {
   const { formatPrice } = useCurrency();

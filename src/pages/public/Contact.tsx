@@ -9,6 +9,8 @@ import {
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 
+import { supabase } from '@/lib/supabase/client';
+
 export default function Contact() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -56,8 +58,22 @@ export default function Contact() {
     setIsSubmitting(true);
     
     try {
-      // Simulation of file upload/form submission
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      const departmentMatch = formData.subject.match(/^(.*?)\s\(/);
+      const department = departmentMatch ? departmentMatch[1] : 'General';
+
+      const { error } = await supabase
+        .from('contact_messages')
+        .insert([{
+          full_name: formData.name,
+          email: formData.email,
+          subject: formData.subject,
+          message: formData.message,
+          department: department,
+          status: 'New',
+          priority: 'Medium'
+        }]);
+
+      if (error) throw error;
       
       toast.success('Thank you! Your message has been sent successfully.');
       handleReset();

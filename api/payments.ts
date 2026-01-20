@@ -8,7 +8,7 @@ import {
   K2_EVENT_TYPES,
   getK2Token
 } from './_payments.ts';
-import { sendEmail, renderOrderConfirmationEmail } from './_email.ts';
+import { sendEmail, renderOrderConfirmationEmail, renderFailedPaymentEmail } from './_email.ts';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Set CORS headers manually if needed, or rely on vercel.json
@@ -135,37 +135,50 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               if (isSuccess) {
                 await calculateOrderCommissions(order.id);
                 
+                // Fetch items with product type and ebook metadata to check for digital-only order
+                const { data: items } = await supabase
+                  .from('order_items')
+                  .select(`
+                    *,
+                    product:products(
+                      type,
+                      metadata
+                    )
+                  `)
+                  .eq('order_id', order.id);
+
+                // Check if this is a digital-only order (all items are ebooks)
+                const isDigitalOnly = items && items.length > 0 && items.every((item: any) => 
+                  item.product?.type === 'ebook' || item.product_snapshot?.type === 'ebook'
+                );
+
+                if (isDigitalOnly) {
+                  console.log(`Order ${order.id} is digital-only. Marking as completed.`);
+                  await supabase
+                    .from('orders')
+                    .update({ status: 'completed' })
+                    .eq('id', order.id);
+                }
+
                 // Notifications
                 if (order.user_id) {
                   await createNotification({
                     userId: order.user_id,
                     type: 'order',
                     title: 'Payment Received!',
-                    message: `Your payment of KES ${order.total_amount} for order #${order.id.slice(0, 8).toUpperCase()} was successful.`,
-                    link: `/account?tab=orders`
+                    message: `Your payment of KES ${order.total_amount} for order #${order.id.slice(0, 8).toUpperCase()} was successful.${isDigitalOnly ? ' Your ebooks are now available.' : ''}`,
+                    link: isDigitalOnly ? '/account?tab=ebooks' : `/account?tab=orders`
                   });
                 }
 
                 // Email
                 try {
-                  // Fetch items with product type and ebook metadata
-                  const { data: items } = await supabase
-                    .from('order_items')
-                    .select(`
-                      *,
-                      product:products(
-                        type,
-                        metadata
-                      )
-                    `)
-                    .eq('order_id', order.id);
-
                   const email = order.shipping_address?.email;
                   if (email) {
                     const processedItems = (items as any[])?.map(item => ({
                       ...item,
-                      is_ebook: item.product?.type === 'ebook',
-                      ebook_password: item.product?.metadata?.ebook_password || (item as any).ebook_password
+                      is_ebook: item.product?.is_ebook || item.product?.type === 'ebook' || item.product_snapshot?.type === 'ebook',
+                      ebook_password: item.product?.metadata?.ebook_password || item.product_snapshot?.metadata?.ebook_password || (item as any).ebook_password
                     }));
 
                     const html = renderOrderConfirmationEmail({ order, items: processedItems || [] });
@@ -177,6 +190,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                   }
                 } catch (e) {
                   console.error('Email failed:', e);
+                }
+              } else {
+                // Send failed payment email
+                try {
+                  const email = order.shipping_address?.email;
+                  if (email) {
+                    const html = renderFailedPaymentEmail({ order });
+                    await sendEmail({
+                      to: email,
+                      subject: `Payment Failed - #${order.id.slice(0, 8).toUpperCase()}`,
+                      html
+                    });
+                  }
+                } catch (e) {
+                  console.error('Failed payment email failed:', e);
                 }
               }
             }

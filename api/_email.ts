@@ -105,6 +105,50 @@ export const renderContactNotificationEmail = (data: any) => {
   `;
 };
 
+export const renderFailedPaymentEmail = (data: any) => {
+  const { order } = data;
+  const id = order.id.slice(0, 8).toUpperCase();
+  const formatPrice = (amount: number) => `KES ${Number(amount).toLocaleString()}`;
+  
+  return `
+    <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; color: #333;">
+      <h1 style="color: #ef4444;">Payment Failed</h1>
+      <p>Hello ${order.shipping_address?.full_name || 'Customer'},</p>
+      <p>We were unable to process your payment of <strong>${formatPrice(order.total_amount)}</strong> for order #${id}.</p>
+      <div style="background: #fef2f2; padding: 20px; border-radius: 8px; border: 1px solid #fee2e2; margin: 20px 0;">
+        <p><strong>Reason:</strong> The M-Pesa transaction was cancelled or failed to complete.</p>
+        <p>Don't worry, your items are still reserved for a limited time. You can try paying again by clicking the button below.</p>
+      </div>
+      <p style="text-align: center; margin: 30px 0;">
+        <a href="https://readmartke.com/checkout" style="display: inline-block; background: #6366f1; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">Retry Payment</a>
+      </p>
+      <p>If you need assistance, please reply to this email.</p>
+      <p>Best regards,<br/>The ReadMart Team</p>
+    </div>
+  `;
+};
+
+export const renderAbandonedCartEmail = (data: any) => {
+  const { user, cartTotal } = data;
+  const formatPrice = (amount: number) => `KES ${Number(amount).toLocaleString()}`;
+
+  return `
+    <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; color: #333;">
+      <h1 style="color: #6366f1;">Forgot something?</h1>
+      <p>Hello ${user.full_name || 'there'},</p>
+      <p>We noticed you left some items in your cart. They are waiting for you!</p>
+      <div style="background: #f3f4f6; padding: 20px; border-radius: 8px; border: 1px solid #e5e7eb; margin: 20px 0;">
+        <p>Your cart total: <strong>${formatPrice(cartTotal)}</strong></p>
+      </div>
+      <p style="text-align: center; margin: 30px 0;">
+        <a href="https://readmartke.com/cart" style="display: inline-block; background: #6366f1; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">Return to Cart</a>
+      </p>
+      <p>Items in high demand may sell out, so grab them while you can!</p>
+      <p>Best regards,<br/>The ReadMart Team</p>
+    </div>
+  `;
+};
+
 export const renderApplicationNotificationEmail = (type: 'author' | 'partner', data: any) => {
   const title = type === 'author' ? 'New Author Application' : 'New Partnership Application';
   return `
@@ -169,7 +213,8 @@ export const renderOrderConfirmationEmail = (data: any) => {
         ${isEbook ? `
           <div style="font-size: 12px; color: #6366f1; margin-top: 4px;">
             <strong>Digital E-book (PDF)</strong><br/>
-            Access Password: <span style="background: #f3f4f6; padding: 2px 6px; border-radius: 4px; font-family: monospace; font-weight: bold; color: #333;">${password || 'N/A'}</span>
+            Access Password: <span style="background: #f3f4f6; padding: 2px 6px; border-radius: 4px; font-family: monospace; font-weight: bold; color: #333;">${password || 'N/A'}</span><br/>
+            <a href="https://readmartke.com/account?tab=ebooks" style="color: #6366f1; text-decoration: underline; font-weight: bold; display: inline-block; mt-2;">Download from your Account</a>
           </div>
         ` : ''}
       </td>

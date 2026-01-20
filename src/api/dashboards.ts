@@ -9,6 +9,25 @@ function calculateTrend(current: number, previous: number): string {
   return `${diff >= 0 ? '+' : ''}${diff.toFixed(1)}%`;
 }
 
+/**
+ * Utility to verify administrative privileges
+ */
+async function verifyAdmin() {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) throw new Error('Authentication required');
+
+  const { data: profile, error: roleError } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', session.user.id)
+    .single();
+
+  if (roleError || !profile || (profile.role !== 'founder' && profile.role !== 'admin')) {
+    throw new Error('Unauthorized access: Administrative privileges required');
+  }
+  return session;
+}
+
 // --- Founder Services ---
 
 /**
@@ -17,19 +36,8 @@ function calculateTrend(current: number, previous: number): string {
  */
 export async function getGlobalAnalytics() {
   try {
-    // 0. Security Check: Verify user role before fetching sensitive data
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) throw new Error('Authentication required');
-
-    const { data: profile, error: roleError } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', session.user.id)
-      .single();
-
-    if (roleError || !profile || (profile.role !== 'founder' && profile.role !== 'admin')) {
-      throw new Error('Unauthorized access: Administrative privileges required');
-    }
+    // 0. Security Check
+    await verifyAdmin();
 
     const now = new Date();
     const thirtyDaysAgo = new Date(now.getTime() - (30 * 24 * 60 * 60 * 1000));
@@ -208,11 +216,37 @@ export async function getGlobalAnalytics() {
 }
 
 /**
- * Fetch all categories
+ * Trigger abandoned cart reminders
  */
-export async function getCategories() {
+export async function sendAbandonedCartReminders() {
+  await verifyAdmin();
+
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) throw new Error('Authentication required');
+
+  const response = await fetch('/api/reminders', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${session.access_token}`,
+      'Content-Type': 'application/json'
+    }
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || 'Failed to send reminders');
+  }
+
+  return await response.json();
+}
+
+/**
+ * Fetch all shipping zones (for management)
+ */
+export async function getShippingZones() {
+  await verifyAdmin();
   const { data, error } = await supabase
-    .from('categories')
+    .from('shipping_zones')
     .select('*')
     .order('name');
 
@@ -220,15 +254,305 @@ export async function getCategories() {
   return data;
 }
 
+// --- Generic CRUD Utilities ---
+
 /**
- * Fetch all active shipping zones
+ * Fetch all records from a table with optional ordering
  */
-export async function getShippingZones() {
+async function getAllRecords(table: string, orderBy: string = 'created_at') {
+  await verifyAdmin();
   const { data, error } = await supabase
-    .from('shipping_zones')
+    .from(table)
     .select('*')
-    .eq('is_active', true)
-    .order('name');
+    .order(orderBy, { ascending: false });
+
+  if (error) throw error;
+  return data;
+}
+
+export async function getInventory() {
+  await verifyAdmin();
+  const { data, error } = await supabase
+    .from('products')
+    .select('*, category:categories(name), ebook_metadata(*)')
+    .order('created_at', { ascending: false });
+
+  if (error) throw error;
+  return data;
+}
+
+export async function getOrders() {
+  await verifyAdmin();
+  return getAllRecords('orders');
+}
+
+export async function getAllUsers() {
+  await verifyAdmin();
+  return getAllRecords('profiles');
+}
+
+export async function getCMSContent() {
+  await verifyAdmin();
+  return getAllRecords('cms_content');
+}
+
+export async function getClubs() {
+  await verifyAdmin();
+  const { data, error } = await supabase
+    .from('cms_content')
+    .select('*')
+    .eq('type', 'book_club')
+    .order('created_at', { ascending: false });
+
+  if (error) throw error;
+  return data;
+}
+
+export async function getEvents() {
+  await verifyAdmin();
+  const { data, error } = await supabase
+    .from('cms_content')
+    .select('*')
+    .eq('type', 'event')
+    .order('created_at', { ascending: false });
+
+  if (error) throw error;
+  return data;
+}
+
+export async function getBanners() {
+  await verifyAdmin();
+  const { data, error } = await supabase
+    .from('cms_content')
+    .select('*')
+    .eq('type', 'banner')
+    .order('created_at', { ascending: false });
+
+  if (error) throw error;
+  return data;
+}
+
+export async function getPromos() {
+  await verifyAdmin();
+  return getAllRecords('promos');
+}
+
+export async function getAuditLogs() {
+  await verifyAdmin();
+  return getAllRecords('audit_logs');
+}
+
+export async function getInquiries() {
+  await verifyAdmin();
+  return getAllRecords('contact_messages');
+}
+
+export async function getAuthorSalesReport(authorId: string) {
+  await verifyAdmin();
+  // This is a placeholder that will be expanded when we have the sales/orders logic for authors
+  const { data, error } = await supabase
+    .from('order_items')
+    .select(`
+      *,
+      order:orders(status, created_at),
+      product:products(title, metadata)
+    `)
+    .eq('product:products.metadata->>author_id', authorId);
+  
+  if (error) throw error;
+  return data;
+}
+
+export async function getPartnerships() {
+  await verifyAdmin();
+  return getAllRecords('partnership_applications');
+}
+
+export async function getAuthors() {
+  await verifyAdmin();
+  return getAllRecords('author_applications');
+}
+
+export async function getCategories() {
+  await verifyAdmin();
+  return getAllRecords('categories', 'name');
+}
+
+export async function getSiteSettings() {
+  await verifyAdmin();
+  const { data, error } = await supabase
+    .from('site_settings')
+    .select('*')
+    .single();
+
+  if (error && error.code !== 'PGRST116') throw error;
+  return data || {};
+}
+
+/**
+ * Generic Create
+ */
+export async function createRecord(table: string, record: any) {
+  await verifyAdmin();
+  const { data, error } = await supabase
+    .from(table)
+    .insert([record])
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+/**
+ * Generic Update
+ */
+export async function updateRecord(table: string, id: string, updates: any) {
+  await verifyAdmin();
+  const { data, error } = await supabase
+    .from(table)
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+/**
+ * Generic Delete
+ */
+export async function deleteRecord(table: string, id: string) {
+  await verifyAdmin();
+  const { error } = await supabase
+    .from(table)
+    .delete()
+    .eq('id', id);
+
+  if (error) throw error;
+  return true;
+}
+
+/**
+ * Generic Bulk Delete
+ */
+export async function deleteRecords(table: string, ids: string[]) {
+  await verifyAdmin();
+  const { error } = await supabase
+    .from(table)
+    .delete()
+    .in('id', ids);
+
+  if (error) throw error;
+  return true;
+}
+
+// --- Specialized Update Services ---
+
+export async function updateOrderStatus(orderId: string, status: string) {
+  await verifyAdmin();
+  return updateRecord('orders', orderId, { status });
+}
+
+export async function togglePromoStatus(promoId: string, isActive: boolean) {
+  await verifyAdmin();
+  return updateRecord('promos', promoId, { is_active: isActive });
+}
+
+export async function updateUserStatus(userId: string, isActive: boolean) {
+  await verifyAdmin();
+  return updateRecord('profiles', userId, { is_active: isActive });
+}
+
+export async function updateSiteSettings(settings: any) {
+  await verifyAdmin();
+  const { data: existing } = await supabase.from('site_settings').select('id').single();
+  
+  if (existing) {
+    return updateRecord('site_settings', existing.id, settings);
+  } else {
+    return createRecord('site_settings', settings);
+  }
+}
+
+export async function updateCMSContent(id: string, content: any) {
+  await verifyAdmin();
+  return updateRecord('cms_content', id, content);
+}
+
+export async function createCMSContent(content: any) {
+  await verifyAdmin();
+  return createRecord('cms_content', content);
+}
+
+export async function createProduct(product: any) {
+  await verifyAdmin();
+  const { ebook_metadata, ...productData } = product;
+  
+  const { data, error } = await supabase
+    .from('products')
+    .insert([productData])
+    .select()
+    .single();
+
+  if (error) throw error;
+
+  if (productData.type === 'ebook' && ebook_metadata) {
+    await supabase.from('ebook_metadata').insert([{
+      ...ebook_metadata,
+      product_id: data.id
+    }]);
+  }
+
+  return data;
+}
+
+export async function updateProduct(id: string, product: any) {
+  await verifyAdmin();
+  const { ebook_metadata, ...productData } = product;
+
+  const { data, error } = await supabase
+    .from('products')
+    .update(productData)
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) throw error;
+
+  if (productData.type === 'ebook' && ebook_metadata) {
+    const { data: existing } = await supabase
+      .from('ebook_metadata')
+      .select('id')
+      .eq('product_id', id)
+      .maybeSingle();
+
+    if (existing) {
+      await supabase
+        .from('ebook_metadata')
+        .update(ebook_metadata)
+        .eq('id', existing.id);
+    } else {
+      await supabase
+        .from('ebook_metadata')
+        .insert([{
+          ...ebook_metadata,
+          product_id: id
+        }]);
+    }
+  }
+
+  return data;
+}
+
+export async function bulkUpdateProducts(ids: string[], updates: any) {
+  await verifyAdmin();
+  const { data, error } = await supabase
+    .from('products')
+    .update(updates)
+    .in('id', ids)
+    .select();
 
   if (error) throw error;
   return data;
