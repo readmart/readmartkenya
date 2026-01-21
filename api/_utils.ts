@@ -103,7 +103,40 @@ export const calculateOrderCommissions = async (orderId: string) => {
     const platformService = services?.find((s: any) => s.name.toLowerCase().includes('platform')) || 
                            services?.find((s: any) => s.name.toLowerCase().includes('readmart'));
 
+    const logisticsService = services?.find((s: any) => s.name.toLowerCase().includes('logistics')) ||
+                            services?.find((s: any) => s.name.toLowerCase().includes('shipping'));
+
+    const authorService = services?.find((s: any) => s.name.toLowerCase().includes('author')) ||
+                         services?.find((s: any) => s.name.toLowerCase().includes('royalty'));
+
     const ledgerEntries: any[] = [];
+
+    // 2.1 Calculate Logistics Payout if order has a shipping zone with an assigned partner
+    if (order.shipping_zone_id && Number(order.shipping_amount) > 0) {
+      const { data: zone } = await supabase
+        .from('shipping_zones')
+        .select('partner_id')
+        .eq('id', order.shipping_zone_id)
+        .single();
+      
+      if (zone?.partner_id) {
+        ledgerEntries.push({
+          order_id: orderId,
+          partner_id: zone.partner_id,
+          partner_service_id: logisticsService?.id,
+          amount: order.shipping_amount,
+          payout_status: 'pending',
+          metadata: {
+            type: 'logistics_fulfillment',
+            zone_id: order.shipping_zone_id
+          }
+        });
+      }
+    }
+
+    // Fetch site settings once for author rates
+    const { data: settings } = await supabase.from('site_settings').select('author_commission_rate').single();
+    const defaultAuthorRate = settings?.author_commission_rate || 70;
 
     for (const item of items) {
       const price = item.price_at_purchase || item.price || 0;
@@ -127,21 +160,21 @@ export const calculateOrderCommissions = async (orderId: string) => {
 
       // 2. Calculate Author Payout if product has an author
       const productSnapshot = item.product_snapshot || {};
-      if (productSnapshot.author_id) {
-        // Fetch author commission rate from settings (default 70%)
-        const { data: settings } = await supabase.from('site_settings').select('author_commission_rate').single();
-        const authorRate = settings?.author_commission_rate || 70;
-        const authorAmount = (amount * (Number(authorRate) / 100));
+      const authorId = productSnapshot.author_id || item.author_id;
+
+      if (authorId) {
+        const authorAmount = (amount * (Number(defaultAuthorRate) / 100));
 
         ledgerEntries.push({
           order_id: orderId,
-          partner_id: productSnapshot.author_id,
+          partner_id: authorId,
+          partner_service_id: authorService?.id,
           amount: authorAmount,
           payout_status: 'pending',
           metadata: {
             item_id: item.product_id,
             type: 'author_royalty',
-            rate: authorRate
+            rate: defaultAuthorRate
           }
         });
       }

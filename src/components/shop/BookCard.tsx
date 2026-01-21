@@ -10,13 +10,15 @@ interface BookCardProps {
   id: string;
   title: string;
   author: string;
+  author_id?: string;
   price: number;
   image: string;
   rating: number;
   category: string;
+  type?: 'physical' | 'ebook';
 }
 
-export default function BookCard({ id, title, author, price, image, rating, category }: BookCardProps) {
+export default function BookCard({ id, title, author, author_id, price, image, rating, category, type }: BookCardProps) {
   const navigate = useNavigate();
   const { addToCart, buyNow } = useCart();
   const { addToWishlist, removeFromWishlist, isInWishlist } = useWishlist();
@@ -25,14 +27,14 @@ export default function BookCard({ id, title, author, price, image, rating, cate
   const handleAddToCart = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    addToCart({ id, title, author, price, image, category });
+    addToCart({ id, title, author, author_id, price, image, category, type });
     toast.success(`${title} added to cart!`);
   };
 
   const handleBuyNow = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    buyNow({ id, title, author, price, image, category });
+    buyNow({ id, title, author, author_id, price, image, category, type });
     navigate('/checkout');
   };
 

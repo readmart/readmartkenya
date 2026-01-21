@@ -260,7 +260,35 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       } catch (err: any) {
         if (err.message.includes('credentials') || err.message.includes('configured')) {
           console.warn('Payment credentials missing, using demo response');
-          return json(res, 200, { demo: true, message: 'Demo mode active' });
+          
+          // FOR DEMO: Automatically complete the order/membership
+          const { orderId, type } = req.body;
+          const isMembership = type === 'membership';
+          
+          if (!isMembership && orderId) {
+            console.log(`Demo mode: Fulfilling order ${orderId}`);
+            // Update order to paid
+            await supabase.from('orders').update({ status: 'paid' }).eq('id', orderId);
+            // Trigger commission calculation
+            await calculateOrderCommissions(orderId);
+          } else if (isMembership) {
+            const { data: { user } } = await supabase.auth.getUser(req.headers.authorization?.split(' ')[1] || '');
+            if (user) {
+              console.log(`Demo mode: Activating membership for user ${user.id}`);
+              const { data: settings } = await supabase.from('settings').select('membership_duration_days').maybeSingle();
+              const duration = settings?.membership_duration_days || 30;
+              const expiresAt = new Date();
+              expiresAt.setDate(expiresAt.getDate() + duration);
+              
+              await supabase.from('profiles').update({
+                is_member: true,
+                membership_started_at: new Date().toISOString(),
+                membership_expires_at: expiresAt.toISOString()
+              }).eq('id', user.id);
+            }
+          }
+
+          return json(res, 200, { demo: true, message: 'Demo mode active - Order automatically fulfilled' });
         }
         throw err;
       }

@@ -82,6 +82,31 @@ export async function uploadSiteAsset(file: File, path?: string) {
 }
 
 /**
+ * Upload a signed agreement to the partnership_documents bucket
+ */
+export async function uploadSignedAgreement(file: File, userId: string) {
+  const fileExt = file.name.split('.').pop();
+  const fileName = `${userId}_${Date.now()}.${fileExt}`;
+  
+  const { data, error } = await supabase.storage
+    .from('partnership_documents')
+    .upload(fileName, file, {
+      cacheControl: '3600',
+      upsert: true
+    });
+
+  if (error) {
+    if (error.message.includes('bucket not found')) {
+      throw new Error('Storage bucket for documents not found. Please contact support.');
+    }
+    throw error;
+  }
+
+  // Agreements should be private, so we return the path instead of public URL
+  return data.path;
+}
+
+/**
  * Delete an image from the products bucket
  * @param url Full public URL of the image
  */

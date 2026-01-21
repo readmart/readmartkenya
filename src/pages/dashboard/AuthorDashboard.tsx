@@ -9,7 +9,12 @@ import {
 } from 'recharts';
 import { useCurrency } from '@/contexts/CurrencyContext';
 import { useAuth } from '@/contexts/AuthContext';
-import { getAuthorSalesReport, getInventory, getSiteSettings } from '@/api/dashboards';
+import { 
+  getAuthorSalesReport, 
+  getInventory, 
+  getSiteSettings,
+  getAuthorPayouts 
+} from '@/api/dashboards';
 import { toast } from 'sonner';
 
 export default function AuthorDashboard() {
@@ -17,6 +22,7 @@ export default function AuthorDashboard() {
   const { user } = useAuth();
   const [salesReport, setSalesReport] = useState<any[]>([]);
   const [myBooks, setMyBooks] = useState<any[]>([]);
+  const [payouts, setPayouts] = useState<any[]>([]);
   const [settings, setSettings] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -30,14 +36,16 @@ export default function AuthorDashboard() {
     if (!user) return;
     setIsLoading(true);
     try {
-      const [sales, books, siteSettings] = await Promise.all([
+      const [sales, books, siteSettings, payoutData] = await Promise.all([
         getAuthorSalesReport(user.id),
         getInventory(user.id),
-        getSiteSettings()
+        getSiteSettings(),
+        getAuthorPayouts(user.id)
       ]);
       setSalesReport(sales);
       setMyBooks(books); 
       setSettings(siteSettings);
+      setPayouts(payoutData);
     } catch (error) {
       toast.error('Failed to fetch dashboard data');
     } finally {
@@ -46,17 +54,16 @@ export default function AuthorDashboard() {
   };
 
   const stats = useMemo(() => {
-    const totalSales = salesReport.reduce((acc, curr) => acc + (Number(curr.price_at_purchase || curr.price || 0) * Number(curr.quantity || 0)), 0);
+    const totalRoyalties = payouts.reduce((acc, curr) => acc + Number(curr.amount), 0);
     const uniqueBooks = new Set(myBooks.map(b => b.id)).size;
-    const royaltyRate = settings?.author_commission_rate || 70;
     
     return [
       { label: 'Published Books', value: uniqueBooks.toString(), icon: <BookOpen />, color: 'text-blue-500' },
-      { label: 'Total Royalties', value: formatPrice(totalSales * (royaltyRate / 100)), icon: <DollarSign />, color: 'text-green-500' },
+      { label: 'Total Royalties', value: formatPrice(totalRoyalties), icon: <DollarSign />, color: 'text-green-500' },
       { label: 'Total Sales', value: salesReport.length.toString(), icon: <TrendingUp />, color: 'text-orange-500' },
       { label: 'Reader Reviews', value: '0', icon: <MessageSquare />, color: 'text-purple-500' },
     ];
-  }, [salesReport, myBooks, formatPrice, settings]);
+  }, [payouts, myBooks, formatPrice, salesReport]);
 
   const performanceData = useMemo(() => {
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -155,7 +162,8 @@ export default function AuthorDashboard() {
             <div className="divide-y divide-white/5">
               {myBooks.slice(0, 5).map(book => {
                 const bookSales = salesReport.filter(s => s.product_id === book.id);
-                const totalEarned = bookSales.reduce((acc, curr) => acc + (curr.price * curr.quantity * 0.7), 0);
+                const authorRate = (settings?.author_commission_rate || 70) / 100;
+                const totalEarned = bookSales.reduce((acc, curr) => acc + (curr.price * curr.quantity * authorRate), 0);
                 
                 return (
                   <div key={book.id} className="p-6 flex items-center justify-between hover:bg-white/5 transition-all">
@@ -219,19 +227,38 @@ export default function AuthorDashboard() {
           >
             <h3 className="font-bold mb-6 flex items-center gap-2">
               <TrendingUp className="text-primary w-5 h-5" />
-              Royalty Forecast
+              Royalty Ledger
             </h3>
-            <div className="space-y-4">
+            <div className="space-y-6">
               <div className="flex justify-between items-center">
-                <span className="text-sm text-muted-foreground">Estimated Next Payout</span>
-                <span className="font-bold">{formatPrice(1250.00)}</span>
+                <span className="text-sm text-muted-foreground">Pending Payout</span>
+                <span className="font-bold text-orange-500">
+                  {formatPrice(payouts.filter(p => p.payout_status === 'pending').reduce((acc, p) => acc + Number(p.amount), 0))}
+                </span>
               </div>
-              <div className="w-full bg-white/10 h-2 rounded-full overflow-hidden">
-                <div className="bg-primary h-full w-[65%]" />
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-muted-foreground">Paid to Date</span>
+                <span className="font-bold text-green-500">
+                  {formatPrice(payouts.filter(p => p.payout_status === 'paid').reduce((acc, p) => acc + Number(p.amount), 0))}
+                </span>
               </div>
-              <p className="text-xs text-muted-foreground text-center">
-                65% towards next threshold
-              </p>
+              
+              <div className="pt-4 border-t border-white/5">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-4">Recent Payouts</p>
+                <div className="space-y-3">
+                  {payouts.slice(0, 3).map(p => (
+                    <div key={p.id} className="flex justify-between items-center text-xs">
+                      <span className="text-muted-foreground">{new Date(p.created_at).toLocaleDateString()}</span>
+                      <span className={`font-bold ${p.payout_status === 'paid' ? 'text-green-500' : 'text-orange-500'}`}>
+                        {formatPrice(p.amount)}
+                      </span>
+                    </div>
+                  ))}
+                  {payouts.length === 0 && (
+                    <p className="text-xs text-muted-foreground italic">No payout history yet</p>
+                  )}
+                </div>
+              </div>
             </div>
           </motion.div>
         </div>

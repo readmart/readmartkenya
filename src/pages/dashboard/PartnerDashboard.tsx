@@ -29,7 +29,7 @@ export default function PartnerDashboard() {
     try {
       const [payoutData, orders] = await Promise.all([
         getPartnerPayouts(user.id),
-        getOrders() // Ideally filtered by partner zone/id
+        getOrders(user.id)
       ]);
       setPayouts(payoutData);
       setAssignments(orders);

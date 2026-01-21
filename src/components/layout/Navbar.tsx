@@ -264,14 +264,14 @@ export default function Navbar() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setIsMenuOpen(false)}
-              className="fixed inset-0 bg-white/90 backdrop-blur-xl z-[90] lg:hidden"
+              className="fixed inset-0 bg-black/40 backdrop-blur-md z-[90] lg:hidden"
             />
             <motion.div
               initial={{ x: '100%' }}
               animate={{ x: 0 }}
               exit={{ x: '100%' }}
               transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-              className="fixed top-0 right-0 bottom-0 w-[80%] max-sm glass bg-white/95 z-[100] lg:hidden p-8 flex flex-col gap-8 shadow-2xl"
+              className="fixed top-0 right-0 bottom-0 w-[85%] max-w-sm bg-white z-[100] lg:hidden p-8 flex flex-col gap-8 shadow-2xl"
             >
               <div className="flex items-center justify-between mb-4">
                 <img src="/assets/logo.jpg" alt="ReadMart" className="h-10 w-auto rounded" />

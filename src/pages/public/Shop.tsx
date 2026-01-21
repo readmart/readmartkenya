@@ -325,10 +325,12 @@ export default function Shop() {
                           id={book.id}
                           title={book.title}
                           author={book.author || book.metadata?.author || 'ReadMart Original'}
+                          author_id={book.author_id}
                           price={book.price}
                           rating={book.metadata?.rating || 5.0}
                           category={book.category?.name || 'General'}
                           image={book.image_url || book.metadata?.image_url || 'https://images.unsplash.com/photo-1544947950-fa07a98d237f?auto=format&fit=crop&q=80&w=800'}
+                          type={book.type}
                         />
                       </motion.div>
                     ))}

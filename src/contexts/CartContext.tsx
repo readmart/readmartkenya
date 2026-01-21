@@ -4,10 +4,12 @@ export interface CartItem {
   id: string;
   title: string;
   author: string;
+  author_id?: string;
   price: number;
   quantity: number;
   image: string;
   category?: string;
+  type?: 'physical' | 'ebook';
 }
 
 interface CartContextType {

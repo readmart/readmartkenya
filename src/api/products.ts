@@ -16,11 +16,16 @@ export async function getProducts(options: {
     .eq('is_active', true);
 
   if (options.category && options.category !== 'All') {
-    // If it's a UUID, search by ID, otherwise search by category name
+    // If it's a UUID, search by ID, otherwise search by category name via inner join
     if (options.category.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
       query = query.eq('category_id', options.category);
     } else {
-      query = query.filter('category.name', 'eq', options.category);
+      // Use inner join to filter by category name
+      query = supabase
+        .from('products')
+        .select('*, category:categories!inner(name)')
+        .eq('is_active', true)
+        .eq('category.name', options.category);
     }
   }
 

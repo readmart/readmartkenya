@@ -90,12 +90,7 @@ export default function FounderDashboard() {
   const fetchAllData = async () => {
     setIsLoading(true);
     try {
-      const [
-        analytics, inventory, orders, users, 
-        settings, inquiries, partnerships, 
-        authors, approvedAuthors, categories, shippingZones, promos,
-        cmsContent
-      ] = await Promise.all([
+      const results = await Promise.allSettled([
         getGlobalAnalytics(),
         getInventory(),
         getOrders(),
@@ -110,13 +105,36 @@ export default function FounderDashboard() {
         getPromos(),
         getCMSContent()
       ]);
+
+      const [
+        analytics, inventory, orders, users, 
+        settings, inquiries, partnerships, 
+        authors, approvedAuthors, categories, shippingZones, promos,
+        cmsContent
+      ] = results.map(res => res.status === 'fulfilled' ? res.value : null);
+
       setData({ 
-        analytics, inventory, orders, users, settings, 
-        inquiries, partnerships, authors, approvedAuthors,
-        categories, shippingZones, promos, cmsContent 
+        analytics: analytics || { total_revenue: 0, total_orders: 0, total_users: 0, total_products: 0, salesData: [], categoryStats: [] },
+        inventory: inventory || [],
+        orders: orders || [],
+        users: users || [],
+        settings: settings || {},
+        inquiries: inquiries || [],
+        partnerships: partnerships || [],
+        authors: authors || [],
+        approvedAuthors: approvedAuthors || [],
+        categories: categories || [],
+        shippingZones: shippingZones || [],
+        promos: promos || [],
+        cmsContent: cmsContent || []
       });
+
+      if (results.some(res => res.status === 'rejected')) {
+        console.warn('Some dashboard data failed to load:', results.filter(res => res.status === 'rejected'));
+        toast.error('Some metrics could not be loaded');
+      }
     } catch (error) {
-      console.error('Failed to fetch dashboard data:', error);
+      console.error('Critical failure in dashboard data fetch:', error);
       toast.error('Error loading dashboard data');
     } finally {
       setIsLoading(false);
@@ -300,8 +318,8 @@ function AnalyticsView({ data, formatPrice }: any) {
               </div>
             </div>
           </div>
-          <div className="h-[400px]">
-            <ResponsiveContainer width="100%" height="100%">
+          <div className="h-[400px] w-full min-h-[400px]">
+            <ResponsiveContainer width="100%" height="100%" minHeight={400}>
               <AreaChart data={data.salesData}>
                 <defs>
                   <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
@@ -334,8 +352,8 @@ function AnalyticsView({ data, formatPrice }: any) {
 
         <div className="bg-white p-10 rounded-[40px] border border-slate-100 shadow-sm">
           <h3 className="text-xl font-black tracking-tighter uppercase mb-10">Category Saturation</h3>
-          <div className="h-[400px]">
-            <ResponsiveContainer width="100%" height="100%">
+          <div className="h-[400px] w-full min-h-[400px]">
+            <ResponsiveContainer width="100%" height="100%" minHeight={400}>
               <PieChart>
                 <Pie
                   data={data.categoryStats}

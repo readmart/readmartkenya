@@ -91,9 +91,11 @@ export default function BookDetail() {
       id: book.id,
       title: book.title,
       author: book.author || book.metadata?.author || 'ReadMart Original',
+      author_id: book.author_id,
       price: book.price,
       image: book.image_url || book.metadata?.image_url,
-      category: book.category?.name || 'General'
+      category: book.category?.name || 'General',
+      type: book.type || 'physical'
     });
     toast.success(`${book.title} added to cart!`);
   };
@@ -103,9 +105,11 @@ export default function BookDetail() {
       id: book.id,
       title: book.title,
       author: book.author || book.metadata?.author || 'ReadMart Original',
+      author_id: book.author_id,
       price: book.price,
       image: book.image_url || book.metadata?.image_url,
-      category: book.category?.name || 'General'
+      category: book.category?.name || 'General',
+      type: book.type || 'physical'
     });
     navigate('/checkout');
   };

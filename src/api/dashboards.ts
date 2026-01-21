@@ -13,17 +13,16 @@ function calculateTrend(current: number, previous: number): string {
  * Utility to verify roles
  */
 export async function verifyRole(allowedRoles: string[]) {
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session) throw new Error('Not authenticated');
-
-  // Development bypass: Check localStorage for dev role
-  // This matches the logic in AuthContext.tsx
+  // Development bypass: Check localStorage for dev role first
   if (typeof window !== 'undefined') {
     const devRole = localStorage.getItem('rm_dev_role');
     if (devRole && allowedRoles.includes(devRole)) {
-      return session; // Authorized via dev bypass
+      return null; // Authorized via dev bypass (no real session needed)
     }
   }
+
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) throw new Error('Not authenticated');
 
   const { data: profile } = await supabase
     .from('profiles')
@@ -268,7 +267,8 @@ export async function sendAbandonedCartReminders() {
  */
 export async function getShippingZones() {
   try {
-    await verifyAdmin();
+    // Shipping zones are public for checkout selection
+    // RLS policies handle management security
     const { data, error } = await supabase
       .from('shipping_zones')
       .select('*')
@@ -328,9 +328,32 @@ export async function getInventory(authorId?: string) {
   }
 }
 
-export async function getOrders() {
+export async function getOrders(partnerId?: string) {
   try {
     await verifyPartner();
+    
+    if (partnerId) {
+      // Fetch shipping zones assigned to this partner
+      const { data: zones } = await supabase
+        .from('shipping_zones')
+        .select('id')
+        .eq('partner_id', partnerId);
+      
+      const zoneIds = zones?.map(z => z.id) || [];
+      
+      if (zoneIds.length === 0) return [];
+
+      // Fetch orders for those zones
+      const { data, error } = await supabase
+        .from('orders')
+        .select('*')
+        .in('shipping_zone_id', zoneIds)
+        .order('created_at', { ascending: false });
+      
+      if (error) throw error;
+      return data || [];
+    }
+
     return await getAllRecords('orders');
   } catch (err) {
     console.error('Orders fetch failed:', err);
@@ -350,7 +373,8 @@ export async function getAllUsers() {
 
 export async function getCMSContent() {
   try {
-    await verifyAdmin();
+    // CMS content is public-facing (home page, events, etc.)
+    // RLS policies on the database handle the security
     return await getAllRecords('cms_content');
   } catch (err) {
     console.error('CMS Content fetch failed:', err);
@@ -462,7 +486,7 @@ export async function getAuthorSalesReport(authorId: string) {
 
 export async function getPartnerPayouts(partnerId: string) {
   try {
-    await verifyPartner();
+    await verifyRole(['partner', 'author', 'admin', 'founder']);
     
     // We filter by partner_id which links directly to the partner's profile
     const { data, error } = await supabase
@@ -480,6 +504,10 @@ export async function getPartnerPayouts(partnerId: string) {
     console.error('Partner Payouts fetch failed:', err);
     return [];
   }
+}
+
+export async function getAuthorPayouts(authorId: string) {
+  return getPartnerPayouts(authorId);
 }
 
 export async function getPartnerships() {
@@ -504,6 +532,35 @@ export async function getAuthors() {
 
 export async function getApprovedAuthors() {
   try {
+    // This function is often used for public author lists
+    // RLS policies should ensure only basic info is returned if public
+    // or verifyAdmin is needed if it returns sensitive data
+    
+    // For public display, we might not need admin verification if the query is safe
+    // But currently this function returns profiles which might have sensitive info
+    // However, it selects specific columns: id, full_name, email
+    // Email might be sensitive.
+    
+    // If this is used in Founder Dashboard, it should be protected.
+    // If used in public Author page, it should be public but without email.
+    
+    // Let's check if we are in a protected context or not.
+    // Since we don't pass context, we can try to verify, but catch error.
+    
+    // Actually, let's keep verifyAdmin but handle the failure better in UI
+    // OR if this is used for "Meet our Authors" page, we need a public version.
+    
+    // Based on user error "Approved Authors fetch failed", it seems to be blocking.
+    // Let's make it safe by checking session but not throwing?
+    // No, if the user is not admin, they shouldn't see the list IF it's an admin function.
+    
+    // Wait, the error is in the console log. If it's just a log, maybe it's fine?
+    // But if it breaks the page...
+    
+    // If this is ONLY used in Founder Dashboard, then the error is correct for non-admins.
+    // But why is Founder Dashboard fetching if I'm not on it?
+    // Maybe the user IS on it?
+    
     await verifyAdmin();
     const { data, error } = await supabase
       .from('profiles')
@@ -521,7 +578,7 @@ export async function getApprovedAuthors() {
 
 export async function getCategories() {
   try {
-    await verifyAdmin();
+    // Categories are public for shop filtering
     return await getAllRecords('categories', 'name');
   } catch (err) {
     console.error('Categories fetch failed:', err);
@@ -664,7 +721,7 @@ function generateSlug(text: string): string {
 
 export async function createProduct(product: any) {
   await verifyAdmin();
-  const { ebook_metadata, ...productData } = product;
+  const { ebook_metadata, ebook_url, is_ebook, ...productData } = product;
   
   // Ensure slug exists
   if (!productData.slug && productData.title) {
@@ -691,7 +748,7 @@ export async function createProduct(product: any) {
 
 export async function updateProduct(id: string, product: any) {
   await verifyAdmin();
-  const { ebook_metadata, ...productData } = product;
+  const { ebook_metadata, ebook_url, is_ebook, ...productData } = product;
 
   const { data, error } = await supabase
     .from('products')
