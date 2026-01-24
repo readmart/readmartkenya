@@ -1,5 +1,5 @@
 import crypto from 'crypto';
-import { fetchWithTimeout } from './_utils';
+import { fetchWithTimeout } from './_utils.js';
 
 const getK2Env = () => {
   if (process.env.KOPOKOPO_ENV) return process.env.KOPOKOPO_ENV;
@@ -175,17 +175,30 @@ export const getK2TransactionStatus = async (transactionId: string) => {
 };
 
 export const verifyK2Signature = (payload: unknown, signature: string) => {
-  const apiKey = process.env.KOPOKOPO_API_KEY;
+  const apiKey = (process.env.KOPOKOPO_API_KEY || '').trim();
+  const isProduction = process.env.VERCEL_ENV === 'production' || process.env.NODE_ENV === 'production';
+  
   if (!apiKey) {
-    console.warn('KOPOKOPO_API_KEY is not set. Skipping signature verification.');
-    return true; 
+    console.warn('KOPOKOPO_API_KEY is not set.');
+    // In production, we MUST have the API key for security
+    return !isProduction; 
   }
+  
   if (!signature) return false;
 
   const bodyString = typeof payload === 'string' ? payload : JSON.stringify(payload);
   const hash = crypto.createHmac('sha256', apiKey).update(bodyString).digest('hex');
 
-  return hash === signature;
+  // Use timingSafeEqual if possible, but it requires Buffer of equal length
+  try {
+    const signatureBuffer = Buffer.from(signature);
+    const hashBuffer = Buffer.from(hash);
+    if (signatureBuffer.length !== hashBuffer.length) return false;
+    return crypto.timingSafeEqual(signatureBuffer, hashBuffer);
+  } catch (e) {
+    // Fallback to standard comparison if buffers can't be created
+    return hash === signature;
+  }
 };
 
 export const extractK2WebhookData = (payload: any) => {

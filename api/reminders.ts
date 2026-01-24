@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { supabase, json, serverError, badRequest } from './_utils';
-import { sendEmail, renderAbandonedCartEmail } from './_email';
+import { supabase, json, serverError, badRequest } from './_utils.js';
+import { sendEmail, renderAbandonedCartEmail } from './_email.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') return json(res, 405, { error: 'Method not allowed' });

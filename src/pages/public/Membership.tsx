@@ -76,6 +76,11 @@ export default function Membership() {
       return;
     }
 
+    if (!phone.match(/^(?:254|\+254|0)?(7|1)\d{8}$/)) {
+      toast.error('Please enter a valid M-Pesa phone number (e.g., 2547XXXXXXXX)');
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       const amount = club ? club.membership_price : (settings?.membership_price || 1000);

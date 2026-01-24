@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { supabase } from './_db';
+import { supabase } from './_db.js';
 export { supabase };
 
 export const TAX_RATE = 0.16; // 16% VAT

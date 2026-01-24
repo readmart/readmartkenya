@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { supabase, json, badRequest, serverError, logAction } from './_utils';
-import { sendEmail, renderContactNotificationEmail } from './_email';
+import { supabase, json, badRequest, serverError, logAction } from './_utils.js';
+import { sendEmail, renderContactNotificationEmail } from './_email.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*');
