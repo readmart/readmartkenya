@@ -26,6 +26,7 @@ export default function Checkout() {
   const { settings } = useSettings();
   const [isProcessing, setIsProcessing] = useState(false);
   const [orderNumber, setOrderNumber] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState<'m-pesa' | 'card'>('m-pesa');
   const [shippingZones, setShippingZones] = useState<any[]>([]);
   const [selectedZoneId, setSelectedZoneId] = useState<string>('');
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -47,19 +48,24 @@ export default function Checkout() {
     const trackSession = async () => {
       try {
         if (!sessionId) {
-          const { data } = await supabase
+          const { data, error } = await supabase
             .from('checkout_sessions')
             .insert([{
               user_id: user.id,
               email: formData.email || user.email,
               phone: formData.phone,
               cart_data: cartItems,
+              shipping_zone_id: selectedZoneId || null,
               status: 'initiated',
               last_step: step
             }])
             .select()
             .single();
           
+          if (error) {
+            console.error('Failed to create checkout session:', error);
+            return;
+          }
           if (data) setSessionId(data.id);
         } else {
           await supabase
@@ -67,6 +73,7 @@ export default function Checkout() {
             .update({
               email: formData.email,
               phone: formData.phone,
+              shipping_zone_id: selectedZoneId || null,
               last_step: step,
               status: step === 'confirmation' ? 'completed' : 
                       step === 'payment' ? 'payment_initiated' : 'initiated'
@@ -80,7 +87,7 @@ export default function Checkout() {
 
     const timer = setTimeout(trackSession, 2000); // Debounce
     return () => clearTimeout(timer);
-  }, [formData, step, user, cartItems]);
+  }, [formData, step, user, cartItems, selectedZoneId, sessionId]);
 
   const kenyanPhoneRegex = /^(?:254|\+254|0)?(7|1)\d{8}$/;
 
@@ -241,7 +248,7 @@ export default function Checkout() {
         subtotal_amount: cartTotal,
         shipping_amount: shippingAmount,
         shipping_zone_id: selectedZoneId,
-        payment_method: 'm-pesa',
+        payment_method: paymentMethod,
         items: cartItems.map(item => ({
           product_id: item.id,
           quantity: item.quantity,
@@ -252,12 +259,22 @@ export default function Checkout() {
 
       setOrderNumber(order.id.slice(0, 8).toUpperCase());
 
-      // 2. Initiate M-Pesa STK Push using the backend-calculated total
-      const result = await initiateSTKPush(order.id, formData.phone, order.total_amount);
+      // 2. Initiate payment based on selected method
+      const result = await initiateSTKPush(
+        order.id, 
+        formData.phone, 
+        order.total_amount, 
+        paymentMethod
+      );
       
       if (result.error) {
         toast.error(result.error);
         setIsProcessing(false);
+        return;
+      }
+
+      if (paymentMethod === 'card' && result.location) {
+        window.location.href = result.location;
         return;
       }
 
@@ -503,18 +520,37 @@ export default function Checkout() {
                 </div>
 
                 <div className="grid gap-4">
-                  <div className="p-6 glass border-2 border-primary rounded-2xl flex items-center justify-between bg-primary/5 transition-all">
+                  <button 
+                    onClick={() => setPaymentMethod('m-pesa')}
+                    className={`p-6 glass border-2 rounded-2xl flex items-center justify-between transition-all ${paymentMethod === 'm-pesa' ? 'border-primary bg-primary/5' : 'border-transparent hover:bg-white/5'}`}
+                  >
                     <div className="flex items-center gap-4">
                       <div className="w-12 h-12 bg-green-500 rounded-xl flex items-center justify-center text-white font-black text-xl italic shadow-lg shadow-green-500/20">
                         M
                       </div>
-                      <div>
+                      <div className="text-left">
                         <p className="font-bold text-lg">M-Pesa Express</p>
-                        <p className="text-sm text-muted-foreground font-medium">Instant STK Push to your phone</p>
+                        <p className="text-sm text-muted-foreground font-medium">Instant STK Push</p>
                       </div>
                     </div>
-                    <div className="w-6 h-6 rounded-full border-4 border-primary bg-primary shadow-[0_0_10px_rgba(var(--primary),0.5)]" />
-                  </div>
+                    <div className={`w-6 h-6 rounded-full border-4 ${paymentMethod === 'm-pesa' ? 'border-primary bg-primary shadow-[0_0_10px_rgba(var(--primary),0.5)]' : 'border-slate-700'}`} />
+                  </button>
+
+                  <button 
+                    onClick={() => setPaymentMethod('card')}
+                    className={`p-6 glass border-2 rounded-2xl flex items-center justify-between transition-all ${paymentMethod === 'card' ? 'border-primary bg-primary/5' : 'border-transparent hover:bg-white/5'}`}
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 bg-blue-500 rounded-xl flex items-center justify-center text-white font-black text-xl shadow-lg shadow-blue-500/20">
+                        <CreditCard className="w-6 h-6" />
+                      </div>
+                      <div className="text-left">
+                        <p className="font-bold text-lg">Card Payment</p>
+                        <p className="text-sm text-muted-foreground font-medium">Visa, Mastercard, Amex</p>
+                      </div>
+                    </div>
+                    <div className={`w-6 h-6 rounded-full border-4 ${paymentMethod === 'card' ? 'border-primary bg-primary shadow-[0_0_10px_rgba(var(--primary),0.5)]' : 'border-slate-700'}`} />
+                  </button>
 
                   {/* Trust Badges */}
                   <div className="grid grid-cols-2 gap-3">
@@ -536,11 +572,19 @@ export default function Checkout() {
                     </div>
                     <div className="space-y-1">
                       <p className="text-sm font-bold">How it works:</p>
-                      <p className="text-xs text-muted-foreground leading-relaxed">
-                        1. Click "Authorize Payment" below.<br/>
-                        2. Check your phone <strong>{formData.phone}</strong> for a prompt.<br/>
-                        3. Enter your M-Pesa PIN to confirm.
-                      </p>
+                      {paymentMethod === 'm-pesa' ? (
+                        <p className="text-xs text-muted-foreground leading-relaxed">
+                          1. Click "Authorize Payment" below.<br/>
+                          2. Check your phone <strong>{formData.phone}</strong> for a prompt.<br/>
+                          3. Enter your M-Pesa PIN to confirm.
+                        </p>
+                      ) : (
+                        <p className="text-xs text-muted-foreground leading-relaxed">
+                          1. Click "Authorize Payment" below.<br/>
+                          2. You will be redirected to our secure payment partner.<br/>
+                          3. Enter your card details and confirm.
+                        </p>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -553,7 +597,7 @@ export default function Checkout() {
                   {isProcessing ? (
                     <>
                       <Loader2 className="w-5 h-5 animate-spin" />
-                      Waiting for PIN...
+                      {paymentMethod === 'm-pesa' ? 'Waiting for PIN...' : 'Redirecting...'}
                     </>
                   ) : (
                     <>

@@ -918,7 +918,7 @@ export async function getSiteSettings() {
     // Try site_settings first with the author_of_the_day join
     let { data: siteData, error: siteError } = await supabase
       .from('site_settings')
-      .select('*, author_of_the_day:author_of_the_day_id(id, full_name, avatar_url, bio)')
+      .select('*, author_of_the_day:profiles!author_of_the_day_id(id, full_name, avatar_url, bio)')
       .maybeSingle();
 
     // If any error (likely author_of_the_day_id column missing or join failed), try without the join

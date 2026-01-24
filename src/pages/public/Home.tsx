@@ -38,13 +38,26 @@ export default function Home() {
           setHeroData(hero);
         }
 
-        // Get site settings for Author of the Day
-        const { data: settings } = await supabase
-          .from('site_settings')
-          .select('*, author_of_the_day:author_of_the_day_id(id, full_name, avatar_url, bio)')
-          .single();
+        // Get site settings for Author of the Day with resilience
+        let settings = null;
+        try {
+          const { data, error } = await supabase
+            .from('site_settings')
+            .select('*, author_of_the_day:profiles!author_of_the_day_id(id, full_name, avatar_url, bio)')
+            .maybeSingle();
+          
+          if (error) throw error;
+          settings = data;
+        } catch (err: any) {
+          console.warn('Author of the Day join failed, retrying without join:', err.message);
+          const { data } = await supabase
+            .from('site_settings')
+            .select('*')
+            .maybeSingle();
+          settings = data;
+        }
 
-        if (settings?.author_of_the_day_enabled && settings.author_of_the_day) {
+        if (settings?.author_of_the_day_enabled) {
           // Fetch featured books
           if (settings.author_of_the_day_books?.length > 0) {
             const { data: books } = await supabase

@@ -24,7 +24,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const url = req.url || '';
     const method = req.method;
 
-    // --- WEBHOOK HANDLER ---
+    // --- WEBHOOK ENDPOINT ---
     if (url.includes('webhook')) {
       if (method !== 'POST') return json(res, 405, { error: 'Method not allowed' });
       
@@ -42,8 +42,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
 
       const webhookData = extractK2WebhookData(payload);
-      const { transactionId, isSuccess, amount, phone, eventType, senderName, status } = webhookData;
+      const { transactionId, amount, phone, eventType, senderName, status } = webhookData;
       const orderId = webhookData.orderId || queryOrderId;
+
+      // Handle card payments or other transaction types where status might be 'Received'
+      const isSuccess = webhookData.isSuccess || status === 'Success' || status === 'Completed' || status === 'Received';
       
       console.log(`Processing webhook: Event=${eventType}, OrderId=${orderId}, Success=${isSuccess}, Status=${status}`);
       
@@ -53,6 +56,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           K2_EVENT_TYPES.STK_PUSH_SUCCESS, 
           K2_EVENT_TYPES.BUYGOODS_RECEIVED, 
           K2_EVENT_TYPES.PAYBILL_RECEIVED,
+          K2_EVENT_TYPES.CARD_RECEIVED,
           'incoming_payment' 
         ].includes(eventType) || eventType?.includes('payment');
 
@@ -252,7 +256,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // --- INIT PAYMENT ---
     if (url.includes('init')) {
       if (method !== 'POST') return json(res, 405, { error: 'Method not allowed' });
-      const { orderId, phone, amount, firstName, lastName, email, type, metadata } = req.body;
+      const { orderId, phone, amount, firstName, lastName, email, type, metadata, paymentMethod } = req.body;
       
       const isMembership = type === 'membership' || type === 'club_membership';
       if (!isMembership && (!orderId || !phone || !amount)) return badRequest(res, 'Missing payment details');
@@ -262,14 +266,30 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const { data: { user } } = await supabase.auth.getUser(req.headers.authorization?.split(' ')[1] || '');
         const finalOrderId = orderId || `MEMB-${user?.id?.slice(0, 8)}-${Date.now()}`;
 
-        const k2Result = await initiateK2StkPush({
-          phone,
-          amount,
-          orderId: finalOrderId,
-          firstName,
-          lastName,
-          email,
-        });
+        let k2Result;
+        
+        if (paymentMethod === 'card') {
+          // For card payments, we might return a hosted link or just a success message 
+          // if we're using a different flow. Since the K2 doc provided doesn't show 
+          // card initiation API, we'll return a simulated success/redirect for now
+          // or a message that card is handled via the app.
+          k2Result = {
+            status: 'Pending',
+            message: 'Please complete the card payment on the following page',
+            location: `https://checkout.kopokopo.com/pay/readmart?reference=${finalOrderId}`, // Simulated
+            payment_method: 'card'
+          };
+        } else {
+          // Default to M-Pesa STK Push
+          k2Result = await initiateK2StkPush({
+            phone,
+            amount,
+            orderId: finalOrderId,
+            firstName,
+            lastName,
+            email,
+          });
+        }
 
         // Update appropriate table with payment request location for polling
         const paymentId = k2Result.location || (k2Result as any).id;

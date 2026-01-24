@@ -37,6 +37,29 @@ export interface K2StkPushRequest {
 
 let cachedToken: { token: string; expiry: number } | null = null;
 
+/**
+ * Enhanced fetch with exponential backoff for 429 errors
+ */
+async function fetchWithBackoff(url: string, options: any, retries = 3, backoff = 1000) {
+  try {
+    const response = await fetchWithTimeout(url, options);
+    
+    if (response.status === 429 && retries > 0) {
+      console.warn(`Rate limited (429) on ${url}. Retrying in ${backoff}ms...`);
+      await new Promise(resolve => setTimeout(resolve, backoff));
+      return fetchWithBackoff(url, options, retries - 1, backoff * 2);
+    }
+    
+    return response;
+  } catch (error) {
+    if (retries > 0) {
+      await new Promise(resolve => setTimeout(resolve, backoff));
+      return fetchWithBackoff(url, options, retries - 1, backoff * 2);
+    }
+    throw error;
+  }
+}
+
 export const getK2Token = async () => {
   if (cachedToken && cachedToken.expiry > Date.now()) {
     return cachedToken.token;
@@ -51,7 +74,7 @@ export const getK2Token = async () => {
 
   const authUrl = `${getK2AuthUrl()}/oauth/token`;
   
-  const response = await fetchWithTimeout(authUrl, {
+  const response = await fetchWithBackoff(authUrl, {
     method: 'POST',
     headers: { 
       'Content-Type': 'application/x-www-form-urlencoded',
@@ -122,7 +145,7 @@ export const initiateK2StkPush = async (params: K2StkPushRequest) => {
     },
   };
 
-  const response = await fetchWithTimeout(`${getK2BaseUrl()}/api/v1/incoming_payments`, {
+  const response = await fetchWithBackoff(`${getK2BaseUrl()}/api/v1/incoming_payments`, {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${token}`,
@@ -152,12 +175,13 @@ export const K2_EVENT_TYPES = {
   STK_PUSH_SUCCESS: 'incoming_payment',
   BUYGOODS_RECEIVED: 'buygoods_transaction_received',
   PAYBILL_RECEIVED: 'paybill_transaction_received',
+  CARD_RECEIVED: 'card_transaction_received',
   REVERSAL: 'buygoods_transaction_reversed',
 };
 
 export const getK2TransactionStatus = async (transactionId: string) => {
   const token = await getK2Token();
-  const response = await fetchWithTimeout(`${getK2BaseUrl()}/api/v1/incoming_payments/${transactionId}`, {
+  const response = await fetchWithBackoff(`${getK2BaseUrl()}/api/v1/incoming_payments/${transactionId}`, {
     method: 'GET',
     headers: {
       'Authorization': `Bearer ${token}`,

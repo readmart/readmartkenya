@@ -1,9 +1,9 @@
 import { supabase } from '../lib/supabase/client';
 
 /**
- * Initiates an M-Pesa STK Push via ReadMart Backend
+ * Initiates a payment via ReadMart Backend
  */
-export async function initiateSTKPush(orderId: string, phoneNumber: string, amount: number) {
+export async function initiateSTKPush(orderId: string, phoneNumber: string, amount: number, paymentMethod: string = 'm-pesa') {
   try {
     const { data: { session } } = await supabase.auth.getSession();
     
@@ -17,7 +17,7 @@ export async function initiateSTKPush(orderId: string, phoneNumber: string, amou
         orderId,
         phone: phoneNumber,
         amount,
-        // We can optionally pass more info if needed, but backend can fetch from orderId
+        paymentMethod
       })
     });
 
