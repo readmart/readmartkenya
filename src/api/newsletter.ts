@@ -1,4 +1,4 @@
-import { supabase } from '../lib/supabase';
+import { supabase } from '../lib/supabase/client';
 
 /**
  * Subscribes an email to the newsletter
