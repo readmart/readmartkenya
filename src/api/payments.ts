@@ -42,12 +42,39 @@ export async function checkPaymentStatus(orderId: string) {
       .from('orders')
       .select('status, payment_id')
       .eq('id', orderId)
-      .single();
+      .maybeSingle();
 
     if (error) throw error;
     return order;
   } catch (error) {
     console.error('Status Check Error:', error);
+    return null;
+  }
+}
+
+/**
+ * Checks the status of a membership payment
+ */
+export async function checkMembershipStatus(userId: string, paymentId?: string) {
+  try {
+    let query = supabase
+      .from('membership_payments')
+      .select('status, payment_id')
+      .eq('user_id', userId);
+
+    if (paymentId) {
+      query = query.eq('payment_id', paymentId);
+    }
+
+    const { data, error } = await query
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (error) throw error;
+    return data;
+  } catch (error) {
+    console.error('Membership Status Check Error:', error);
     return null;
   }
 }

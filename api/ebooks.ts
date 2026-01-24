@@ -27,7 +27,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         .select('id, orders!inner(status, user_id)')
         .eq('product_id', ebookId)
         .eq('orders.user_id', user.id)
-        .eq('orders.status', 'paid')
+        .in('orders.status', ['paid', 'completed'])
         .maybeSingle();
 
       if (!purchase) {

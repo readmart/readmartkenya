@@ -9,8 +9,9 @@ import {
 import { useAuth } from '@/contexts/AuthContext';
 import { useSettings } from '@/hooks/useSettings';
 import { useCurrency } from '@/contexts/CurrencyContext';
-import { initiateMembershipPayment } from '@/api/payments';
+import { initiateMembershipPayment, checkMembershipStatus } from '@/api/payments';
 import { getBookClubById, type BookClub } from '@/api/community';
+import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 
@@ -81,15 +82,78 @@ export default function Membership() {
       const metadata = club ? { club_id: club.id, type: 'club_membership' } : { type: 'site_membership' };
       
       const response = await initiateMembershipPayment(phone, amount, metadata);
-      if (response.success) {
-        toast.success('Payment request sent to your phone!');
-        // In a real app, we'd poll for status or wait for webhook
+      if (response.success || response.location) {
+        const paymentId = response.location || response.id;
+        toast.success('M-Pesa request sent! Please enter your PIN.');
+
+        if (response.demo) {
+          setTimeout(() => {
+            setIsSubmitting(false);
+            toast.success('Membership activated! Redirecting...');
+            navigate(clubId ? `/community` : '/account');
+          }, 2000);
+          return;
+        }
+
+        // Realtime listener
+        const channel = supabase
+          .channel(`membership-payment-${user.id}`)
+          .on(
+            'postgres_changes',
+            {
+              event: 'UPDATE',
+              schema: 'public',
+              table: 'membership_payments',
+              filter: `user_id=eq.${user.id}`
+            },
+            (payload) => {
+              if (payload.new.status === 'completed') {
+                cleanup();
+                setIsSubmitting(false);
+                toast.success('Payment successful! Welcome aboard.');
+                navigate(clubId ? `/community` : '/account');
+              } else if (payload.new.status === 'failed') {
+                cleanup();
+                setIsSubmitting(false);
+                toast.error('Payment failed. Please try again.');
+              }
+            }
+          )
+          .subscribe();
+
+        // Polling fallback
+        let attempts = 0;
+        const maxAttempts = 20;
+        const pollInterval = setInterval(async () => {
+          attempts++;
+          const status = await checkMembershipStatus(user.id, paymentId);
+          if (status?.status === 'completed') {
+            cleanup();
+            setIsSubmitting(false);
+            toast.success('Payment successful! Welcome aboard.');
+            navigate(clubId ? `/community` : '/account');
+          } else if (status?.status === 'failed') {
+            cleanup();
+            setIsSubmitting(false);
+            toast.error('Payment failed. Please try again.');
+          } else if (attempts >= maxAttempts) {
+            cleanup();
+            setIsSubmitting(false);
+            toast.error('Payment timeout. If you paid, please check your account in a moment.');
+          }
+        }, 3000);
+
+        const cleanup = () => {
+          clearInterval(pollInterval);
+          supabase.removeChannel(channel);
+        };
+
       } else {
         toast.error(response.error || 'Failed to initiate payment');
+        setIsSubmitting(false);
       }
     } catch (error) {
       toast.error('Something went wrong. Please try again.');
-    } finally {
       setIsSubmitting(false);
     }
   };
