@@ -53,7 +53,7 @@ export default function Shop() {
     }
   }, [searchParams]);
 
-  const [priceRange, setPriceRange] = useState(50000);
+  const [priceRange, setPriceRange] = useState(200);
   const [sortBy, setSortBy] = useState('Newest First');
   const [selectedConditions, setSelectedConditions] = useState<string[]>([]);
   const [selectedFormats, setSelectedFormats] = useState<string[]>([]);
@@ -87,7 +87,7 @@ export default function Shop() {
           }
         }
         
-        const matchesPrice = priceRange >= 50000 || book.price <= priceRange;
+        const matchesPrice = priceRange >= 200 || book.price <= priceRange;
         
         const matchesCondition = selectedConditions.length === 0 || selectedConditions.includes(condition);
         const matchesFormat = selectedFormats.length === 0 || selectedFormats.includes(format);
@@ -168,15 +168,15 @@ export default function Shop() {
               <input 
                 type="range" 
                 min="0"
-                max="50000"
-                step="500"
+                max="200"
+                step="5"
                 value={priceRange}
                 onChange={(e) => setPriceRange(parseInt(e.target.value))}
                 className="w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer accent-primary" 
               />
               <div className="flex justify-between mt-2 text-xs text-muted-foreground font-bold">
                 <span>Min</span>
-                <span>{formatPrice(50000)}+</span>
+                <span>{formatPrice(200)}+</span>
               </div>
             </div>
           </div>
@@ -267,7 +267,7 @@ export default function Shop() {
             onClick={() => {
               setSelectedCategory('All');
               setSelectedGenre('All Genres');
-              setPriceRange(50000);
+              setPriceRange(200);
               setSelectedConditions([]);
               setSelectedFormats([]);
               setSearchQuery('');
@@ -352,7 +352,7 @@ export default function Shop() {
                       setSearchQuery('');
                       setSelectedCategory('All');
                       setSelectedGenre('All Genres');
-                      setPriceRange(50000);
+                      setPriceRange(200);
                       setSelectedConditions([]);
                       setSelectedFormats([]);
                     }}
@@ -437,15 +437,15 @@ export default function Shop() {
                     <input 
                       type="range" 
                       min="0"
-                      max="50000"
-                      step="500"
+                      max="200"
+                      step="5"
                       value={priceRange}
                       onChange={(e) => setPriceRange(parseInt(e.target.value))}
                       className="w-full h-2 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-primary" 
                     />
                     <div className="flex justify-between mt-2 text-xs text-slate-400 font-bold">
                       <span>Min</span>
-                      <span>{formatPrice(50000)}+</span>
+                      <span>{formatPrice(200)}+</span>
                     </div>
                   </div>
                 </div>

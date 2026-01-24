@@ -12,6 +12,7 @@ import { useCart } from '@/contexts/CartContext';
 import { useCurrency } from '@/contexts/CurrencyContext';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
+import { supabase } from '@/lib/supabase/client';
 
 const getTabs = (isPartner: boolean, isAuthor: boolean) => [
   { id: 'profile', label: 'Profile', icon: <User className="w-5 h-5" /> },
@@ -35,13 +36,122 @@ export default function Account() {
   const [activeTab, setActiveTab] = useState('profile');
   const [ebooks, setEbooks] = useState<any[]>([]);
   const [isLoadingEbooks, setIsLoadingEbooks] = useState(false);
-  const { user, profile, logout, isPartner, isAuthor } = useAuth();
+  const { user, profile, logout, isPartner, isAuthor, updateProfile } = useAuth();
 
   const tabs = getTabs(isPartner, isAuthor);
+
+  const [isUpdatingPreferences, setIsUpdatingPreferences] = useState(false);
+
+  const toggleSMS = async () => {
+    if (isUpdatingPreferences) return;
+    setIsUpdatingPreferences(true);
+    
+    const newPrefs = {
+      ...profile?.preferences,
+      sms_notifications: !profile?.preferences?.sms_notifications
+    };
+
+    const { error } = await updateProfile({ preferences: newPrefs });
+    
+    if (error) {
+      toast.error('Failed to update preferences');
+    } else {
+      toast.success(`SMS notifications ${newPrefs.sms_notifications ? 'enabled' : 'disabled'}`);
+    }
+    setIsUpdatingPreferences(false);
+  };
+
+  const toggleNewsletter = async () => {
+    if (isUpdatingPreferences) return;
+    setIsUpdatingPreferences(true);
+    
+    const newPrefs = {
+      ...profile?.preferences,
+      newsletter: !profile?.preferences?.newsletter
+    };
+
+    const { error } = await updateProfile({ preferences: newPrefs });
+    
+    if (error) {
+      toast.error('Failed to update preferences');
+    } else {
+      toast.success(`Newsletter ${newPrefs.newsletter ? 'subscribed' : 'unsubscribed'}`);
+    }
+    setIsUpdatingPreferences(false);
+  };
+
+  const [paymentMethods, setPaymentMethods] = useState<any[]>([]);
+  const [isAddingPayment, setIsAddingPayment] = useState(false);
+  const [isLoadingPayments, setIsLoadingPayments] = useState(false);
+  const [newPaymentPhone, setNewPaymentPhone] = useState('');
+
+  const fetchPaymentMethods = async () => {
+    if (!user) return;
+    setIsLoadingPayments(true);
+    try {
+      const { data, error } = await supabase
+        .from('payment_methods')
+        .select('*')
+        .eq('user_id', user.id);
+      
+      if (!error) setPaymentMethods(data || []);
+    } catch (err) {
+      console.error('Failed to fetch payment methods');
+    } finally {
+      setIsLoadingPayments(false);
+    }
+  };
+
+  const handleAddPayment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user || !newPaymentPhone) return;
+    
+    setIsAddingPayment(true);
+    try {
+      const { error } = await supabase
+        .from('payment_methods')
+        .insert({
+          user_id: user.id,
+          type: 'mpesa',
+          provider: 'Safaricom',
+          identifier: newPaymentPhone,
+          is_default: paymentMethods.length === 0
+        });
+
+      if (error) throw error;
+
+      toast.success('Payment method added successfully');
+      setNewPaymentPhone('');
+      setIsAddingPayment(false);
+      fetchPaymentMethods();
+    } catch (err) {
+      toast.error('Failed to add payment method');
+    } finally {
+      setIsAddingPayment(false);
+    }
+  };
+
+  const deletePaymentMethod = async (id: string) => {
+    try {
+      const { error } = await supabase
+        .from('payment_methods')
+        .delete()
+        .eq('id', id);
+      
+      if (error) throw error;
+      toast.success('Payment method removed');
+      fetchPaymentMethods();
+    } catch (err) {
+      toast.error('Failed to remove payment method');
+    }
+  };
 
   useEffect(() => {
     if (activeTab === 'ebooks') {
       fetchEbooks();
+    }
+    if (activeTab === 'settings') {
+      fetchPaymentMethods();
     }
   }, [activeTab]);
 
@@ -467,8 +577,15 @@ export default function Account() {
                               <p className="text-xs text-muted-foreground">Receive SMS for delivery status</p>
                             </div>
                           </div>
-                          <div className="w-12 h-6 bg-primary rounded-full relative p-1 cursor-pointer">
-                            <div className="w-4 h-4 bg-white rounded-full absolute right-1" />
+                          <div 
+                            onClick={toggleSMS}
+                            className={`w-12 h-6 rounded-full relative p-1 cursor-pointer transition-colors ${
+                              profile?.preferences?.sms_notifications ? 'bg-primary' : 'bg-white/10'
+                            }`}
+                          >
+                            <div className={`w-4 h-4 bg-white rounded-full absolute transition-all ${
+                              profile?.preferences?.sms_notifications ? 'right-1' : 'left-1'
+                            }`} />
                           </div>
                         </div>
                         <div className="glass p-6 rounded-3xl flex items-center justify-between border-white/5">
@@ -479,8 +596,15 @@ export default function Account() {
                               <p className="text-xs text-muted-foreground">Weekly book recommendations</p>
                             </div>
                           </div>
-                          <div className="w-12 h-6 bg-white/10 rounded-full relative p-1 cursor-pointer">
-                            <div className="w-4 h-4 bg-white/40 rounded-full absolute left-1" />
+                          <div 
+                            onClick={toggleNewsletter}
+                            className={`w-12 h-6 rounded-full relative p-1 cursor-pointer transition-colors ${
+                              profile?.preferences?.newsletter ? 'bg-secondary' : 'bg-white/10'
+                            }`}
+                          >
+                            <div className={`w-4 h-4 bg-white rounded-full absolute transition-all ${
+                              profile?.preferences?.newsletter ? 'right-1' : 'left-1'
+                            }`} />
                           </div>
                         </div>
                       </div>
@@ -488,10 +612,79 @@ export default function Account() {
 
                     <section className="space-y-6">
                       <h3 className="text-xl font-black uppercase tracking-tight">Payment Methods</h3>
-                      <button className="w-full glass p-6 rounded-3xl border-dashed border-white/20 flex items-center justify-center gap-3 text-muted-foreground hover:text-primary hover:border-primary/50 transition-all">
-                        <CreditCard className="w-5 h-5" />
-                        <span className="font-black text-sm uppercase tracking-widest">Add New Payment Method</span>
-                      </button>
+                      
+                      <div className="space-y-4">
+                        {isLoadingPayments ? (
+                          <div className="flex justify-center py-12">
+                            <Loader2 className="w-8 h-8 text-primary animate-spin" />
+                          </div>
+                        ) : paymentMethods.length > 0 ? (
+                          paymentMethods.map((method) => (
+                            <div key={method.id} className="glass p-6 rounded-3xl flex items-center justify-between border-white/5 group">
+                              <div className="flex items-center gap-4">
+                                <div className="p-3 glass rounded-xl text-primary">
+                                  <Phone className="w-5 h-5" />
+                                </div>
+                                <div>
+                                  <p className="font-black text-sm uppercase tracking-widest">{method.provider}</p>
+                                  <p className="text-xs text-muted-foreground">{method.identifier}</p>
+                                </div>
+                                {method.is_default && (
+                                  <span className="text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md bg-primary/10 text-primary border border-primary/20">Default</span>
+                                )}
+                              </div>
+                              <button 
+                                onClick={() => deletePaymentMethod(method.id)}
+                                className="p-2 text-muted-foreground hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          ))
+                        ) : null}
+
+                        {!isAddingPayment && !isLoadingPayments ? (
+                          <button 
+                            onClick={() => setIsAddingPayment(true)}
+                            className="w-full glass p-6 rounded-3xl border-dashed border-white/20 flex items-center justify-center gap-3 text-muted-foreground hover:text-primary hover:border-primary/50 transition-all"
+                          >
+                            <CreditCard className="w-5 h-5" />
+                            <span className="font-black text-sm uppercase tracking-widest">Add New Payment Method</span>
+                          </button>
+                        ) : isAddingPayment ? (
+                          <form onSubmit={handleAddPayment} className="glass p-8 rounded-3xl border-primary/30 space-y-6">
+                            <div className="flex items-center justify-between mb-2">
+                              <h4 className="font-black uppercase text-sm tracking-widest">Add M-Pesa Number</h4>
+                              <button 
+                                type="button" 
+                                onClick={() => setIsAddingPayment(false)}
+                                className="text-muted-foreground hover:text-white"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                            <div className="space-y-4">
+                              <div className="relative">
+                                <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                                <input 
+                                  type="tel" 
+                                  placeholder="e.g. 254700000000"
+                                  value={newPaymentPhone}
+                                  onChange={(e) => setNewPaymentPhone(e.target.value)}
+                                  className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 pl-12 pr-4 font-bold focus:border-primary/50 outline-none transition-all"
+                                  required
+                                />
+                              </div>
+                              <button 
+                                type="submit"
+                                className="w-full bg-primary text-white py-4 rounded-2xl font-black uppercase tracking-widest hover:scale-[1.02] transition-all shadow-xl shadow-primary/20"
+                              >
+                                Save Payment Method
+                              </button>
+                            </div>
+                          </form>
+                        ) : null}
+                      </div>
                     </section>
                   </div>
                 </div>

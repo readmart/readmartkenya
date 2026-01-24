@@ -12,6 +12,10 @@ export interface Profile {
   is_member?: boolean;
   membership_expires_at?: string;
   membership_started_at?: string;
+  preferences?: {
+    sms_notifications?: boolean;
+    newsletter?: boolean;
+  };
 }
 
 export interface AuthContextType {
@@ -26,6 +30,7 @@ export interface AuthContextType {
   logout: () => Promise<void>;
   resetPassword: (email: string) => Promise<{ error: any }>;
   updatePassword: (password: string) => Promise<{ error: any }>;
+  updateProfile: (updates: Partial<Profile>) => Promise<{ error: any }>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -150,6 +155,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return { error };
   };
 
+  const updateProfile = async (updates: Partial<Profile>) => {
+    try {
+      if (!user) throw new Error('No user logged in');
+      const { error } = await supabase
+        .from('profiles')
+        .update(updates)
+        .eq('id', user.id);
+      
+      if (!error) {
+        setProfile(prev => prev ? { ...prev, ...updates } : null);
+      }
+      return { error };
+    } catch (error: any) {
+      return { error };
+    }
+  };
+
   const hasRole = (roles: UserRole[]) => {
     return profile ? roles.includes(profile.role) : false;
   };
@@ -166,6 +188,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     logout,
     resetPassword,
     updatePassword,
+    updateProfile,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
