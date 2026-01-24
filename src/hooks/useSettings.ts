@@ -31,7 +31,7 @@ const defaultSettings: SiteSettings = {
   site_logo: '/assets/logo.jpg',
   site_name: 'ReadMart',
   whatsapp_link: 'https://wa.me/254794129958',
-  contact_email: 'support@readmartke.com',
+  contact_email: 'hello@readmart.com',
   contact_phone: '+254 794 129 958',
   address: 'Nairobi, Kenya',
   working_hours: 'Mon-Fri: 8am - 5pm',

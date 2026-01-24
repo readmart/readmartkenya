@@ -1,7 +1,7 @@
 export const CONTACT_INFO = {
   phone1: '+254 794 129 958',
   phone2: '+254 741 658 548',
-  email: 'support@readmartke.com',
+  email: 'hello@readmart.com',
   address: 'Nairobi, Kenya',
   workingHours: 'Mon-Fri: 8am - 5pm',
 };

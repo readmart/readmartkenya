@@ -68,12 +68,17 @@ export default function Footer() {
               Bringing books to homes, cafes, and hearts since 2022. Experience the magic of stories with ReadMart.
             </p>
             <div className="space-y-4">
-              <a href={`tel:${settings.contact_phone || CONTACT_INFO.phone1}`} className="flex items-center gap-3 text-muted-foreground hover:text-primary transition-colors group">
-                <div className="p-2 glass rounded-lg group-hover:bg-primary/10 transition-all">
-                  <Phone className="w-4 h-4" />
-                </div>
-                <span className="font-medium">{settings.contact_phone || CONTACT_INFO.phone1}</span>
-              </a>
+              <div className="space-y-2">
+                <a href={`tel:${settings.contact_phone || CONTACT_INFO.phone1}`} className="flex items-center gap-3 text-muted-foreground hover:text-primary transition-colors group">
+                  <div className="p-2 glass rounded-lg group-hover:bg-primary/10 transition-all">
+                    <Phone className="w-4 h-4" />
+                  </div>
+                  <span className="font-medium">{settings.contact_phone || CONTACT_INFO.phone1}</span>
+                </a>
+                <a href={`tel:${CONTACT_INFO.phone2}`} className="flex items-center gap-3 text-muted-foreground hover:text-primary transition-colors group ml-11">
+                  <span className="font-medium">{CONTACT_INFO.phone2}</span>
+                </a>
+              </div>
               <a href={`mailto:${settings.contact_email || CONTACT_INFO.email}`} className="flex items-center gap-3 text-muted-foreground hover:text-primary transition-colors group">
                 <div className="p-2 glass rounded-lg group-hover:bg-primary/10 transition-all">
                   <Mail className="w-4 h-4" />

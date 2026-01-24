@@ -1908,7 +1908,7 @@ function IdentityView({ settings, onUpdate }: any) {
                 value={formData.contact_phone}
                 onChange={(e) => setFormData({...formData, contact_phone: e.target.value})}
                 className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-2 focus:ring-primary/20 font-bold transition-all" 
-                placeholder="+254 700 000 000"
+                placeholder="+254 794 129 958"
               />
             </div>
             <div>
