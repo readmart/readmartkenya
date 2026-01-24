@@ -39,7 +39,7 @@ const defaultSettings: SiteSettings = {
   default_currency: 'KES',
   maintenance_mode: false,
   instagram_url: 'https://instagram.com/readmartke',
-  facebook_url: 'https://facebook.com/readmartke',
+  facebook_url: 'https://www.facebook.com/share/1LB4jKLTTV/',
   twitter_url: 'https://x.com/readmartke',
   x_url: 'https://x.com/readmartke',
   linkedin_url: 'https://linkedin.com/company/readmartke',

@@ -57,4 +57,10 @@ export const SOCIAL_LINKS = [
     color: "hover:bg-[#0A66C2]",
     icon: "Linkedin"
   },
+  { 
+    label: "WhatsApp", 
+    href: "https://wa.me/254794129958", 
+    color: "hover:bg-[#25D366]",
+    icon: "MessageCircle"
+  },
 ];

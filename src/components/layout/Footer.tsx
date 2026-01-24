@@ -151,8 +151,8 @@ export default function Footer() {
               <h3 className="text-sm font-bold uppercase tracking-widest text-muted-foreground">Connect With Us</h3>
               <div className="flex flex-wrap gap-3">
                 {[
-                  { icon: 'Instagram', href: settings.instagram_url, label: 'Instagram', color: 'hover:bg-[#E1306C]' },
                   { icon: 'Facebook', href: settings.facebook_url, label: 'Facebook', color: 'hover:bg-[#1877F2]' },
+                  { icon: 'Instagram', href: settings.instagram_url, label: 'Instagram', color: 'hover:bg-[#E1306C]' },
                   { icon: 'X', href: settings.twitter_url, label: 'X (Twitter)', color: 'hover:bg-[#000000]' },
                   { icon: 'Threads', href: settings.threads_url, label: 'Threads', color: 'hover:bg-[#000000]' },
                   { icon: 'Youtube', href: settings.youtube_url, label: 'YouTube', color: 'hover:bg-[#FF0000]' },
