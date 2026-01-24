@@ -31,26 +31,6 @@ import { uploadSiteAsset, uploadProductImage, uploadEbookFile, uploadAgreementFi
 import { getEventRSVPs } from '@/api/community';
 import { getNewsletterSubscriptions, updateNewsletterStatus } from '@/api/newsletter';
 
-// Tabs definition
-const TABS = [
-  { id: 'analytics', label: 'Analytics', icon: LayoutDashboard },
-  { id: 'inventory', label: 'Inventory', icon: Package },
-  { id: 'orders', label: 'Orders', icon: ShoppingCart },
-  { id: 'users', label: 'Users', icon: Users },
-  { id: 'settings', label: 'Global Logic', icon: Settings },
-  { id: 'identity', label: 'Identity', icon: Globe },
-  { id: 'banners', label: 'Banners', icon: ImageIcon },
-  { id: 'author_of_day', label: 'Author of the Day', icon: Sparkles },
-  { id: 'shipping', label: 'Shipping Methods', icon: Truck },
-  { id: 'areas', label: 'City/Area Management', icon: MapPin },
-  { id: 'inquiries', label: 'Inquiries', icon: MessageSquare },
-  { id: 'clubs', label: 'Clubs', icon: Users2 },
-  { id: 'events', label: 'Events', icon: Calendar },
-  { id: 'agreements', label: 'Agreements', icon: FileText },
-  { id: 'promos', label: 'Promos', icon: Tag },
-  { id: 'newsletter', label: 'Newsletter', icon: Mail },
-];
-
 export default function FounderDashboard() {
   const { formatPrice } = useCurrency();
   const [activeTab, setActiveTab] = useState('analytics');
@@ -130,7 +110,18 @@ export default function FounderDashboard() {
       ] = results.map(res => res.status === 'fulfilled' ? res.value : null);
 
       setData({ 
-        analytics: analytics || { total_revenue: 0, total_orders: 0, total_users: 0, total_products: 0, salesData: [], categoryStats: [] },
+        analytics: analytics || { 
+          totalRevenue: 0, 
+          totalOrders: 0, 
+          totalUsers: 0, 
+          totalProducts: 0, 
+          revenueTrend: '0%',
+          ordersTrend: '0%',
+          usersTrend: '0%',
+          productsTrend: '0%',
+          salesData: [], 
+          categoryStats: [] 
+        },
         inventory: inventory || [],
         orders: orders || [],
         users: users || [],
@@ -182,6 +173,85 @@ export default function FounderDashboard() {
       toast.success('Global synchronization successful', { id: loadingToast });
     } catch (error) {
       toast.error('Synchronization failed', { id: loadingToast });
+    }
+  };
+
+  // Tabs definition
+  const TABS = [
+    { id: 'analytics', label: 'Analytics', icon: LayoutDashboard },
+    { id: 'inventory', label: 'Inventory', icon: Package },
+    { id: 'orders', label: 'Orders', icon: ShoppingCart },
+    { id: 'users', label: 'Users', icon: Users },
+    { id: 'settings', label: 'Global Logic', icon: Settings },
+    { id: 'identity', label: 'Identity', icon: Globe },
+    { id: 'banners', label: 'Banners', icon: ImageIcon },
+    { id: 'author_of_day', label: 'Author of the Day', icon: Sparkles },
+    { id: 'shipping', label: 'Shipping Methods', icon: Truck },
+    { id: 'areas', label: 'City/Area Management', icon: MapPin },
+    { id: 'inquiries', label: 'Inquiries', icon: MessageSquare },
+    { id: 'clubs', label: 'Clubs', icon: Users2 },
+    { id: 'events', label: 'Events', icon: Calendar },
+    { id: 'agreements', label: 'Agreements', icon: FileText },
+    { id: 'promos', label: 'Promos', icon: Tag },
+    { id: 'newsletter', label: 'Newsletter', icon: Mail },
+  ];
+
+  const renderActiveTab = () => {
+    switch (activeTab) {
+      case 'analytics': return <AnalyticsView data={data.analytics} formatPrice={formatPrice} isMounted={isMounted} />;
+      case 'inventory': return (
+        <InventoryView 
+          data={data.inventory} 
+          categories={data.categories} 
+          approvedAuthors={data.approvedAuthors}
+          onUpdate={fetchAllData} 
+        />
+      );
+      case 'orders': return <OrdersView data={data.orders} formatPrice={formatPrice} onUpdate={fetchAllData} />;
+      case 'users': return <UsersView data={data.users} onUpdate={fetchAllData} />;
+      case 'settings': return <SettingsView settings={data.settings} onUpdate={fetchAllData} />;
+      case 'identity': return <IdentityView settings={data.settings} onUpdate={fetchAllData} />;
+      case 'banners': return <BannersView settings={data.settings} cmsContent={data.cmsContent} onUpdate={fetchAllData} />;
+      case 'author_of_day': return (
+        <AuthorOfDayView 
+          settings={data.settings} 
+          authors={data.approvedAuthors}
+          inventory={data.inventory}
+          onUpdate={fetchAllData} 
+        />
+      );
+      case 'shipping': return <ShippingView data={data.shippingZones} onUpdate={fetchAllData} />;
+      case 'areas': return (
+        <AreasView 
+          data={data.shippingZones} 
+          onUpdate={fetchAllData} 
+          formatPrice={formatPrice}
+        />
+      );
+      case 'inquiries': return <InquiriesView data={data.inquiries} onUpdate={fetchAllData} />;
+      case 'clubs': return (
+        <ClubsView 
+          data={data.cmsContent?.filter((c: any) => c.type === 'book_club') || []} 
+          onUpdate={fetchAllData} 
+        />
+      );
+      case 'events': return (
+        <EventsView 
+          data={data.cmsContent?.filter((c: any) => c.type === 'event') || []} 
+          onUpdate={fetchAllData} 
+        />
+      );
+      case 'agreements': return (
+        <AgreementsView 
+          partnerships={data.partnerships} 
+          authors={data.authors} 
+          protocols={data.protocols}
+          onUpdate={fetchAllData} 
+        />
+      );
+      case 'promos': return <PromosView data={data.promos} onUpdate={fetchAllData} />;
+      case 'newsletter': return <NewsletterView data={data.newsletterSubscriptions} onUpdate={fetchAllData} />;
+      default: return null;
     }
   };
 
@@ -249,60 +319,9 @@ export default function FounderDashboard() {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
             transition={{ duration: 0.2 }}
+            className="w-full"
           >
-            {activeTab === 'analytics' && <AnalyticsView data={data.analytics} formatPrice={formatPrice} isMounted={isMounted} />}
-            {activeTab === 'inventory' && (
-              <InventoryView 
-                data={data.inventory} 
-                categories={data.categories} 
-                approvedAuthors={data.approvedAuthors}
-                onUpdate={fetchAllData} 
-              />
-            )}
-            {activeTab === 'orders' && <OrdersView data={data.orders} formatPrice={formatPrice} onUpdate={fetchAllData} />}
-            {activeTab === 'users' && <UsersView data={data.users} onUpdate={fetchAllData} />}
-            {activeTab === 'settings' && <SettingsView settings={data.settings} onUpdate={fetchAllData} />}
-            {activeTab === 'identity' && <IdentityView settings={data.settings} onUpdate={fetchAllData} />}
-            {activeTab === 'banners' && <BannersView settings={data.settings} cmsContent={data.cmsContent} onUpdate={fetchAllData} />}
-            {activeTab === 'author_of_day' && (
-              <AuthorOfDayView 
-                settings={data.settings} 
-                authors={data.approvedAuthors}
-                inventory={data.inventory}
-                onUpdate={fetchAllData} 
-              />
-            )}
-            {activeTab === 'shipping' && <ShippingView data={data.shippingZones} onUpdate={fetchAllData} />}
-            {activeTab === 'areas' && (
-              <AreasView 
-                data={data.shippingZones} 
-                onUpdate={fetchAllData} 
-                formatPrice={formatPrice}
-              />
-            )}
-            {activeTab === 'inquiries' && <InquiriesView data={data.inquiries} onUpdate={fetchAllData} />}
-            {activeTab === 'clubs' && (
-              <ClubsView 
-                data={data.cmsContent?.filter((c: any) => c.type === 'book_club') || []} 
-                onUpdate={fetchAllData} 
-              />
-            )}
-            {activeTab === 'events' && (
-              <EventsView 
-                data={data.cmsContent?.filter((c: any) => c.type === 'event') || []} 
-                onUpdate={fetchAllData} 
-              />
-            )}
-            {activeTab === 'agreements' && (
-              <AgreementsView 
-                partnerships={data.partnerships} 
-                authors={data.authors} 
-                protocols={data.protocols}
-                onUpdate={fetchAllData} 
-              />
-            )}
-            {activeTab === 'promos' && <PromosView data={data.promos} onUpdate={fetchAllData} />}
-            {activeTab === 'newsletter' && <NewsletterView data={data.newsletterSubscriptions} onUpdate={fetchAllData} />}
+            {renderActiveTab()}
           </motion.div>
         </AnimatePresence>
       </main>
