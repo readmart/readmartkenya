@@ -1,5 +1,5 @@
 import { Resend } from 'resend';
-import { supabase } from './_db.ts';
+import { supabase } from './_db';
 
 let resendInstance: Resend | null = null;
 

@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { json, badRequest, serverError, unauthorized, logAction } from './_utils.ts';
+import { json, badRequest, serverError, unauthorized, logAction } from './_utils';
 import { SignJWT, jwtVerify } from 'jose';
 
 const JWT_SECRET = new TextEncoder().encode(

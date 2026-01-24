@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { supabase, json, badRequest, serverError, createNotification, calculateOrderCommissions, logAction } from './_utils.ts';
+import { supabase, json, badRequest, serverError, createNotification, calculateOrderCommissions, logAction } from './_utils';
 import {
   verifyK2Signature,
   extractK2WebhookData,
@@ -7,8 +7,8 @@ import {
   getK2TransactionStatus,
   K2_EVENT_TYPES,
   getK2Token
-} from './_payments.ts';
-import { sendEmail, renderOrderConfirmationEmail, renderFailedPaymentEmail } from './_email.ts';
+} from './_payments';
+import { sendEmail, renderOrderConfirmationEmail, renderFailedPaymentEmail } from './_email';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Set CORS headers manually if needed, or rely on vercel.json

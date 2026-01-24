@@ -1,5 +1,5 @@
 import crypto from 'crypto';
-import { fetchWithTimeout } from './_utils.ts';
+import { fetchWithTimeout } from './_utils';
 
 const getK2Env = () => {
   if (process.env.KOPOKOPO_ENV) return process.env.KOPOKOPO_ENV;
