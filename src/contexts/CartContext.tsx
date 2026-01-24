@@ -10,6 +10,8 @@ export interface CartItem {
   image: string;
   category?: string;
   type?: 'physical' | 'ebook';
+  weight?: number;
+  volume?: number;
 }
 
 interface CartContextType {

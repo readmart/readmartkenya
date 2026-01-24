@@ -59,6 +59,29 @@ npm run build
 - **API Proxy**: `/api` proxies to `http://127.0.0.1:3002`
 - **Build**: Manual chunking enabled for vendor optimization
 
+## 📦 Shipping Configuration Standard
+
+### 1. Database Schema
+The `shipping_zones` table has been enhanced with the following columns:
+- `price`: Unified delivery fee (KES).
+- `estimated_days`: Delivery ETA.
+- `country_code`: 2-letter ISO code (e.g., 'KE').
+- `region`: Geographic region or province.
+- `postal_codes`: Comma-separated list of supported codes.
+- `shipping_method`: Type of delivery (Standard, Express, Pickup, Global).
+
+### 2. Maintenance Flow
+1. **Adding Zones**: Use the Founder Dashboard -> Regional Management.
+2. **Metadata**: Ensure `country_code` and `region` are provided for better filtering.
+3. **Postal Codes**: Add specific codes to enable auto-matching in checkout.
+4. **Validation**: Checkout automatically matches zones based on city or postal code input.
+
+### 3. Standards
+- Nairobi CBD: KES 150 (1 Day)
+- Nairobi Environs: KES 250 (1-2 Days)
+- Major Towns (Mombasa, Kisumu): KES 350 (2-3 Days)
+- Upcountry: KES 450 (3-5 Days)
+
 ## 📄 License
 
 MIT

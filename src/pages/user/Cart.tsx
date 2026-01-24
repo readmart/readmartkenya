@@ -3,13 +3,19 @@ import { Trash2, Plus, Minus, ArrowRight, ShoppingBag } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useCart } from '@/contexts/CartContext';
 import { useCurrency } from '@/contexts/CurrencyContext';
+import { useSettings } from '@/hooks/useSettings';
 
 export default function Cart() {
   const { cartItems, updateQuantity, removeFromCart, cartTotal } = useCart();
   const { formatPrice } = useCurrency();
+  const { settings } = useSettings();
 
-  const shipping = cartTotal > 5000 ? 0 : 500; // Example: free shipping over 5000 KES
-  const total = cartTotal + shipping;
+  const taxRate = settings?.tax_rate ?? 16;
+  const estimatedTax = cartTotal * (taxRate / 100);
+  const displaySubtotal = cartTotal + estimatedTax;
+
+  const shipping = displaySubtotal > 5000 ? 0 : 500; // Example: free shipping over 5000 KES
+  const total = displaySubtotal + shipping;
 
   if (cartItems.length === 0) {
     return (
@@ -84,10 +90,10 @@ export default function Cart() {
 
               <div className="text-center sm:text-right">
                 <div className="text-2xl font-bold text-primary mb-1">
-                  {formatPrice(item.price * item.quantity)}
+                  {formatPrice((item.price * (1 + taxRate / 100)) * item.quantity)}
                 </div>
                 <div className="text-sm text-muted-foreground">
-                  {formatPrice(item.price)} each
+                  {formatPrice(item.price * (1 + taxRate / 100))} each
                 </div>
               </div>
             </motion.div>
@@ -102,7 +108,7 @@ export default function Cart() {
             <div className="space-y-4 text-sm">
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Subtotal</span>
-                <span className="font-semibold">{formatPrice(cartTotal)}</span>
+                <span className="font-semibold">{formatPrice(displaySubtotal)}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Shipping</span>

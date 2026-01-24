@@ -55,7 +55,7 @@ export async function checkPaymentStatus(orderId: string) {
 /**
  * Initiates a Membership payment
  */
-export async function initiateMembershipPayment(phoneNumber: string, amount: number) {
+export async function initiateMembershipPayment(phoneNumber: string, amount: number, metadata: any = {}) {
   try {
     const { data: { session } } = await supabase.auth.getSession();
     
@@ -66,9 +66,10 @@ export async function initiateMembershipPayment(phoneNumber: string, amount: num
         'Authorization': `Bearer ${session?.access_token}`
       },
       body: JSON.stringify({
-        type: 'membership',
+        type: metadata.type || 'membership',
         phone: phoneNumber,
-        amount
+        amount,
+        metadata
       })
     });
 

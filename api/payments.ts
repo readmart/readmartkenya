@@ -69,7 +69,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 payment_id: transactionId,
                 metadata: payload
               })
-              .eq('payment_id', transactionId) // Or use a custom metadata field if needed
+              .eq('payment_id', transactionId) 
               .select();
 
             if (membError) console.error('Membership update error:', membError);
@@ -77,28 +77,53 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             if (isSuccess && membershipPayments?.[0]) {
               const payment = membershipPayments[0];
               const userId = payment.user_id;
+              const metadata = payment.metadata || {};
+              const isClubMembership = metadata.type === 'club_membership';
+              const clubId = metadata.club_id;
 
-              // 2. Update profile to member status
-              const { data: settings } = await supabase.from('settings').select('membership_duration_days').maybeSingle();
-              const duration = settings?.membership_duration_days || 30;
-              
-              const expiresAt = new Date();
-              expiresAt.setDate(expiresAt.getDate() + duration);
+              if (isClubMembership && clubId) {
+                console.log(`Activating club membership for user ${userId} in club ${clubId}`);
+                
+                // Update club_members table
+                await supabase.from('club_members').upsert({
+                  user_id: userId,
+                  club_id: clubId,
+                  payment_status: 'paid',
+                  status: 'active',
+                  joined_at: new Date().toISOString()
+                }, { onConflict: 'user_id, club_id' });
 
-              await supabase.from('profiles').update({
-                is_member: true,
-                membership_started_at: new Date().toISOString(),
-                membership_expires_at: expiresAt.toISOString()
-              }).eq('id', userId);
+                // Create notification
+                await createNotification({
+                  userId,
+                  type: 'system',
+                  title: 'Club Access Unlocked!',
+                  message: `Welcome to the club! Your membership payment was successful.`,
+                  link: `/community`
+                });
+              } else {
+                // 2. Update profile to member status (Site-wide)
+                const { data: settings } = await supabase.from('site_settings').select('membership_duration_days').maybeSingle();
+                const duration = settings?.membership_duration_days || 30;
+                
+                const expiresAt = new Date();
+                expiresAt.setDate(expiresAt.getDate() + duration);
 
-              // 3. Create notification
-              await createNotification({
-                userId,
-                type: 'system',
-                title: 'Membership Activated!',
-                message: `Welcome to ReadMart Premium! Your membership is now active until ${expiresAt.toLocaleDateString()}.`,
-                link: '/account'
-              });
+                await supabase.from('profiles').update({
+                  is_member: true,
+                  membership_started_at: new Date().toISOString(),
+                  membership_expires_at: expiresAt.toISOString()
+                }).eq('id', userId);
+
+                // 3. Create notification
+                await createNotification({
+                  userId,
+                  type: 'system',
+                  title: 'Membership Activated!',
+                  message: `Welcome to ReadMart Premium! Your membership is now active until ${expiresAt.toLocaleDateString()}.`,
+                  link: '/account'
+                });
+              }
             }
           } else {
             console.log(`Updating order ${orderId} status to ${finalStatus}`);
@@ -218,9 +243,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // --- INIT PAYMENT ---
     if (url.includes('init')) {
       if (method !== 'POST') return json(res, 405, { error: 'Method not allowed' });
-      const { orderId, phone, amount, firstName, lastName, email, type } = req.body;
+      const { orderId, phone, amount, firstName, lastName, email, type, metadata } = req.body;
       
-      const isMembership = type === 'membership';
+      const isMembership = type === 'membership' || type === 'club_membership';
       if (!isMembership && (!orderId || !phone || !amount)) return badRequest(res, 'Missing payment details');
       if (isMembership && (!phone || !amount)) return badRequest(res, 'Missing phone or amount for membership');
 
@@ -246,7 +271,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             amount,
             status: 'pending',
             payment_id: paymentId,
-            metadata: { ...k2Result, type: 'membership' }
+            metadata: { ...k2Result, type, ...(metadata || {}) }
           }]);
         } else if (orderId) {
           const updatePayload: any = { 
@@ -262,8 +287,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           console.warn('Payment credentials missing, using demo response');
           
           // FOR DEMO: Automatically complete the order/membership
-          const { orderId, type } = req.body;
-          const isMembership = type === 'membership';
+          const { orderId, type, metadata } = req.body;
+          const isMembership = type === 'membership' || type === 'club_membership';
           
           if (!isMembership && orderId) {
             console.log(`Demo mode: Fulfilling order ${orderId}`);
@@ -274,17 +299,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           } else if (isMembership) {
             const { data: { user } } = await supabase.auth.getUser(req.headers.authorization?.split(' ')[1] || '');
             if (user) {
-              console.log(`Demo mode: Activating membership for user ${user.id}`);
-              const { data: settings } = await supabase.from('settings').select('membership_duration_days').maybeSingle();
-              const duration = settings?.membership_duration_days || 30;
-              const expiresAt = new Date();
-              expiresAt.setDate(expiresAt.getDate() + duration);
-              
-              await supabase.from('profiles').update({
-                is_member: true,
-                membership_started_at: new Date().toISOString(),
-                membership_expires_at: expiresAt.toISOString()
-              }).eq('id', user.id);
+              if (type === 'club_membership' && metadata?.club_id) {
+                console.log(`Demo mode: Activating club membership for user ${user.id} in club ${metadata.club_id}`);
+                await supabase.from('club_members').upsert({
+                  user_id: user.id,
+                  club_id: metadata.club_id,
+                  payment_status: 'paid',
+                  status: 'active',
+                  joined_at: new Date().toISOString()
+                }, { onConflict: 'user_id, club_id' });
+              } else {
+                console.log(`Demo mode: Activating membership for user ${user.id}`);
+                const { data: settings } = await supabase.from('site_settings').select('membership_duration_days').maybeSingle();
+                const duration = settings?.membership_duration_days || 30;
+                const expiresAt = new Date();
+                expiresAt.setDate(expiresAt.getDate() + duration);
+                
+                await supabase.from('profiles').update({
+                  is_member: true,
+                  membership_started_at: new Date().toISOString(),
+                  membership_expires_at: expiresAt.toISOString()
+                }).eq('id', user.id);
+              }
             }
           }
 

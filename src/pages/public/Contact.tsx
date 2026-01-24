@@ -8,10 +8,12 @@ import {
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
+import { useSettings } from '@/hooks/useSettings';
 
 import { supabase } from '@/lib/supabase/client';
 
 export default function Contact() {
+  const { settings } = useSettings();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [formData, setFormData] = useState({
@@ -343,17 +345,9 @@ export default function Contact() {
                     <Phone className="w-6 h-6" />
                   </div>
                   <div>
-                    <p className="text-xs font-black uppercase tracking-widest text-muted-foreground mb-1">Primary Contact</p>
-                    <a href="tel:0794129958" className="text-lg font-black hover:text-primary transition-colors">0794129958</a>
-                  </div>
-                </div>
-
-                <div className="flex gap-4">
-                  <div className="w-12 h-12 bg-primary/10 text-primary rounded-xl flex items-center justify-center shrink-0">
-                    <Phone className="w-6 h-6" />
-                  </div>
-                  <div>
-                    <p className="text-xs font-black uppercase tracking-widest text-muted-foreground mb-1">Alternative Contact</p>
+                    <p className="text-xs font-black uppercase tracking-widest text-muted-foreground mb-1">Primary Support</p>
+                    <a href={`tel:${settings.contact_phone}`} className="text-lg font-black hover:text-primary transition-colors">{settings.contact_phone}</a>
+                    <p className="text-xs font-black uppercase tracking-widest text-muted-foreground mb-1 mt-4">Alternative Contact</p>
                     <a href="tel:0741658548" className="text-lg font-black hover:text-primary transition-colors">0741658548</a>
                   </div>
                 </div>
@@ -364,7 +358,7 @@ export default function Contact() {
                   </div>
                   <div>
                     <p className="text-xs font-black uppercase tracking-widest text-muted-foreground mb-1">Email</p>
-                    <a href="mailto:support@readmartke.com" className="text-lg font-black hover:text-secondary transition-colors">support@readmartke.com</a>
+                    <a href={`mailto:${settings.contact_email}`} className="text-lg font-black hover:text-secondary transition-colors">{settings.contact_email}</a>
                   </div>
                 </div>
 
@@ -374,7 +368,7 @@ export default function Contact() {
                   </div>
                   <div>
                     <p className="text-xs font-black uppercase tracking-widest text-muted-foreground mb-1">Business Hours</p>
-                    <p className="text-lg font-black">Open Everyday 24/7</p>
+                    <p className="text-lg font-black">{settings.working_hours || 'Open Everyday 24/7'}</p>
                   </div>
                 </div>
               </div>
@@ -392,7 +386,7 @@ export default function Contact() {
                 Stay updated with our latest news and business insights.
               </p>
               <a 
-                href="https://linkedin.com/company/readmartke" 
+                href={settings.linkedin_url} 
                 target="_blank"
                 rel="noopener noreferrer"
                 className="w-full py-4 bg-blue-600 text-white rounded-xl font-black flex items-center justify-center gap-2 hover:bg-blue-700 transition-all shadow-lg shadow-blue-600/25"

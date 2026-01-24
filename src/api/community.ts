@@ -13,14 +13,33 @@ export interface CMSContent {
   created_at: string;
 }
 
+export interface BookClub {
+  id: string;
+  name: string;
+  description: string | null;
+  image_url: string | null;
+  founder_id: string | null;
+  membership_price: number;
+  is_active: boolean;
+  created_at: string;
+  metadata?: {
+    category?: string;
+    member_limit?: number;
+    meeting_frequency?: string;
+    active_book?: string;
+    members_count?: number;
+  };
+}
+
 export interface BookClubMembership {
   id: string;
   user_id: string;
   club_id: string;
-  tier: 'basic' | 'premium' | 'vip';
-  is_active: boolean;
-  created_at: string;
-  club?: CMSContent;
+  status: 'active' | 'pending' | 'expired' | 'cancelled';
+  joined_at: string;
+  expires_at: string | null;
+  payment_status: 'paid' | 'unpaid' | 'pending';
+  club?: BookClub;
 }
 
 export interface Review {
@@ -41,6 +60,29 @@ export interface Review {
   user?: string;
   book?: string;
   date?: string;
+}
+
+export interface ClubDiscussion {
+  id: string;
+  club_id: string;
+  author_id: string;
+  title: string;
+  content: string;
+  image_url: string | null;
+  is_pinned: boolean;
+  created_at: string;
+  author?: {
+    full_name: string | null;
+    avatar_url: string | null;
+  };
+}
+
+export interface EventRSVP {
+  id: string;
+  user_id: string;
+  event_id: string;
+  status: 'attending' | 'interested' | 'cancelled';
+  created_at: string;
 }
 
 // --- Wishlist Features ---
@@ -98,38 +140,56 @@ export async function getWishlist() {
 // --- Book Club Features ---
 
 /**
- * Fetch available book clubs from CMS content
+ * Fetch available book clubs
  */
-export async function getAvailableBookClubs(): Promise<CMSContent[]> {
+export async function getAvailableBookClubs(): Promise<BookClub[]> {
   try {
     const { data, error } = await supabase
-      .from('cms_content')
+      .from('clubs')
       .select('*')
-      .eq('type', 'book_club')
       .eq('is_active', true);
 
     if (error) throw error;
-    return (data as CMSContent[]) || [];
+    return (data as BookClub[]) || [];
   } catch (error) {
-    console.warn('CMS Content (book_clubs) fetch failed, returning empty list');
+    console.warn('Clubs fetch failed, returning empty list');
     return [];
   }
 }
 
 /**
+ * Get a specific book club by ID
+ */
+export async function getBookClubById(id: string): Promise<BookClub | null> {
+  try {
+    const { data, error } = await supabase
+      .from('clubs')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (error) throw error;
+    return data as BookClub;
+  } catch (error) {
+    return null;
+  }
+}
+
+
+/**
  * Join a book club
  */
-export async function joinBookClub(clubId: string, tier: 'basic' | 'premium' | 'vip' = 'basic'): Promise<BookClubMembership> {
+export async function joinBookClub(clubId: string): Promise<BookClubMembership> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Authentication required');
 
   try {
     // Check for existing membership (One-Club Policy)
     const { data: existing } = await supabase
-      .from('book_club_memberships')
+      .from('club_members')
       .select('id')
       .eq('user_id', user.id)
-      .eq('is_active', true)
+      .eq('status', 'active')
       .maybeSingle();
 
     if (existing) {
@@ -137,12 +197,12 @@ export async function joinBookClub(clubId: string, tier: 'basic' | 'premium' | '
     }
 
     const { data, error } = await supabase
-      .from('book_club_memberships')
+      .from('club_members')
       .upsert({ 
         user_id: user.id, 
         club_id: clubId, 
-        tier,
-        is_active: true 
+        status: 'active',
+        payment_status: 'unpaid' // Default to unpaid until payment flow is integrated
       })
       .select()
       .single();
@@ -163,7 +223,7 @@ export async function leaveBookClub(clubId: string): Promise<boolean> {
 
   try {
     const { error } = await supabase
-      .from('book_club_memberships')
+      .from('club_members')
       .delete()
       .eq('user_id', user.id)
       .eq('club_id', clubId);
@@ -184,10 +244,10 @@ export async function getUserMembership(): Promise<BookClubMembership | null> {
 
   try {
     const { data, error } = await supabase
-      .from('book_club_memberships')
-      .select('*, club:cms_content(*)')
+      .from('club_members')
+      .select('*, club:clubs(*)')
       .eq('user_id', user.id)
-      .eq('is_active', true)
+      .eq('status', 'active')
       .maybeSingle();
 
     if (error) throw error;
@@ -268,3 +328,113 @@ export async function getRecentReviews(): Promise<Review[]> {
     return [];
   }
 }
+
+// --- Event RSVP ---
+
+/**
+ * RSVP to an event
+ */
+export async function rsvpToEvent(eventId: string, status: 'attending' | 'interested' | 'cancelled' = 'attending'): Promise<boolean> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Authentication required');
+
+  try {
+    const { error } = await supabase
+      .from('event_rsvps')
+      .upsert({ 
+        user_id: user.id, 
+        event_id: eventId, 
+        status 
+      });
+
+    if (error) throw error;
+    return true;
+  } catch (error: any) {
+    throw new Error(error.message || 'Failed to RSVP');
+  }
+}
+
+/**
+ * Get user's RSVPs
+ */
+export async function getUserRSVPs(): Promise<EventRSVP[]> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return [];
+
+  try {
+    const { data, error } = await supabase
+      .from('event_rsvps')
+      .select('*')
+      .eq('user_id', user.id);
+
+    if (error) throw error;
+    return (data as EventRSVP[]) || [];
+  } catch (error) {
+    return [];
+  }
+}
+
+/**
+ * Get all RSVPs for an event (Founder/Admin only)
+ */
+export async function getEventRSVPs(eventId: string): Promise<(EventRSVP & { profile?: { full_name: string | null, email: string | null } })[]> {
+  try {
+    const { data, error } = await supabase
+      .from('event_rsvps')
+      .select('*, profile:profiles(full_name, email)')
+      .eq('event_id', eventId);
+
+    if (error) throw error;
+    return (data as any[]) || [];
+  } catch (error) {
+    return [];
+  }
+}
+
+
+// --- Club Discussions ---
+
+/**
+ * Get discussions/updates for a club
+ */
+export async function getClubDiscussions(clubId: string): Promise<ClubDiscussion[]> {
+  try {
+    const { data, error } = await supabase
+      .from('club_discussions')
+      .select('*, author:profiles(full_name, avatar_url)')
+      .eq('club_id', clubId)
+      .order('is_pinned', { ascending: false })
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return (data as ClubDiscussion[]) || [];
+  } catch (error) {
+    return [];
+  }
+}
+
+/**
+ * Post a new discussion/update (Founder/Admin only)
+ */
+export async function postClubDiscussion(clubId: string, payload: { title: string, content: string, image_url?: string, is_pinned?: boolean }): Promise<ClubDiscussion> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Authentication required');
+
+  try {
+    const { data, error } = await supabase
+      .from('club_discussions')
+      .insert({
+        ...payload,
+        club_id: clubId,
+        author_id: user.id
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data as ClubDiscussion;
+  } catch (error: any) {
+    throw new Error(error.message || 'Failed to post discussion');
+  }
+}
+

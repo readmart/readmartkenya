@@ -1,7 +1,10 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Facebook, Instagram, Youtube, Linkedin, Send, Phone, Mail, MapPin, MessageCircle } from 'lucide-react';
+import { Facebook, Instagram, Youtube, Linkedin, Send, Phone, Mail, MapPin, MessageCircle, Loader2 } from 'lucide-react';
 import { useSettings } from '@/hooks/useSettings';
 import { CONTACT_INFO } from '@/lib/constants';
+import { subscribeToNewsletter } from '@/api/newsletter';
+import { toast } from 'sonner';
 
 // Custom SVG Icons for X (Twitter) and Threads
 const XIcon = ({ className }: { className?: string }) => (
@@ -19,6 +22,28 @@ const ThreadsIcon = ({ className }: { className?: string }) => (
 export default function Footer() {
   const { settings } = useSettings();
   const currentYear = new Date().getFullYear();
+  const [email, setEmail] = useState('');
+  const [isSubscribing, setIsSubscribing] = useState(false);
+
+  const handleSubscribe = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email) return;
+
+    setIsSubscribing(true);
+    try {
+      const result = await subscribeToNewsletter(email);
+      if (result.success) {
+        toast.success(result.message);
+        setEmail('');
+      } else {
+        toast.error(result.error || result.message);
+      }
+    } catch (error) {
+      toast.error('Something went wrong. Please try again.');
+    } finally {
+      setIsSubscribing(false);
+    }
+  };
 
   const socialIcons: Record<string, any> = {
     Facebook,
@@ -97,19 +122,27 @@ export default function Footer() {
             <div>
               <h3 className="text-lg font-bold mb-4 text-foreground">Newsletter</h3>
               <p className="text-sm text-muted-foreground mb-4">Stay updated with our latest releases.</p>
-              <form className="relative" onSubmit={(e) => e.preventDefault()}>
+              <form className="relative" onSubmit={handleSubscribe}>
                 <input 
                   type="email" 
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
                   placeholder="Your email address" 
                   aria-label="Email address for newsletter"
                   className="w-full glass bg-white/5 border border-white/10 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-primary/50 transition-all text-sm"
                 />
                 <button 
                   type="submit"
-                  className="absolute right-1.5 top-1.5 p-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-all shadow-lg"
+                  disabled={isSubscribing}
+                  className="absolute right-1.5 top-1.5 p-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-all shadow-lg disabled:opacity-50"
                   aria-label="Subscribe"
                 >
-                  <Send className="w-4 h-4" />
+                  {isSubscribing ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Send className="w-4 h-4" />
+                  )}
                 </button>
               </form>
             </div>
@@ -121,6 +154,8 @@ export default function Footer() {
                   { icon: 'Instagram', href: settings.instagram_url, label: 'Instagram', color: 'hover:bg-[#E1306C]' },
                   { icon: 'Facebook', href: settings.facebook_url, label: 'Facebook', color: 'hover:bg-[#1877F2]' },
                   { icon: 'X', href: settings.twitter_url, label: 'X (Twitter)', color: 'hover:bg-[#000000]' },
+                  { icon: 'Threads', href: settings.threads_url, label: 'Threads', color: 'hover:bg-[#000000]' },
+                  { icon: 'Youtube', href: settings.youtube_url, label: 'YouTube', color: 'hover:bg-[#FF0000]' },
                   { icon: 'Linkedin', href: settings.linkedin_url, label: 'LinkedIn', color: 'hover:bg-[#0A66C2]' },
                 ].filter(link => link.href).map((link) => {
                   const Icon = socialIcons[link.icon];

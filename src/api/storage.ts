@@ -30,15 +30,14 @@ export async function uploadProductImage(file: File, path?: string) {
 /**
  * Upload an ebook file to the private ebooks bucket
  * @param file File to upload (PDF only)
- * @param productId ID of the product this ebook belongs to
+ * @param identifier Unique identifier (e.g., productId or temp name)
  */
-export async function uploadEbookFile(file: File, productId: string) {
+export async function uploadEbookFile(file: File, identifier: string) {
   if (file.type !== 'application/pdf') {
     throw new Error('Only PDF files are allowed for e-books');
   }
 
-  const fileExt = 'pdf';
-  const fileName = `${productId}_${Date.now()}.${fileExt}`;
+  const fileName = `${identifier}_${Date.now()}.pdf`;
   
   const { data, error } = await supabase.storage
     .from('ebooks')
@@ -58,6 +57,35 @@ export async function uploadEbookFile(file: File, productId: string) {
 }
 
 /**
+ * Upload a signed agreement to the private partnership_documents bucket
+ * @param file File to upload (PDF only)
+ * @param identifier Unique identifier (e.g., partner name or ID)
+ */
+export async function uploadAgreementFile(file: File, identifier: string) {
+  if (file.type !== 'application/pdf') {
+    throw new Error('Only PDF files are allowed for agreements');
+  }
+
+  const fileName = `agreement_${identifier}_${Date.now()}.pdf`;
+  
+  const { data, error } = await supabase.storage
+    .from('partnership_documents')
+    .upload(fileName, file, {
+      cacheControl: '3600',
+      upsert: true
+    });
+
+  if (error) {
+    if (error.message.includes('bucket not found')) {
+      throw new Error('Agreements storage bucket not initialized.');
+    }
+    throw error;
+  }
+
+  return data.path;
+}
+
+/**
  * Upload an image to the settings bucket (logo, etc.)
  */
 export async function uploadSiteAsset(file: File, path?: string) {
@@ -66,8 +94,8 @@ export async function uploadSiteAsset(file: File, path?: string) {
   const filePath = path ? `${path}/${fileName}` : fileName;
 
   const { data, error } = await supabase.storage
-    .from('products') // Using products bucket as a general asset store for now
-    .upload(`assets/${filePath}`, file, {
+    .from('settings')
+    .upload(filePath, file, {
       cacheControl: '3600',
       upsert: true
     });
@@ -75,7 +103,31 @@ export async function uploadSiteAsset(file: File, path?: string) {
   if (error) throw error;
 
   const { data: { publicUrl } } = supabase.storage
-    .from('products')
+    .from('settings')
+    .getPublicUrl(data.path);
+
+  return publicUrl;
+}
+
+/**
+ * Upload an image to the banners bucket
+ */
+export async function uploadBannerImage(file: File, path?: string) {
+  const fileExt = file.name.split('.').pop();
+  const fileName = `banner_${Date.now()}.${fileExt}`;
+  const filePath = path ? `${path}/${fileName}` : fileName;
+
+  const { data, error } = await supabase.storage
+    .from('banners')
+    .upload(filePath, file, {
+      cacheControl: '3600',
+      upsert: true
+    });
+
+  if (error) throw error;
+
+  const { data: { publicUrl } } = supabase.storage
+    .from('banners')
     .getPublicUrl(data.path);
 
   return publicUrl;
@@ -103,6 +155,30 @@ export async function uploadSignedAgreement(file: File, userId: string) {
   }
 
   // Agreements should be private, so we return the path instead of public URL
+  return data.path;
+}
+
+/**
+ * Upload qualification proof for author/partner applications
+ */
+export async function uploadQualificationProof(file: File, userId: string) {
+  const fileExt = file.name.split('.').pop();
+  const fileName = `proof_${userId}_${Date.now()}.${fileExt}`;
+  
+  const { data, error } = await supabase.storage
+    .from('partnership_documents')
+    .upload(fileName, file, {
+      cacheControl: '3600',
+      upsert: true
+    });
+
+  if (error) {
+    if (error.message.includes('bucket not found')) {
+      throw new Error('Storage bucket for documents not found. Please contact support.');
+    }
+    throw error;
+  }
+
   return data.path;
 }
 

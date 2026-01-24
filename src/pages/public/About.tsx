@@ -9,9 +9,13 @@ import { Link } from 'react-router-dom';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
+import { subscribeToNewsletter } from '@/api/newsletter';
+import { Loader2 } from 'lucide-react';
 
 export default function About() {
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSubscribingNewsletter, setIsSubscribingNewsletter] = useState(false);
+  const [newsletterEmail, setNewsletterEmail] = useState('');
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -67,6 +71,26 @@ export default function About() {
       toast.error(error.message || 'Failed to send message. Please try again.');
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleNewsletterSubscribe = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newsletterEmail) return;
+
+    setIsSubscribingNewsletter(true);
+    try {
+      const result = await subscribeToNewsletter(newsletterEmail);
+      if (result.success) {
+        toast.success(result.message);
+        setNewsletterEmail('');
+      } else {
+        toast.error(result.error || result.message);
+      }
+    } catch (error) {
+      toast.error('Something went wrong. Please try again.');
+    } finally {
+      setIsSubscribingNewsletter(false);
     }
   };
 
@@ -406,18 +430,24 @@ export default function About() {
               Join our community to receive updates on new releases, exclusive events, and literary news.
             </p>
             
-            <form className="flex flex-col sm:flex-row gap-4 max-w-lg mx-auto" onSubmit={(e) => {
-              e.preventDefault();
-              toast.success('Thanks for subscribing!');
-            }}>
+            <form className="flex flex-col sm:flex-row gap-4 max-w-lg mx-auto" onSubmit={handleNewsletterSubscribe}>
               <input 
                 type="email"
                 required
+                value={newsletterEmail}
+                onChange={(e) => setNewsletterEmail(e.target.value)}
                 placeholder="your@email.com"
                 className="flex-1 px-8 py-5 rounded-[2rem] bg-white/10 backdrop-blur-md border border-white/20 text-white placeholder:text-white/50 focus:bg-white/20 transition-all outline-none font-bold"
               />
-              <button className="px-10 py-5 bg-white text-primary rounded-[2rem] font-black hover:scale-105 transition-all shadow-xl">
-                SUBSCRIBE
+              <button 
+                disabled={isSubscribingNewsletter}
+                className="px-10 py-5 bg-white text-primary rounded-[2rem] font-black hover:scale-105 transition-all shadow-xl disabled:opacity-50 flex items-center justify-center min-w-[160px]"
+              >
+                {isSubscribingNewsletter ? (
+                  <Loader2 className="w-6 h-6 animate-spin" />
+                ) : (
+                  'SUBSCRIBE'
+                )}
               </button>
             </form>
           </div>

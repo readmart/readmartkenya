@@ -1,13 +1,15 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, Package, Truck, CheckCircle, Clock, AlertCircle, Loader2 } from 'lucide-react';
-import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
+import { getOrder } from '@/api/orders';
+import { useCurrency } from '@/contexts/CurrencyContext';
 
 export default function TrackOrder() {
   const [orderId, setOrderId] = useState('');
   const [order, setOrder] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const { formatPrice } = useCurrency();
 
   const handleTrack = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -15,27 +17,11 @@ export default function TrackOrder() {
 
     setIsLoading(true);
     try {
-      // Find order by ID or order number (if we have a short one)
-      const { data, error } = await supabase
-        .from('orders')
-        .select(`
-          *,
-          order_items (
-            *,
-            products (*)
-          )
-        `)
-        .or(`id.eq.${orderId},id.ilike.%${orderId}%`)
-        .single();
-
-      if (error || !data) {
-        toast.error('Order not found. Please check the ID and try again.');
-        setOrder(null);
-      } else {
-        setOrder(data);
-      }
+      const data = await getOrder(orderId);
+      setOrder(data);
     } catch (err) {
-      toast.error('Failed to track order');
+      toast.error('Order not found. Please check the ID and try again.');
+      setOrder(null);
     } finally {
       setIsLoading(false);
     }
@@ -43,6 +29,7 @@ export default function TrackOrder() {
 
   const steps = [
     { status: 'pending', label: 'Order Placed', icon: <Clock />, description: 'We have received your order' },
+    { status: 'paid', label: 'Payment Confirmed', icon: <CheckCircle className="text-green-500" />, description: 'Your payment was successful' },
     { status: 'processing', label: 'Processing', icon: <Package />, description: 'Your order is being prepared' },
     { status: 'shipped', label: 'In Transit', icon: <Truck />, description: 'Your order is on the way' },
     { status: 'completed', label: 'Delivered', icon: <CheckCircle />, description: 'Order has been delivered' },
@@ -145,24 +132,27 @@ export default function TrackOrder() {
                 <div className="md:col-span-2 glass-card p-8">
                   <h3 className="text-xl font-bold mb-6">Order Details</h3>
                   <div className="space-y-4">
-                    {order.order_items.map((item: any) => (
-                      <div key={item.id} className="flex items-center gap-4 py-4 border-b border-white/5 last:border-0">
-                        <img 
-                          src={item.products?.image_url} 
-                          alt={item.products?.title} 
-                          className="w-16 h-20 rounded-lg object-cover bg-white/5"
-                        />
-                        <div className="flex-1">
-                          <p className="font-bold">{item.products?.title}</p>
-                          <p className="text-sm text-muted-foreground">Qty: {item.quantity}</p>
+                    {order.order_items.map((item: any) => {
+                      const product = item.product_snapshot || item.products || {};
+                      return (
+                        <div key={item.id} className="flex items-center gap-4 py-4 border-b border-white/5 last:border-0">
+                          <img 
+                            src={product.image_url} 
+                            alt={product.title} 
+                            className="w-16 h-20 rounded-lg object-cover bg-white/5"
+                          />
+                          <div className="flex-1">
+                            <p className="font-bold">{product.title}</p>
+                            <p className="text-sm text-muted-foreground">Qty: {item.quantity}</p>
+                          </div>
+                          <p className="font-bold text-primary">{formatPrice(item.price_at_purchase * item.quantity)}</p>
                         </div>
-                        <p className="font-bold text-primary">KES {item.price * item.quantity}</p>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                   <div className="mt-8 pt-8 border-t border-white/5 flex justify-between items-center">
                     <p className="text-muted-foreground font-bold text-lg">Total Amount</p>
-                    <p className="text-2xl font-bold text-primary">KES {order.total_amount}</p>
+                    <p className="text-2xl font-bold text-primary">{formatPrice(order.total_amount)}</p>
                   </div>
                 </div>
 
@@ -181,9 +171,9 @@ export default function TrackOrder() {
                       <MapPin className="w-5 h-5 text-primary shrink-0" />
                       <div>
                         <p className="text-xs text-muted-foreground uppercase tracking-wider font-bold">Delivery Address</p>
-                        <p className="font-medium">{order.full_name}</p>
-                        <p className="text-sm text-muted-foreground">{order.address}</p>
-                        <p className="text-sm text-muted-foreground">{order.city}</p>
+                        <p className="font-medium">{order.shipping_address?.full_name || order.full_name}</p>
+                        <p className="text-sm text-muted-foreground">{order.shipping_address?.address || order.address}</p>
+                        <p className="text-sm text-muted-foreground">{order.shipping_address?.city || order.city}</p>
                       </div>
                     </div>
                     <div className="flex gap-3">

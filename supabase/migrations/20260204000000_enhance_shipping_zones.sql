@@ -1,0 +1,183 @@
+-- ==========================================
+-- Migration: Restore Kenyan Shipping Zones and Add Geographic/Method Metadata
+-- Target: shipping_zones
+-- Description: Adds country, region, postcodes, and shipping_method columns, then restores full Kenya list
+-- ==========================================
+
+BEGIN;
+
+-- 1. Add Metadata Columns
+DO $$ 
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'shipping_zones' AND column_name = 'country_code') THEN
+        ALTER TABLE public.shipping_zones ADD COLUMN country_code text DEFAULT 'KE';
+    END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'shipping_zones' AND column_name = 'region') THEN
+        ALTER TABLE public.shipping_zones ADD COLUMN region text;
+    END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'shipping_zones' AND column_name = 'postal_codes') THEN
+        ALTER TABLE public.shipping_zones ADD COLUMN postal_codes text;
+    END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'shipping_zones' AND column_name = 'shipping_method') THEN
+        ALTER TABLE public.shipping_zones ADD COLUMN shipping_method text DEFAULT 'Standard';
+    END IF;
+END $$;
+
+-- 2. Restore Comprehensive Kenyan Zones
+INSERT INTO public.shipping_zones (name, price, estimated_days, is_active, country_code, shipping_method) VALUES
+('Nairobi - CBD', 150.00, 1, true, 'KE', 'Standard'),
+('Nairobi - Westlands', 200.00, 1, true, 'KE', 'Standard'),
+('Nairobi - Kilimani', 200.00, 1, true, 'KE', 'Standard'),
+('Nairobi - Karen', 300.00, 1, true, 'KE', 'Standard'),
+('Nairobi - Langata', 250.00, 1, true, 'KE', 'Standard'),
+('Nairobi - Kasarani', 250.00, 1, true, 'KE', 'Standard'),
+('Nairobi - Embakasi', 250.00, 1, true, 'KE', 'Standard'),
+('Nairobi - Roysambu', 250.00, 1, true, 'KE', 'Standard'),
+('Nairobi - Ruaraka', 250.00, 1, true, 'KE', 'Standard'),
+('Nairobi - Dagoretti', 250.00, 1, true, 'KE', 'Standard'),
+('Nairobi - Kibra', 200.00, 1, true, 'KE', 'Standard'),
+('Nairobi - Kamukunji', 200.00, 1, true, 'KE', 'Standard'),
+('Nairobi - Starehe', 200.00, 1, true, 'KE', 'Standard'),
+('Nairobi - Mathare', 200.00, 1, true, 'KE', 'Standard'),
+('Mombasa - Island', 400.00, 2, true, 'KE', 'Standard'),
+('Mombasa - Nyali', 450.00, 2, true, 'KE', 'Standard'),
+('Mombasa - Likoni', 450.00, 2, true, 'KE', 'Standard'),
+('Mombasa - Changamwe', 450.00, 2, true, 'KE', 'Standard'),
+('Mombasa - Kisauni', 450.00, 2, true, 'KE', 'Standard'),
+('Mombasa - Jomvu', 450.00, 2, true, 'KE', 'Standard'),
+('Kwale - Ukunda', 500.00, 3, true, 'KE', 'Standard'),
+('Kwale - Diani', 500.00, 3, true, 'KE', 'Standard'),
+('Kwale - Msambweni', 550.00, 3, true, 'KE', 'Standard'),
+('Kilifi - Malindi', 500.00, 3, true, 'KE', 'Standard'),
+('Kilifi - Watamu', 550.00, 3, true, 'KE', 'Standard'),
+('Kilifi - Kilifi Town', 500.00, 3, true, 'KE', 'Standard'),
+('Kilifi - Mtwapa', 450.00, 2, true, 'KE', 'Standard'),
+('Tana River - Hola', 700.00, 5, true, 'KE', 'Standard'),
+('Lamu - Lamu Island', 800.00, 5, true, 'KE', 'Standard'),
+('Lamu - Mpeketoni', 750.00, 5, true, 'KE', 'Standard'),
+('Taita Taveta - Voi', 450.00, 2, true, 'KE', 'Standard'),
+('Taita Taveta - Wundanyi', 500.00, 3, true, 'KE', 'Standard'),
+('Taita Taveta - Taveta', 550.00, 3, true, 'KE', 'Standard'),
+('Garissa - Garissa Town', 600.00, 4, true, 'KE', 'Standard'),
+('Wajir - Wajir Town', 800.00, 6, true, 'KE', 'Standard'),
+('Mandera - Mandera Town', 1000.00, 7, true, 'KE', 'Standard'),
+('Marsabit - Marsabit Town', 800.00, 5, true, 'KE', 'Standard'),
+('Marsabit - Moyale', 900.00, 6, true, 'KE', 'Standard'),
+('Isiolo - Isiolo Town', 500.00, 3, true, 'KE', 'Standard'),
+('Meru - Meru Town', 400.00, 2, true, 'KE', 'Standard'),
+('Meru - Maua', 450.00, 3, true, 'KE', 'Standard'),
+('Meru - Nanyuki (Meru Side)', 400.00, 2, true, 'KE', 'Standard'),
+('Tharaka-Nithi - Chuka', 450.00, 3, true, 'KE', 'Standard'),
+('Embu - Embu Town', 400.00, 2, true, 'KE', 'Standard'),
+('Embu - Runyenjes', 450.00, 3, true, 'KE', 'Standard'),
+('Kitui - Kitui Town', 450.00, 3, true, 'KE', 'Standard'),
+('Kitui - Mwingi', 500.00, 3, true, 'KE', 'Standard'),
+('Machakos - Machakos Town', 350.00, 2, true, 'KE', 'Standard'),
+('Machakos - Athi River', 300.00, 1, true, 'KE', 'Standard'),
+('Machakos - Syokimau', 300.00, 1, true, 'KE', 'Standard'),
+('Machakos - Kangundo', 400.00, 2, true, 'KE', 'Standard'),
+('Makueni - Wote', 450.00, 3, true, 'KE', 'Standard'),
+('Makueni - Mtito Andei', 450.00, 2, true, 'KE', 'Standard'),
+('Nyandarua - Ol Kalou', 400.00, 2, true, 'KE', 'Standard'),
+('Nyandarua - Njabini', 450.00, 3, true, 'KE', 'Standard'),
+('Nyeri - Nyeri Town', 350.00, 2, true, 'KE', 'Standard'),
+('Nyeri - Karatina', 350.00, 2, true, 'KE', 'Standard'),
+('Nyeri - Othaya', 400.00, 2, true, 'KE', 'Standard'),
+('Kirinyaga - Kerugoya', 350.00, 2, true, 'KE', 'Standard'),
+('Kirinyaga - Sagana', 350.00, 2, true, 'KE', 'Standard'),
+('Murang''a - Murang''a Town', 350.00, 2, true, 'KE', 'Standard'),
+('Murang''a - Kenol', 300.00, 1, true, 'KE', 'Standard'),
+('Kiambu - Kiambu Town', 250.00, 1, true, 'KE', 'Standard'),
+('Kiambu - Thika', 250.00, 1, true, 'KE', 'Standard'),
+('Kiambu - Ruiru', 250.00, 1, true, 'KE', 'Standard'),
+('Kiambu - Kikuyu', 250.00, 1, true, 'KE', 'Standard'),
+('Kiambu - Limuru', 300.00, 1, true, 'KE', 'Standard'),
+('Kiambu - Githunguri', 300.00, 1, true, 'KE', 'Standard'),
+('Kiambu - Karuri', 250.00, 1, true, 'KE', 'Standard'),
+('Turkana - Lodwar', 1000.00, 7, true, 'KE', 'Standard'),
+('Turkana - Kakuma', 1100.00, 8, true, 'KE', 'Standard'),
+('West Pokot - Kapenguria', 600.00, 4, true, 'KE', 'Standard'),
+('Samburu - Maralal', 700.00, 5, true, 'KE', 'Standard'),
+('Trans Nzoia - Kitale', 450.00, 3, true, 'KE', 'Standard'),
+('Uasin Gishu - Eldoret', 400.00, 2, true, 'KE', 'Standard'),
+('Elgeyo-Marakwet - Iten', 500.00, 3, true, 'KE', 'Standard'),
+('Nandi - Kapsabet', 450.00, 3, true, 'KE', 'Standard'),
+('Baringo - Kabarnet', 500.00, 3, true, 'KE', 'Standard'),
+('Baringo - Eldama Ravine', 450.00, 3, true, 'KE', 'Standard'),
+('Laikipia - Nanyuki', 400.00, 2, true, 'KE', 'Standard'),
+('Laikipia - Nyahururu', 400.00, 2, true, 'KE', 'Standard'),
+('Nakuru - Nakuru City', 350.00, 2, true, 'KE', 'Standard'),
+('Nakuru - Naivasha', 300.00, 1, true, 'KE', 'Standard'),
+('Nakuru - Molo', 400.00, 2, true, 'KE', 'Standard'),
+('Nakuru - Gilgil', 350.00, 2, true, 'KE', 'Standard'),
+('Narok - Narok Town', 450.00, 3, true, 'KE', 'Standard'),
+('Kajiado - Kajiado Town', 400.00, 2, true, 'KE', 'Standard'),
+('Kajiado - Ngong', 300.00, 1, true, 'KE', 'Standard'),
+('Kajiado - Kitengela', 300.00, 1, true, 'KE', 'Standard'),
+('Kajiado - Rongai', 250.00, 1, true, 'KE', 'Standard'),
+('Kericho - Kericho Town', 400.00, 2, true, 'KE', 'Standard'),
+('Bomet - Bomet Town', 450.00, 3, true, 'KE', 'Standard'),
+('Kakamega - Kakamega Town', 450.00, 3, true, 'KE', 'Standard'),
+('Kakamega - Mumias', 500.00, 3, true, 'KE', 'Standard'),
+('Vihiga - Mbale', 450.00, 3, true, 'KE', 'Standard'),
+('Bungoma - Bungoma Town', 500.00, 3, true, 'KE', 'Standard'),
+('Bungoma - Webuye', 450.00, 3, true, 'KE', 'Standard'),
+('Busia - Busia Town', 500.00, 3, true, 'KE', 'Standard'),
+('Siaya - Siaya Town', 500.00, 3, true, 'KE', 'Standard'),
+('Siaya - Bondo', 550.00, 3, true, 'KE', 'Standard'),
+('Kisumu - Kisumu City', 400.00, 2, true, 'KE', 'Standard'),
+('Kisumu - Ahero', 450.00, 2, true, 'KE', 'Standard'),
+('Homa Bay - Homa Bay Town', 550.00, 3, true, 'KE', 'Standard'),
+('Migori - Migori Town', 600.00, 4, true, 'KE', 'Standard'),
+('Migori - Kehancha', 650.00, 4, true, 'KE', 'Standard'),
+('Kisii - Kisii Town', 450.00, 3, true, 'KE', 'Standard'),
+('Nyamira - Nyamira Town', 500.00, 3, true, 'KE', 'Standard'),
+('Garissa - Dadaab', 800.00, 6, true, 'KE', 'Standard'),
+('Turkana - Lokichogio', 1200.00, 9, true, 'KE', 'Standard'),
+('Makueni - Kibwezi', 450.00, 2, true, 'KE', 'Standard'),
+('Taita Taveta - Mwatate', 500.00, 3, true, 'KE', 'Standard'),
+('Kilifi - Mariakani', 400.00, 2, true, 'KE', 'Standard'),
+('Kwale - Kinango', 550.00, 3, true, 'KE', 'Standard'),
+('Narok - Kilgoris', 600.00, 4, true, 'KE', 'Standard'),
+('Kajiado - Namanga', 500.00, 3, true, 'KE', 'Standard'),
+('Kajiado - Loitokitok', 600.00, 4, true, 'KE', 'Standard'),
+('Uasin Gishu - Turbo', 450.00, 3, true, 'KE', 'Standard'),
+('Nandi - Nandi Hills', 500.00, 3, true, 'KE', 'Standard'),
+('Kericho - Litein', 450.00, 3, true, 'KE', 'Standard'),
+('Bomet - Sotik', 450.00, 3, true, 'KE', 'Standard'),
+('Kisii - Ogembo', 500.00, 3, true, 'KE', 'Standard'),
+('Migori - Rongo', 550.00, 3, true, 'KE', 'Standard'),
+('Homa Bay - Mbita', 650.00, 4, true, 'KE', 'Standard'),
+('Siaya - Ugunja', 500.00, 3, true, 'KE', 'Standard'),
+('Kakamega - Malava', 500.00, 3, true, 'KE', 'Standard'),
+('Bungoma - Kimilili', 550.00, 4, true, 'KE', 'Standard'),
+('Busia - Malaba', 550.00, 3, true, 'KE', 'Standard'),
+('Trans Nzoia - Endebess', 550.00, 4, true, 'KE', 'Standard'),
+('Kiambu - Gatundu', 350.00, 2, true, 'KE', 'Standard'),
+('Murang''a - Kangema', 400.00, 3, true, 'KE', 'Standard'),
+('Nyeri - Mukurweini', 400.00, 3, true, 'KE', 'Standard'),
+('Kirinyaga - Mwea', 350.00, 2, true, 'KE', 'Standard'),
+('Nyandarua - Engineer', 450.00, 3, true, 'KE', 'Standard'),
+('Meru - Nkubu', 400.00, 2, true, 'KE', 'Standard'),
+('Embu - Siakago', 450.00, 3, true, 'KE', 'Standard'),
+('Kitui - Mutomo', 550.00, 4, true, 'KE', 'Standard'),
+('Machakos - Tala', 350.00, 2, true, 'KE', 'Standard'),
+('Makueni - Emali', 400.00, 2, true, 'KE', 'Standard'),
+('Laikipia - Rumuruti', 500.00, 3, true, 'KE', 'Standard'),
+('Samburu - Archer''s Post', 650.00, 4, true, 'KE', 'Standard'),
+('Isiolo - Merti', 800.00, 6, true, 'KE', 'Standard'),
+('Wajir - Habaswein', 900.00, 7, true, 'KE', 'Standard'),
+('Garissa - Modogashe', 850.00, 6, true, 'KE', 'Standard'),
+('Tana River - Garsen', 650.00, 4, true, 'KE', 'Standard'),
+('Lamu - Kiunga', 1000.00, 8, true, 'KE', 'Standard')
+ON CONFLICT (name) DO UPDATE SET 
+    price = EXCLUDED.price,
+    estimated_days = EXCLUDED.estimated_days,
+    is_active = EXCLUDED.is_active,
+    country_code = EXCLUDED.country_code,
+    shipping_method = EXCLUDED.shipping_method;
+
+COMMIT;

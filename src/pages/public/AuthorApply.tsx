@@ -1,77 +1,39 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { 
   PenTool, Mail, User, FileText, Send, 
-  Loader2, CheckCircle2, Lock, ArrowRight, BookOpen,
-  Download, Upload, X
+  Loader2, CheckCircle2, Lock, ArrowRight,
+  Upload, X, Phone, MessageSquare
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { Link, useNavigate } from 'react-router-dom';
-import { uploadSignedAgreement } from '@/api/storage';
-
-interface Agreement {
-  id: string;
-  title: string;
-  content: string;
-  type: 'author' | 'service_provider';
-  file_url?: string;
-}
+import { uploadQualificationProof } from '@/api/storage';
 
 export default function AuthorApply() {
   const { user, profile } = useAuth();
   const navigate = useNavigate();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
-  const [agreements, setAgreements] = useState<Agreement[]>([]);
-  const [loadingAgreements, setLoadingAgreements] = useState(true);
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   
   const [formData, setFormData] = useState({
     full_name: profile?.full_name || '',
     email: user?.email || '',
-    bio: '',
-    agreement_id: '',
+    contact_info: '',
+    collaboration_intent: '',
     genre: 'Fiction',
     experience: 'Emerging Author'
   });
 
-  useEffect(() => {
-    async function fetchAgreements() {
-      try {
-        const { data, error } = await supabase
-          .from('partnership_agreements')
-          .select('*')
-          .eq('type', 'author')
-          .eq('is_active', true);
-        
-        if (error) throw error;
-        setAgreements(data || []);
-        if (data && data.length > 0) {
-          setFormData(prev => ({
-            ...prev,
-            agreement_id: data[0].id,
-            full_name: prev.full_name || profile?.full_name || '',
-            email: prev.email || user?.email || ''
-          }));
-        }
-      } catch (error) {
-        console.error('Error fetching agreements:', error);
-      } finally {
-        setLoadingAgreements(false);
-      }
-    }
-
-    fetchAgreements();
-  }, []);
-
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
-      if (file.type !== 'application/pdf') {
-        toast.error('Please upload a PDF document');
+      const allowedTypes = ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'image/jpeg', 'image/png'];
+      if (!allowedTypes.includes(file.type)) {
+        toast.error('Please upload a PDF, Word doc, or image (JPG/PNG)');
         return;
       }
       setUploadedFile(file);
@@ -83,27 +45,12 @@ export default function AuthorApply() {
     setIsDragging(false);
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
       const file = e.dataTransfer.files[0];
-      if (file.type !== 'application/pdf') {
-        toast.error('Please upload a PDF document');
+      const allowedTypes = ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'image/jpeg', 'image/png'];
+      if (!allowedTypes.includes(file.type)) {
+        toast.error('Please upload a PDF, Word doc, or image (JPG/PNG)');
         return;
       }
       setUploadedFile(file);
-    }
-  };
-
-  const handleDownloadAgreement = () => {
-    const agreement = agreements.find(a => a.id === formData.agreement_id);
-    if (!agreement) return;
-
-    if (agreement.file_url) {
-      window.open(agreement.file_url, '_blank');
-    } else {
-      const blob = new Blob([agreement.content], { type: 'text/plain' });
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${agreement.title.replace(/\s+/g, '_')}.txt`;
-      a.click();
     }
   };
 
@@ -115,15 +62,15 @@ export default function AuthorApply() {
     }
 
     if (!uploadedFile) {
-      toast.error('Please upload the signed agreement');
+      toast.error('Please upload your qualification proof');
       return;
     }
 
     setIsSubmitting(true);
 
     try {
-      // 1. Upload signed document
-      const documentPath = await uploadSignedAgreement(uploadedFile, user.id);
+      // 1. Upload qualification proof
+      const proofPath = await uploadQualificationProof(uploadedFile, user.id);
 
       // 2. Submit application
       const { error } = await supabase
@@ -132,9 +79,9 @@ export default function AuthorApply() {
           user_id: user.id,
           full_name: formData.full_name,
           email: formData.email,
-          bio: formData.bio,
-          agreement_id: formData.agreement_id,
-          signed_agreement_url: documentPath,
+          contact_info: formData.contact_info,
+          collaboration_intent: formData.collaboration_intent,
+          proof_url: proofPath,
           metadata: {
             genre: formData.genre,
             experience: formData.experience
@@ -276,20 +223,17 @@ export default function AuthorApply() {
 
             <div className="grid md:grid-cols-2 gap-8">
               <div className="space-y-2">
-                <label className="text-xs font-black uppercase tracking-widest text-muted-foreground ml-2">Primary Genre</label>
+                <label className="text-xs font-black uppercase tracking-widest text-muted-foreground ml-2">Contact Number</label>
                 <div className="relative">
-                  <BookOpen className="absolute left-6 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                  <select 
-                    value={formData.genre}
-                    onChange={(e) => setFormData({...formData, genre: e.target.value})}
-                    className="glass w-full pl-14 pr-6 py-4 rounded-2xl outline-none focus:ring-2 focus:ring-primary font-bold appearance-none cursor-pointer"
-                  >
-                    <option value="Fiction">Fiction</option>
-                    <option value="Non-Fiction">Non-Fiction</option>
-                    <option value="Poetry">Poetry</option>
-                    <option value="Academic">Academic</option>
-                    <option value="Children">Children</option>
-                  </select>
+                  <Phone className="absolute left-6 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                  <input 
+                    type="tel" 
+                    required
+                    value={formData.contact_info}
+                    onChange={(e) => setFormData({...formData, contact_info: e.target.value})}
+                    className="glass w-full pl-14 pr-6 py-4 rounded-2xl outline-none focus:ring-2 focus:ring-primary font-bold"
+                    placeholder="+254 700 000 000"
+                  />
                 </div>
               </div>
 
@@ -308,118 +252,83 @@ export default function AuthorApply() {
             </div>
 
             <div className="space-y-4">
-              <label className="text-xs font-black uppercase tracking-widest text-muted-foreground ml-2">Author Agreement</label>
+              <label className="text-xs font-black uppercase tracking-widest text-muted-foreground ml-2">Qualification Proof</label>
               
-              <div className="grid md:grid-cols-2 gap-6">
-                {/* Download Section */}
-                <div className="glass-card p-6 border-white/5 space-y-4">
-                  <div className="flex items-center gap-3 text-primary">
-                    <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                      <Download className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <h4 className="font-black text-sm uppercase tracking-tight">1. Download</h4>
-                      <p className="text-[10px] text-muted-foreground uppercase font-bold">Get the agreement</p>
-                    </div>
-                  </div>
-                  
-                  <div className="space-y-3">
-                    <select 
-                      required
-                      value={formData.agreement_id}
-                      onChange={(e) => setFormData({...formData, agreement_id: e.target.value})}
-                      className="glass w-full px-4 py-3 rounded-xl outline-none focus:ring-2 focus:ring-primary text-sm font-bold appearance-none cursor-pointer"
-                    >
-                      <option value="" disabled>Select version</option>
-                      {agreements.map(agreement => (
-                        <option key={agreement.id} value={agreement.id}>
-                          {agreement.title}
-                        </option>
-                      ))}
-                    </select>
-
-                    <button 
-                      type="button"
-                      onClick={handleDownloadAgreement}
-                      disabled={!formData.agreement_id}
-                      className="w-full py-3 bg-white/5 hover:bg-white/10 text-white rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all disabled:opacity-50"
-                    >
-                      <Download className="w-4 h-4" />
-                      Download for Signing
-                    </button>
-                  </div>
+              <div 
+                className={`glass-card p-8 border-2 border-dashed transition-all space-y-4 flex flex-col items-center justify-center text-center ${
+                  isDragging ? 'border-primary bg-primary/5' : 'border-white/5'
+                } ${uploadedFile ? 'bg-green-500/5 border-green-500/20' : ''}`}
+                onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+                onDragLeave={() => setIsDragging(false)}
+                onDrop={handleDrop}
+              >
+                <div className={`w-16 h-16 rounded-full flex items-center justify-center mb-2 ${
+                  uploadedFile ? 'bg-green-500/10 text-green-500' : 'bg-primary/10 text-primary'
+                }`}>
+                  {uploadedFile ? <CheckCircle2 className="w-8 h-8" /> : <Upload className="w-8 h-8" />}
                 </div>
-
-                {/* Upload Section */}
-                <div 
-                  className={`glass-card p-6 border-2 border-dashed transition-all space-y-4 ${
-                    isDragging ? 'border-primary bg-primary/5' : 'border-white/5'
-                  } ${uploadedFile ? 'bg-green-500/5 border-green-500/20' : ''}`}
-                  onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
-                  onDragLeave={() => setIsDragging(false)}
-                  onDrop={handleDrop}
-                >
-                  <div className={`flex items-center gap-3 ${uploadedFile ? 'text-green-500' : 'text-primary'}`}>
-                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                      uploadedFile ? 'bg-green-500/10' : 'bg-primary/10'
-                    }`}>
-                      {uploadedFile ? <CheckCircle2 className="w-5 h-5" /> : <Upload className="w-5 h-5" />}
-                    </div>
-                    <div>
-                      <h4 className="font-black text-sm uppercase tracking-tight">2. Upload</h4>
-                      <p className="text-[10px] text-muted-foreground uppercase font-bold">Signed document (PDF)</p>
-                    </div>
-                  </div>
-
-                  {uploadedFile ? (
-                    <div className="flex items-center justify-between p-3 glass rounded-xl border border-green-500/20">
+                
+                {uploadedFile ? (
+                  <div className="space-y-4 w-full max-w-md">
+                    <div className="flex items-center justify-between p-4 glass rounded-2xl border border-green-500/20">
                       <div className="flex items-center gap-3 overflow-hidden">
-                        <FileText className="w-4 h-4 text-green-500 shrink-0" />
-                        <span className="text-xs font-bold truncate">{uploadedFile.name}</span>
+                        <FileText className="w-5 h-5 text-green-500 shrink-0" />
+                        <span className="text-sm font-bold truncate">{uploadedFile.name}</span>
                       </div>
                       <button 
                         type="button"
                         onClick={() => setUploadedFile(null)}
-                        className="p-1 hover:bg-white/10 rounded-full transition-colors"
+                        className="p-2 hover:bg-white/10 rounded-full transition-colors"
                       >
-                        <X className="w-4 h-4 text-muted-foreground" />
+                        <X className="w-5 h-5 text-muted-foreground" />
                       </button>
                     </div>
-                  ) : (
-                    <label className="block">
+                    <p className="text-xs text-muted-foreground font-medium">
+                      File ready for upload. You can click to change it.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <div>
+                      <h4 className="font-black text-lg uppercase tracking-tight">Upload Proof</h4>
+                      <p className="text-sm text-muted-foreground font-medium">
+                        PDF, DOCX, or Images (Max 10MB)
+                      </p>
+                    </div>
+                    <label className="inline-block">
                       <input 
                         type="file" 
                         className="hidden" 
-                        accept=".pdf"
+                        accept=".pdf,.docx,.jpg,.jpeg,.png"
                         onChange={handleFileChange}
                       />
-                      <div className="w-full py-3 bg-primary/10 hover:bg-primary/20 text-primary rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all cursor-pointer">
+                      <div className="px-8 py-3 bg-primary text-white rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all cursor-pointer hover:scale-105">
                         <Upload className="w-4 h-4" />
-                        Select Signed PDF
+                        Select File
                       </div>
                     </label>
-                  )}
-                </div>
+                  </div>
+                )}
               </div>
             </div>
 
             <div className="space-y-2">
-              <label className="text-xs font-black uppercase tracking-widest text-muted-foreground ml-2">Author Bio & Vision</label>
+              <label className="text-xs font-black uppercase tracking-widest text-muted-foreground ml-2">Collaboration Intent</label>
               <div className="relative">
-                <FileText className="absolute left-6 top-6 w-5 h-5 text-muted-foreground" />
+                <MessageSquare className="absolute left-6 top-6 w-5 h-5 text-muted-foreground" />
                 <textarea 
                   required
-                  value={formData.bio}
-                  onChange={(e) => setFormData({...formData, bio: e.target.value})}
+                  value={formData.collaboration_intent}
+                  onChange={(e) => setFormData({...formData, collaboration_intent: e.target.value})}
                   className="glass w-full pl-14 pr-6 py-6 rounded-3xl outline-none focus:ring-2 focus:ring-primary font-medium min-h-[160px] resize-none"
-                  placeholder="Tell us about yourself, your writing journey, and your vision for your work..."
+                  placeholder="Describe your vision for collaborating with ReadMart, what you hope to achieve, and why you're a great fit..."
                 />
               </div>
             </div>
 
             <button 
               type="submit"
-              disabled={isSubmitting || loadingAgreements}
+              disabled={isSubmitting}
               className="w-full py-6 bg-primary text-white rounded-2xl font-black text-lg flex items-center justify-center gap-3 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:hover:scale-100 shadow-xl shadow-primary/20"
             >
               {isSubmitting ? (

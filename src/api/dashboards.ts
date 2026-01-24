@@ -1,4 +1,24 @@
 import { supabase } from '@/lib/supabase/client';
+import { withRetry } from '@/lib/retry';
+
+/**
+ * Utility to log administrative actions
+ */
+async function logAudit(action: string, entityType: string, entityId: string | null, newData: any = null, oldData: any = null) {
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    await supabase.from('audit_logs').insert([{
+      user_id: session?.user?.id,
+      action,
+      entity_type: entityType,
+      entity_id: entityId,
+      new_data: newData,
+      old_data: oldData
+    }]);
+  } catch (err) {
+    console.warn('Audit logging failed:', err);
+  }
+}
 
 /**
  * Utility to calculate percentage trend between two periods
@@ -330,8 +350,11 @@ export async function getInventory(authorId?: string) {
 
 export async function getOrders(partnerId?: string) {
   try {
-    await verifyPartner();
+    const session = await verifyPartner();
+    const { data: profile } = await supabase.from('profiles').select('role').eq('id', session?.user?.id).single();
+    const isAdmin = profile?.role === 'founder' || profile?.role === 'admin';
     
+    let data;
     if (partnerId) {
       // Fetch shipping zones assigned to this partner
       const { data: zones } = await supabase
@@ -344,17 +367,26 @@ export async function getOrders(partnerId?: string) {
       if (zoneIds.length === 0) return [];
 
       // Fetch orders for those zones
-      const { data, error } = await supabase
+      const { data: orders, error } = await supabase
         .from('orders')
         .select('*')
         .in('shipping_zone_id', zoneIds)
         .order('created_at', { ascending: false });
       
       if (error) throw error;
-      return data || [];
+      data = orders || [];
+    } else {
+      data = await getAllRecords('orders');
     }
 
-    return await getAllRecords('orders');
+    if (!isAdmin && data) {
+      return data.map((order: any) => {
+        const { tax_amount, tax_rate, ...rest } = order;
+        return rest;
+      });
+    }
+
+    return data;
   } catch (err) {
     console.error('Orders fetch failed:', err);
     return [];
@@ -402,18 +434,187 @@ export async function getClubs() {
 export async function getEvents() {
   try {
     await verifyAdmin();
+    // Prefer the new events table
     const { data, error } = await supabase
+      .from('events')
+      .select('*')
+      .order('event_date', { ascending: false });
+
+    if (!error && data) return data;
+
+    // Fallback to cms_content if needed
+    const { data: legacyData, error: legacyError } = await supabase
       .from('cms_content')
       .select('*')
       .eq('type', 'event')
       .order('created_at', { ascending: false });
 
-    if (error) throw error;
-    return data || [];
+    if (legacyError) throw legacyError;
+    return legacyData || [];
   } catch (err) {
     console.error('Events fetch failed:', err);
     return [];
   }
+}
+
+export async function createEvent(event: any) {
+  await verifyAdmin();
+  const { data, error } = await supabase
+    .from('events')
+    .insert([event])
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+export async function updateEvent(id: string, updates: any) {
+  await verifyAdmin();
+  const { data, error } = await supabase
+    .from('events')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+export async function getAgreements() {
+  try {
+    await verifyAdmin();
+    const { data, error } = await supabase
+      .from('agreements')
+      .select('*, partner:profiles(full_name, email)')
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return data || [];
+  } catch (err) {
+    console.error('Agreements fetch failed:', err);
+    return [];
+  }
+}
+
+/**
+ * Fetch agreements for a specific user (Author or Partner)
+ */
+export async function getUserAgreements(userId: string) {
+  try {
+    const { data, error } = await supabase
+      .from('agreements')
+      .select('*')
+      .eq('partner_id', userId)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return data || [];
+  } catch (err) {
+    console.error('User agreements fetch failed:', err);
+    return [];
+  }
+}
+
+/**
+ * Submit a signed agreement
+ */
+export async function submitSignedAgreement(agreementId: string, signedUrl: string) {
+  // 1. Update the agreement record
+  const { data: agreement, error: agreementError } = await supabase
+    .from('agreements')
+    .update({
+      signed_url: signedUrl,
+      signed_at: new Date().toISOString(),
+      status: 'signed'
+    })
+    .eq('id', agreementId)
+    .select()
+    .single();
+
+  if (agreementError) throw agreementError;
+
+  // 2. Automatically activate the account (Update user role)
+  if (agreement.partner_id) {
+    const { error: roleError } = await supabase
+      .from('profiles')
+      .update({
+        role: agreement.type === 'author' ? 'author' : 'partner'
+      })
+      .eq('id', agreement.partner_id);
+    
+    if (roleError) console.error('Failed to auto-activate role:', roleError);
+
+    // 3. Update the corresponding application status to 'completed'
+  const table = agreement.type === 'author' ? 'author_applications' : 'partnership_applications';
+  
+  try {
+    // Try to use the applications API to ensure activation emails are sent
+    // We need the application ID. We can find it by user_id.
+    const { data: appData } = await supabase
+      .from(table)
+      .select('id')
+      .eq('user_id', agreement.partner_id)
+      .single();
+
+    if (appData) {
+      await fetch('/api/applications', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          id: appData.id, 
+          type: agreement.type, 
+          status: 'completed' 
+        })
+      });
+    } else {
+      // Fallback if application record not found
+      await supabase
+        .from(table)
+        .update({ status: 'completed' })
+        .eq('user_id', agreement.partner_id);
+    }
+  } catch (err) {
+    console.error('Failed to update application via API, falling back to direct DB:', err);
+    await supabase
+      .from(table)
+      .update({ status: 'completed' })
+      .eq('user_id', agreement.partner_id);
+    }
+  }
+
+  return agreement;
+}
+
+/**
+ * Approve or reject an agreement (Founder only)
+ */
+export async function updateAgreementStatus(agreementId: string, status: 'approved' | 'rejected', notes?: string) {
+  const session = await verifyAdmin();
+  const { data, error } = await supabase
+    .from('agreements')
+    .update({
+      status,
+      approved_at: status === 'approved' ? new Date().toISOString() : null,
+      approved_by: session?.user?.id,
+      description: notes // Using description as internal notes for rejection if needed
+    })
+    .eq('id', agreementId)
+    .select()
+    .single();
+
+  if (error) throw error;
+
+  // If approved, ensure the user has the correct role privileges or status
+  if (status === 'approved' && data.partner_id) {
+    // We might want to update the profile or send a notification
+    await supabase.from('profiles').update({
+      role: data.type === 'author' ? 'author' : 'partner'
+    }).eq('id', data.partner_id);
+  }
+
+  return data;
 }
 
 export async function getBanners() {
@@ -510,6 +711,27 @@ export async function getAuthorPayouts(authorId: string) {
   return getPartnerPayouts(authorId);
 }
 
+export async function getAuthorReviews(authorId: string) {
+  try {
+    await verifyRole(['author', 'admin', 'founder']);
+    const { data, error } = await supabase
+      .from('reviews')
+      .select(`
+        *,
+        product:products!inner(title, author_id),
+        profile:profiles(full_name, avatar_url)
+      `)
+      .eq('product.author_id', authorId)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return data || [];
+  } catch (err) {
+    console.error('Author Reviews fetch failed:', err);
+    return [];
+  }
+}
+
 export async function getPartnerships() {
   try {
     await verifyAdmin();
@@ -592,10 +814,22 @@ export async function getSiteSettings() {
     // Try site_settings first, then fall back to settings
     const { data: siteData, error: siteError } = await supabase
       .from('site_settings')
-      .select('*')
+      .select('*, author_of_the_day:author_of_the_day_id(id, full_name, avatar_url, bio)')
       .maybeSingle();
 
-    if (!siteError && siteData) return siteData;
+    if (!siteError && siteData) {
+      if (siteData.author_of_the_day_books && siteData.author_of_the_day_books.length > 0) {
+        const { data: bookData, error: bookError } = await supabase
+          .from('products')
+          .select('id, title, image_url, price, author_id')
+          .in('id', siteData.author_of_the_day_books);
+        
+        if (!bookError) {
+          siteData.featured_books = bookData;
+        }
+      }
+      return siteData;
+    }
 
     const { data: legacyData, error: legacyError } = await supabase
       .from('settings')
@@ -612,48 +846,87 @@ export async function getSiteSettings() {
 }
 
 /**
- * Generic Create
+ * Generic Create with Retry and Audit
  */
 export async function createRecord(table: string, record: any) {
   await verifyAdmin();
-  const { data, error } = await supabase
-    .from(table)
-    .insert([record])
-    .select()
-    .single();
+  
+  return withRetry(async () => {
+    const { data, error } = await supabase
+      .from(table)
+      .insert([record])
+      .select()
+      .single();
 
-  if (error) throw error;
-  return data;
+    if (error) throw error;
+    
+    // Log the action
+    await logAudit('CREATE', table, data.id, record);
+    
+    return data;
+  }, {
+    onRetry: (error, attempt) => {
+      console.warn(`Retry attempt ${attempt} for createRecord on ${table}:`, error);
+    }
+  });
 }
 
 /**
- * Generic Update
+ * Generic Update with Retry and Audit
  */
 export async function updateRecord(table: string, id: string, updates: any) {
   await verifyAdmin();
-  const { data, error } = await supabase
-    .from(table)
-    .update(updates)
-    .eq('id', id)
-    .select()
-    .single();
+  
+  return withRetry(async () => {
+    // Optionally fetch old data for audit
+    const { data: oldData } = await supabase.from(table).select('*').eq('id', id).single();
 
-  if (error) throw error;
-  return data;
+    const { data, error } = await supabase
+      .from(table)
+      .update(updates)
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    
+    // Log the action
+    await logAudit('UPDATE', table, id, updates, oldData);
+    
+    return data;
+  }, {
+    onRetry: (error, attempt) => {
+      console.warn(`Retry attempt ${attempt} for updateRecord on ${table}:`, error);
+    }
+  });
 }
 
 /**
- * Generic Delete
+ * Generic Delete with Retry and Audit
  */
 export async function deleteRecord(table: string, id: string) {
   await verifyAdmin();
-  const { error } = await supabase
-    .from(table)
-    .delete()
-    .eq('id', id);
+  
+  return withRetry(async () => {
+    // Optionally fetch old data for audit
+    const { data: oldData } = await supabase.from(table).select('*').eq('id', id).single();
 
-  if (error) throw error;
-  return true;
+    const { error } = await supabase
+      .from(table)
+      .delete()
+      .eq('id', id);
+
+    if (error) throw error;
+    
+    // Log the action
+    await logAudit('DELETE', table, id, null, oldData);
+    
+    return true;
+  }, {
+    onRetry: (error, attempt) => {
+      console.warn(`Retry attempt ${attempt} for deleteRecord on ${table}:`, error);
+    }
+  });
 }
 
 /**
@@ -721,7 +994,7 @@ function generateSlug(text: string): string {
 
 export async function createProduct(product: any) {
   await verifyAdmin();
-  const { ebook_metadata, ebook_url, is_ebook, ...productData } = product;
+  const { ebook_metadata, ...productData } = product;
   
   // Ensure slug exists
   if (!productData.slug && productData.title) {
@@ -748,7 +1021,7 @@ export async function createProduct(product: any) {
 
 export async function updateProduct(id: string, product: any) {
   await verifyAdmin();
-  const { ebook_metadata, ebook_url, is_ebook, ...productData } = product;
+  const { ebook_metadata, ...productData } = product;
 
   const { data, error } = await supabase
     .from('products')

@@ -2,7 +2,8 @@ import { motion } from 'framer-motion';
 import { useState, useEffect, useMemo } from 'react';
 import { 
   BookOpen, DollarSign, TrendingUp,
-  Award, MessageSquare, Plus, Loader2, Shield
+  Award, MessageSquare, Plus, Loader2, Shield,
+  FileCheck, Star
 } from 'lucide-react';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
@@ -13,9 +14,11 @@ import {
   getAuthorSalesReport, 
   getInventory, 
   getSiteSettings,
-  getAuthorPayouts 
+  getAuthorPayouts,
+  getAuthorReviews
 } from '@/api/dashboards';
 import { toast } from 'sonner';
+import AgreementsSection from '@/components/dashboard/AgreementsSection';
 
 export default function AuthorDashboard() {
   const { formatPrice } = useCurrency();
@@ -23,6 +26,7 @@ export default function AuthorDashboard() {
   const [salesReport, setSalesReport] = useState<any[]>([]);
   const [myBooks, setMyBooks] = useState<any[]>([]);
   const [payouts, setPayouts] = useState<any[]>([]);
+  const [reviews, setReviews] = useState<any[]>([]);
   const [settings, setSettings] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -36,16 +40,18 @@ export default function AuthorDashboard() {
     if (!user) return;
     setIsLoading(true);
     try {
-      const [sales, books, siteSettings, payoutData] = await Promise.all([
+      const [sales, books, siteSettings, payoutData, reviewsData] = await Promise.all([
         getAuthorSalesReport(user.id),
         getInventory(user.id),
         getSiteSettings(),
-        getAuthorPayouts(user.id)
+        getAuthorPayouts(user.id),
+        getAuthorReviews(user.id)
       ]);
       setSalesReport(sales);
       setMyBooks(books); 
       setSettings(siteSettings);
       setPayouts(payoutData);
+      setReviews(reviewsData);
     } catch (error) {
       toast.error('Failed to fetch dashboard data');
     } finally {
@@ -61,9 +67,9 @@ export default function AuthorDashboard() {
       { label: 'Published Books', value: uniqueBooks.toString(), icon: <BookOpen />, color: 'text-blue-500' },
       { label: 'Total Royalties', value: formatPrice(totalRoyalties), icon: <DollarSign />, color: 'text-green-500' },
       { label: 'Total Sales', value: salesReport.length.toString(), icon: <TrendingUp />, color: 'text-orange-500' },
-      { label: 'Reader Reviews', value: '0', icon: <MessageSquare />, color: 'text-purple-500' },
+      { label: 'Reader Reviews', value: reviews.length.toString(), icon: <MessageSquare />, color: 'text-purple-500' },
     ];
-  }, [payouts, myBooks, formatPrice, salesReport]);
+  }, [payouts, myBooks, formatPrice, salesReport, reviews]);
 
   const performanceData = useMemo(() => {
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -201,6 +207,47 @@ export default function AuthorDashboard() {
               )}
             </div>
           </motion.div>
+
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="glass p-8 rounded-3xl"
+          >
+            <div className="flex justify-between items-center mb-8">
+              <h3 className="text-xl font-bold">Reader Feedback</h3>
+              <button className="text-primary text-sm font-bold hover:underline">View All Reviews</button>
+            </div>
+            <div className="space-y-4">
+              {reviews.slice(0, 3).map((review) => (
+                <div key={review.id} className="p-4 rounded-2xl bg-white/5 border border-white/10">
+                  <div className="flex justify-between items-start mb-2">
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold text-xs">
+                        {review.profile?.full_name?.charAt(0) || 'U'}
+                      </div>
+                      <div>
+                        <p className="text-sm font-bold">{review.profile?.full_name || 'Anonymous Reader'}</p>
+                        <p className="text-[10px] text-muted-foreground">{new Date(review.created_at).toLocaleDateString()}</p>
+                      </div>
+                    </div>
+                    <div className="flex gap-0.5">
+                      {[...Array(5)].map((_, i) => (
+                        <Star key={i} className={`w-3 h-3 ${i < review.rating ? 'text-secondary fill-secondary' : 'text-white/10'}`} />
+                      ))}
+                    </div>
+                  </div>
+                  <p className="text-xs font-bold text-primary mb-1 italic">on {review.product?.title}</p>
+                  <p className="text-sm text-muted-foreground line-clamp-2">{review.comment}</p>
+                </div>
+              ))}
+              {reviews.length === 0 && (
+                <div className="py-8 text-center text-muted-foreground">
+                  <MessageSquare className="w-12 h-12 mx-auto mb-4 opacity-20" />
+                  <p>No reader feedback yet. Keep writing!</p>
+                </div>
+              )}
+            </div>
+          </motion.div>
         </div>
 
         <div className="space-y-8">
@@ -263,6 +310,24 @@ export default function AuthorDashboard() {
           </motion.div>
         </div>
       </div>
+
+      {/* Agreements System */}
+      <motion.div 
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="mt-12 glass p-8 rounded-3xl"
+      >
+        <div className="flex items-center gap-4 mb-8">
+          <div className="p-3 rounded-2xl bg-primary/10 text-primary">
+            <FileCheck className="w-6 h-6" />
+          </div>
+          <div>
+            <h2 className="text-2xl font-bold">Publishing Agreements</h2>
+            <p className="text-muted-foreground text-sm">Review and sign your digital contracts and publishing terms</p>
+          </div>
+        </div>
+        <AgreementsSection userId={user?.id || ''} type="author" />
+      </motion.div>
     </div>
   );
 }

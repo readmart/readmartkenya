@@ -1,14 +1,17 @@
 import { motion } from 'framer-motion';
 import { useState, useEffect, useMemo } from 'react';
 import { 
-  Package, Truck, CheckCircle, Clock, 
+  Package, Truck, CheckCircle, 
   MapPin, DollarSign,
-  AlertCircle, ChevronRight, Search, Loader2
+  AlertCircle, ChevronRight, Search, Loader2,
+  FileCheck, MessageSquare, BookOpen, ExternalLink,
+  Zap
 } from 'lucide-react';
 import { useCurrency } from '@/contexts/CurrencyContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { getPartnerPayouts, getOrders } from '@/api/dashboards';
 import { toast } from 'sonner';
+import AgreementsSection from '@/components/dashboard/AgreementsSection';
 
 export default function PartnerDashboard() {
   const { formatPrice } = useCurrency();
@@ -41,14 +44,14 @@ export default function PartnerDashboard() {
   };
 
   const stats = useMemo(() => {
-    const pendingPayout = payouts.reduce((acc, curr) => acc + Number(curr.amount), 0);
+    const totalPayouts = payouts.reduce((acc, curr) => acc + Number(curr.amount), 0);
     const deliveredCount = assignments.filter(o => o.status === 'completed').length;
     
     return [
       { label: 'Active Shipments', value: assignments.filter(o => o.status === 'processing').length.toString(), icon: <Truck />, color: 'text-blue-500' },
-      { label: 'Delivered (MTD)', value: deliveredCount.toString(), icon: <CheckCircle />, color: 'text-green-500' },
-      { label: 'Pending Payout', value: formatPrice(pendingPayout), icon: <DollarSign />, color: 'text-orange-500' },
-      { label: 'Avg. Delivery Time', value: '1.2 Days', icon: <Clock />, color: 'text-purple-500' },
+      { label: 'Delivered (Total)', value: deliveredCount.toString(), icon: <CheckCircle />, color: 'text-green-500' },
+      { label: 'Total Earnings', value: formatPrice(totalPayouts), icon: <DollarSign />, color: 'text-orange-500' },
+      { label: 'Performance Score', value: '98%', icon: <Zap />, color: 'text-purple-500' },
     ];
   }, [payouts, assignments, formatPrice]);
 
@@ -65,14 +68,18 @@ export default function PartnerDashboard() {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-12 gap-6">
         <div>
           <h1 className="text-4xl font-bold mb-2 bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
-            Partner Logistics
+            Partner Portal
           </h1>
-          <p className="text-muted-foreground">Manage fulfillment and track service performance</p>
+          <p className="text-muted-foreground">Logistics management, performance metrics, and resources</p>
         </div>
         <div className="flex gap-3">
-          <button className="glass px-6 py-3 rounded-2xl font-bold hover:bg-white/10 transition-all">
-            Service Settings
-          </button>
+          <a 
+            href="mailto:founder@readmart.com"
+            className="glass px-6 py-3 rounded-2xl font-bold flex items-center gap-2 hover:bg-white/10 transition-all"
+          >
+            <MessageSquare className="w-5 h-5" />
+            Contact Founder
+          </a>
           <button className="bg-primary text-white px-6 py-3 rounded-2xl font-bold hover:opacity-90 transition-all shadow-lg shadow-primary/20">
             Request Payout
           </button>
@@ -154,6 +161,35 @@ export default function PartnerDashboard() {
               )}
             </div>
           </motion.div>
+
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="glass p-8 rounded-3xl"
+          >
+            <div className="flex items-center gap-3 mb-8">
+              <div className="p-3 rounded-2xl bg-secondary/10 text-secondary">
+                <BookOpen className="w-6 h-6" />
+              </div>
+              <h3 className="text-xl font-bold">Partner Resource Library</h3>
+            </div>
+            <div className="grid md:grid-cols-2 gap-4">
+              <div className="p-4 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition-all cursor-pointer group">
+                <div className="flex justify-between items-start mb-2">
+                  <h4 className="font-bold">Shipping Guidelines</h4>
+                  <ExternalLink className="w-4 h-4 text-muted-foreground group-hover:text-primary" />
+                </div>
+                <p className="text-sm text-muted-foreground">Standard operating procedures for order fulfillment and packaging.</p>
+              </div>
+              <div className="p-4 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition-all cursor-pointer group">
+                <div className="flex justify-between items-start mb-2">
+                  <h4 className="font-bold">Partner Brand Assets</h4>
+                  <ExternalLink className="w-4 h-4 text-muted-foreground group-hover:text-primary" />
+                </div>
+                <p className="text-sm text-muted-foreground">Official logos, fonts, and marketing materials for your local hub.</p>
+              </div>
+            </div>
+          </motion.div>
         </div>
 
         <div className="space-y-8">
@@ -208,6 +244,24 @@ export default function PartnerDashboard() {
           </motion.div>
         </div>
       </div>
+
+      {/* Agreements System */}
+      <motion.div 
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="mt-12 glass p-8 rounded-3xl"
+      >
+        <div className="flex items-center gap-4 mb-8">
+          <div className="p-3 rounded-2xl bg-primary/10 text-primary">
+            <FileCheck className="w-6 h-6" />
+          </div>
+          <div>
+            <h2 className="text-2xl font-bold">Partnership Agreements</h2>
+            <p className="text-muted-foreground text-sm">Review and sign your digital contracts and partnership terms</p>
+          </div>
+        </div>
+        <AgreementsSection userId={user?.id || ''} type="partner" />
+      </motion.div>
     </div>
   );
 }

@@ -1,36 +1,62 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { 
   ShieldCheck, Zap, Star, 
   ArrowRight, Phone, Lock, Sparkles,
-  BookOpen, Calendar, Users, Gift
+  BookOpen, Calendar, Users, Gift,
+  Loader2
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSettings } from '@/hooks/useSettings';
 import { useCurrency } from '@/contexts/CurrencyContext';
 import { initiateMembershipPayment } from '@/api/payments';
+import { getBookClubById, type BookClub } from '@/api/community';
 import { toast } from 'sonner';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 
 export default function Membership() {
   const { user, profile, loading: authLoading } = useAuth();
   const { settings, isLoading: settingsLoading } = useSettings();
   const { formatPrice } = useCurrency();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const clubId = searchParams.get('club');
   
   const [phone, setPhone] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [club, setClub] = useState<BookClub | null>(null);
+  const [isClubLoading, setIsClubLoading] = useState(!!clubId);
 
-  if (authLoading || settingsLoading) {
+  useEffect(() => {
+    if (clubId) {
+      fetchClub(clubId);
+    }
+  }, [clubId]);
+
+  const fetchClub = async (id: string) => {
+    setIsClubLoading(true);
+    try {
+      const clubData = await getBookClubById(id);
+      setClub(clubData);
+    } catch (error) {
+      console.error('Error fetching club:', error);
+      toast.error('Failed to load club details');
+    } finally {
+      setIsClubLoading(false);
+    }
+  };
+
+  if (authLoading || settingsLoading || isClubLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
+        <Loader2 className="w-12 h-12 text-primary animate-spin" />
       </div>
     );
   }
 
-  // If already a member, redirect to account
-  if (profile?.is_member) {
+  // If already a member (and not looking for a specific club membership or already in that club)
+  // For now, let's keep it simple: general membership check
+  if (profile?.is_member && !clubId) {
     navigate('/account');
     return null;
   }
@@ -40,7 +66,7 @@ export default function Membership() {
     
     if (!user) {
       toast.error('Please login to join membership');
-      navigate('/login?redirect=/membership');
+      navigate(`/login?redirect=${encodeURIComponent(window.location.pathname + window.location.search)}`);
       return;
     }
 
@@ -51,7 +77,10 @@ export default function Membership() {
 
     setIsSubmitting(true);
     try {
-      const response = await initiateMembershipPayment(phone, settings?.membership_price || 1000);
+      const amount = club ? club.membership_price : (settings?.membership_price || 1000);
+      const metadata = club ? { club_id: club.id, type: 'club_membership' } : { type: 'site_membership' };
+      
+      const response = await initiateMembershipPayment(phone, amount, metadata);
       if (response.success) {
         toast.success('Payment request sent to your phone!');
         // In a real app, we'd poll for status or wait for webhook
@@ -105,10 +134,10 @@ export default function Membership() {
               <Sparkles className="w-4 h-4" /> Join the Inner Circle
             </span>
             <h1 className="text-5xl md:text-7xl font-black mb-6 leading-tight uppercase tracking-tight">
-              {settings?.membership_title || 'ReadMart Premium'}
+              {club ? club.name : (settings?.membership_title || 'ReadMart Premium')}
             </h1>
             <p className="text-xl text-slate-300 font-medium mb-12">
-              {settings?.membership_description || 'Unlock exclusive access to book clubs, premium events, and a community of passionate readers.'}
+              {club ? club.description : (settings?.membership_description || 'Unlock exclusive access to book clubs, premium events, and a community of passionate readers.')}
             </p>
           </motion.div>
         </div>
@@ -148,7 +177,9 @@ export default function Membership() {
                 <div className="absolute top-0 right-0 w-32 h-32 bg-primary/10 rounded-bl-[5rem] -mr-8 -mt-8 blur-3xl" />
                 
                 <header className="mb-10 text-center">
-                  <h2 className="text-3xl font-black uppercase tracking-tight mb-2">Premium Access</h2>
+                  <h2 className="text-3xl font-black uppercase tracking-tight mb-2">
+                    {club ? 'Club Access' : 'Premium Access'}
+                  </h2>
                   <div className="flex items-center justify-center gap-3">
                     <span className="h-px w-8 bg-slate-200" />
                     <Star className="w-4 h-4 text-primary fill-current" />
@@ -159,13 +190,15 @@ export default function Membership() {
                 <div className="glass p-8 rounded-[2rem] bg-slate-50 border-white mb-10 text-center">
                   <div className="flex items-baseline justify-center gap-2 mb-2">
                     <span className="text-5xl font-black text-slate-900">
-                      {formatPrice(settings?.membership_price || 1000)}
+                      {formatPrice(club ? club.membership_price : (settings?.membership_price || 1000))}
                     </span>
                     <span className="text-slate-500 font-bold text-lg uppercase tracking-widest">
-                      / {settings?.membership_duration_days || 30} Days
+                      / {club ? 'Lifetime' : `${settings?.membership_duration_days || 30} Days`}
                     </span>
                   </div>
-                  <p className="text-sm text-slate-400 font-black uppercase tracking-widest">Full Platform Access</p>
+                  <p className="text-sm text-slate-400 font-black uppercase tracking-widest">
+                    {club ? `Join ${club.name}` : 'Full Platform Access'}
+                  </p>
                 </div>
 
                 <form onSubmit={handleJoin} className="space-y-6">

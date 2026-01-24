@@ -1,4 +1,4 @@
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useState, useEffect } from 'react';
 import { 
   BookOpen, Star, ArrowRight, ShoppingBag, 
@@ -8,6 +8,7 @@ import {
 import { Link } from 'react-router-dom';
 import BookCard from '@/components/shop/BookCard';
 import { getCMSContent } from '@/api/dashboards';
+import { supabase } from '@/lib/supabase/client';
 
 const featuredCategories = [
   { name: 'Books', icon: <BookOpen className="w-6 h-6" />, count: '2,000+ Titles', color: 'from-blue-500/20 to-cyan-500/20' },
@@ -17,15 +18,16 @@ const featuredCategories = [
 ];
 
 const mockBooks = [
-  { id: '1', title: 'The Midnight Library', author: 'Matt Haig', price: 24.99, rating: 4.8, category: 'Books', image: 'https://images.unsplash.com/photo-1544947950-fa07a98d237f?q=80&w=800' },
-  { id: '2', title: 'Abstract Geometric Art', author: 'Elena Rossi', price: 120.00, rating: 4.9, category: 'Art', image: 'https://images.unsplash.com/photo-1541963463532-d68292c34b19?q=80&w=800' },
-  { id: '3', title: 'Premium Leather Bookmark', author: 'Handcrafted', price: 15.99, rating: 4.7, category: 'Accessories', image: 'https://images.unsplash.com/photo-1544947950-fa07a98d237f?q=80&w=800' },
-  { id: '4', title: 'The Psychology of Money', author: 'Morgan Housel', price: 21.00, rating: 4.8, category: 'Books', image: 'https://images.unsplash.com/photo-1592492159418-39f319320569?q=80&w=800' },
+  { id: '1', title: 'The Midnight Library', author: 'Matt Haig', price: 24.99, rating: 4.8, category: 'Books', image: 'https://images.unsplash.com/photo-1544947950-fa07a98d237f?q=80&w=800', weight: 0.5, volume: 0.001 },
+  { id: '2', title: 'Abstract Geometric Art', author: 'Elena Rossi', price: 120.00, rating: 4.9, category: 'Art', image: 'https://images.unsplash.com/photo-1541963463532-d68292c34b19?q=80&w=800', weight: 1.2, volume: 0.005 },
+  { id: '3', title: 'Premium Leather Bookmark', author: 'Handcrafted', price: 15.99, rating: 4.7, category: 'Accessories', image: 'https://images.unsplash.com/photo-1544947950-fa07a98d237f?q=80&w=800', weight: 0.1, volume: 0.0001 },
+  { id: '4', title: 'The Psychology of Money', author: 'Morgan Housel', price: 21.00, rating: 4.8, category: 'Books', image: 'https://images.unsplash.com/photo-1592492159418-39f319320569?q=80&w=800', weight: 0.4, volume: 0.0008 },
 ];
 
 export default function Home() {
   const [heroData, setHeroData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [authorOfDay, setAuthorOfDay] = useState<any>(null);
 
   useEffect(() => {
     async function fetchHero() {
@@ -35,8 +37,26 @@ export default function Home() {
         if (hero) {
           setHeroData(hero);
         }
+
+        // Get site settings for Author of the Day
+        const { data: settings } = await supabase
+          .from('site_settings')
+          .select('*, author_of_the_day:author_of_the_day_id(id, full_name, avatar_url, bio)')
+          .single();
+
+        if (settings?.author_of_the_day_enabled && settings.author_of_the_day) {
+          // Fetch featured books
+          if (settings.author_of_the_day_books?.length > 0) {
+            const { data: books } = await supabase
+              .from('products')
+              .select('id, title, image_url, price')
+              .in('id', settings.author_of_the_day_books);
+            settings.featured_books = books || [];
+          }
+          setAuthorOfDay(settings);
+        }
       } catch (error) {
-        console.error('Failed to fetch hero:', error);
+        console.error('Failed to fetch home data:', error);
       } finally {
         setIsLoading(false);
       }
@@ -125,6 +145,64 @@ export default function Home() {
                   <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
                 </Link>
               </div>
+
+              {/* Author of the Day Subtle Integration */}
+              <AnimatePresence>
+                {authorOfDay && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.8 }}
+                    className="mt-16 pt-8 border-t border-primary/10"
+                  >
+                    <div className="flex items-start gap-6">
+                      <div className="relative group">
+                        <div className="absolute inset-0 bg-primary/20 rounded-2xl blur-lg group-hover:blur-xl transition-all" />
+                        <div className="relative w-16 h-16 rounded-2xl overflow-hidden border-2 border-white shadow-xl">
+                          <img 
+                            src={authorOfDay.author_of_the_day_image || authorOfDay.author_of_the_day.avatar_url || 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?q=80&w=200'} 
+                            alt={authorOfDay.author_of_the_day.full_name}
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
+                      </div>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-[10px] font-black uppercase tracking-[0.2em] text-primary bg-primary/5 px-2 py-0.5 rounded">Spotlight</span>
+                          <h4 className="text-sm font-black uppercase tracking-tight">{authorOfDay.author_of_the_day.full_name}</h4>
+                        </div>
+                        <p className="text-xs text-muted-foreground line-clamp-1 mb-4 font-medium max-w-xs italic">
+                          "{authorOfDay.author_of_the_day.bio || 'A featured creator in our community.'}"
+                        </p>
+                        
+                        {/* Books Carousel */}
+                        <div className="flex gap-3 overflow-x-auto pb-2 custom-scrollbar">
+                          {authorOfDay.featured_books?.map((book: any, idx: number) => (
+                            <motion.div
+                              key={book.id}
+                              initial={{ opacity: 0, x: 10 }}
+                              animate={{ opacity: 1, x: 0 }}
+                              transition={{ delay: 1 + (idx * 0.1) }}
+                              className="flex-shrink-0 group/book"
+                            >
+                              <Link to={`/product/${book.id}`} className="block">
+                                <div className="relative w-12 h-16 rounded-lg overflow-hidden shadow-md group-hover/book:shadow-lg transition-all group-hover/book:-translate-y-1">
+                                  <img 
+                                    src={book.image_url} 
+                                    alt={book.title}
+                                    className="w-full h-full object-cover"
+                                  />
+                                  <div className="absolute inset-0 bg-black/20 opacity-0 group-hover/book:opacity-100 transition-opacity" />
+                                </div>
+                              </Link>
+                            </motion.div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
 
             {/* Right Column: Hero Image */}

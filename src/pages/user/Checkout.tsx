@@ -28,6 +28,7 @@ export default function Checkout() {
   const [orderNumber, setOrderNumber] = useState('');
   const [shippingZones, setShippingZones] = useState<any[]>([]);
   const [selectedZoneId, setSelectedZoneId] = useState<string>('');
+  const [sessionId, setSessionId] = useState<string | null>(null);
   const navigate = useNavigate();
 
   const [formData, setFormData] = useState({
@@ -35,8 +36,51 @@ export default function Checkout() {
     email: '',
     address: '',
     city: '',
+    postalCode: '',
     phone: '',
   });
+
+  // Track checkout session
+  useEffect(() => {
+    if (!user || cartItems.length === 0) return;
+
+    const trackSession = async () => {
+      try {
+        if (!sessionId) {
+          const { data } = await supabase
+            .from('checkout_sessions')
+            .insert([{
+              user_id: user.id,
+              email: formData.email || user.email,
+              phone: formData.phone,
+              cart_data: cartItems,
+              status: 'initiated',
+              last_step: step
+            }])
+            .select()
+            .single();
+          
+          if (data) setSessionId(data.id);
+        } else {
+          await supabase
+            .from('checkout_sessions')
+            .update({
+              email: formData.email,
+              phone: formData.phone,
+              last_step: step,
+              status: step === 'confirmation' ? 'completed' : 
+                      step === 'payment' ? 'payment_initiated' : 'initiated'
+            })
+            .eq('id', sessionId);
+        }
+      } catch (error) {
+        console.error('Error tracking checkout session:', error);
+      }
+    };
+
+    const timer = setTimeout(trackSession, 2000); // Debounce
+    return () => clearTimeout(timer);
+  }, [formData, step, user, cartItems]);
 
   const kenyanPhoneRegex = /^(?:254|\+254|0)?(7|1)\d{8}$/;
 
@@ -45,8 +89,10 @@ export default function Checkout() {
       try {
         const zones = await getShippingZones();
         setShippingZones(zones);
-        if (zones.length > 0) {
-          setSelectedZoneId(zones[0].id);
+        // Default to first active zone if nothing selected
+        if (zones.length > 0 && !selectedZoneId) {
+          const activeZone = zones.find((z: any) => z.is_active) || zones[0];
+          setSelectedZoneId(activeZone.id);
         }
       } catch (error) {
         console.error('Error loading shipping zones:', error);
@@ -54,6 +100,37 @@ export default function Checkout() {
     }
     loadShippingZones();
   }, []);
+
+  // Auto-match shipping zone based on city or postal code
+  useEffect(() => {
+    if (shippingZones.length === 0) return;
+
+    const city = formData.city.toLowerCase().trim();
+    const pCode = formData.postalCode.toLowerCase().trim();
+
+    if (!city && !pCode) return;
+
+    // Try to find a zone that matches the city name or postal code
+    const matchedZone = shippingZones.find((zone: any) => {
+      if (!zone.is_active) return false;
+      
+      const zoneName = zone.name.toLowerCase();
+      const zonePostalCodes = (zone.postal_codes || '').toLowerCase();
+      
+      // Match by city name
+      if (city && (zoneName.includes(city) || city.includes(zoneName))) return true;
+      
+      // Match by postal code
+      if (pCode && zonePostalCodes.includes(pCode)) return true;
+      
+      return false;
+    });
+
+    if (matchedZone && matchedZone.id !== selectedZoneId) {
+      setSelectedZoneId(matchedZone.id);
+      toast.info(`Shipping zone updated to: ${matchedZone.name}`, { duration: 2000 });
+    }
+  }, [formData.city, formData.postalCode, shippingZones]);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -109,11 +186,21 @@ export default function Checkout() {
     );
   }
   
+  const totalWeight = cartItems.reduce((sum, item) => sum + (item.weight || 0.5) * item.quantity, 0);
+  const totalVolume = cartItems.reduce((sum, item) => sum + (item.volume || 0.001) * item.quantity, 0);
+
   const selectedZone = shippingZones.find(z => z.id === selectedZoneId);
-  const shippingAmount = selectedZone?.rate || 0;
+  const baseShipping = selectedZone?.price ?? selectedZone?.rate ?? 0;
+  const weightSurcharge = (selectedZone?.weight_surcharge || 0) * totalWeight;
+  const volumeSurcharge = (selectedZone?.volume_surcharge || 0) * totalVolume;
+  
+  const shippingAmount = baseShipping + weightSurcharge + volumeSurcharge;
   const taxRate = settings?.tax_rate ?? 16;
   const estimatedTax = cartTotal * (taxRate / 100);
-  const estimatedTotal = cartTotal + shippingAmount + estimatedTax;
+  
+  // Tax-inclusive subtotal for display
+  const displaySubtotal = cartTotal + estimatedTax;
+  const estimatedTotal = displaySubtotal + shippingAmount;
 
   const handleNext = () => {
     if (step === 'shipping') {
@@ -314,34 +401,58 @@ export default function Checkout() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-sm font-medium">City</label>
+                    <label className="text-sm font-medium">City / Town</label>
                     <input 
                       type="text" 
                       value={formData.city}
                       onChange={e => setFormData({...formData, city: e.target.value})}
                       className="glass w-full px-4 py-3 rounded-xl outline-none focus:ring-2 focus:ring-primary" 
-                      placeholder="Nairobi"
+                      placeholder="e.g. Nairobi, Mombasa"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Postal Code (Optional)</label>
+                    <input 
+                      type="text" 
+                      value={formData.postalCode}
+                      onChange={e => setFormData({...formData, postalCode: e.target.value})}
+                      className="glass w-full px-4 py-3 rounded-xl outline-none focus:ring-2 focus:ring-primary" 
+                      placeholder="e.g. 00100"
                     />
                   </div>
                   <div className="md:col-span-2 space-y-2">
-                    <label className="text-sm font-medium">Shipping Zone</label>
+                    <label className="text-sm font-medium">Shipping Method & Region</label>
                     <select
                       value={selectedZoneId}
                       onChange={e => setSelectedZoneId(e.target.value)}
-                      className="glass w-full px-4 py-3 rounded-xl outline-none focus:ring-2 focus:ring-primary bg-transparent"
+                      className="glass w-full px-4 py-3 rounded-xl outline-none focus:ring-2 focus:ring-primary bg-transparent font-bold"
                     >
-                      <option value="" disabled className="bg-background">Select a shipping zone</option>
-                      {shippingZones.map(zone => (
+                      <option value="" disabled className="bg-background">Select delivery option</option>
+                      {shippingZones.filter(z => z.is_active).map(zone => (
                         <option key={zone.id} value={zone.id} className="bg-background">
-                          {zone.name} - {formatPrice(zone.rate)}
+                          {zone.name} ({zone.shipping_method || 'Standard'}) - {formatPrice(zone.price || zone.rate || 0)}
                         </option>
                       ))}
                     </select>
-                    {selectedZone?.description && (
-                      <p className="text-xs text-muted-foreground mt-1 px-1">
-                        {selectedZone.description}
-                      </p>
-                    )}
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {selectedZone && (
+                        <>
+                          {selectedZone.region && (
+                            <span className="px-2 py-1 bg-slate-500/10 text-slate-500 rounded-md text-[10px] font-bold uppercase tracking-widest">
+                              {selectedZone.region}
+                            </span>
+                          )}
+                          <span className="px-2 py-1 bg-primary/10 text-primary rounded-md text-[10px] font-bold uppercase tracking-widest">
+                            {selectedZone.estimated_days || 3} Days Delivery
+                          </span>
+                          {selectedZone.shipping_method && (
+                            <span className="px-2 py-1 bg-blue-500/10 text-blue-500 rounded-md text-[10px] font-bold uppercase tracking-widest">
+                              {selectedZone.shipping_method}
+                            </span>
+                          )}
+                        </>
+                      )}
+                    </div>
                   </div>
                 </div>
                 <button 
@@ -484,25 +595,33 @@ export default function Checkout() {
           <div className="glass p-8 rounded-3xl sticky top-24">
             <h3 className="text-xl font-bold mb-6">Order Summary</h3>
             <div className="space-y-4 mb-6">
-              {cartItems.map(item => (
-                <div key={item.id} className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">{item.title} x {item.quantity}</span>
-                  <span className="font-bold">{formatPrice(item.price * item.quantity)}</span>
-                </div>
-              ))}
+              {cartItems.map(item => {
+                const itemTax = (item.price * (taxRate / 100));
+                const taxInclusivePrice = item.price + itemTax;
+                return (
+                  <div key={item.id} className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">{item.title} x {item.quantity}</span>
+                    <span className="font-bold">{formatPrice(taxInclusivePrice * item.quantity)}</span>
+                  </div>
+                );
+              })}
             </div>
             <div className="space-y-4 pt-6 border-t border-white/10 text-sm">
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Subtotal</span>
-                <span className="font-bold">{formatPrice(cartTotal)}</span>
+                <span className="font-bold">{formatPrice(displaySubtotal)}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Shipping</span>
-                <span className="font-bold">{formatPrice(shippingAmount)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">VAT ({taxRate}%)</span>
-                <span className="font-bold">{formatPrice(estimatedTax)}</span>
+                <div className="text-right">
+                  <span className="font-bold">{formatPrice(shippingAmount)}</span>
+                  {(weightSurcharge > 0 || volumeSurcharge > 0) && (
+                    <div className="text-[10px] text-muted-foreground font-medium uppercase tracking-widest mt-1">
+                      {weightSurcharge > 0 && <div>Weight Surcharge: {formatPrice(weightSurcharge)}</div>}
+                      {volumeSurcharge > 0 && <div>Volume Surcharge: {formatPrice(volumeSurcharge)}</div>}
+                    </div>
+                  )}
+                </div>
               </div>
               <div className="flex justify-between items-end pt-4 border-t border-white/10">
                 <span className="text-lg font-bold">Total</span>

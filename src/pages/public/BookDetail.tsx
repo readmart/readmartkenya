@@ -5,6 +5,7 @@ import { ShoppingCart, Heart, Share2, Star, ChevronLeft, Check, Truck, ShieldChe
 import { useCart } from '@/contexts/CartContext';
 import { useWishlist } from '@/contexts/WishlistContext';
 import { useCurrency } from '@/contexts/CurrencyContext';
+import { useSettings } from '@/hooks/useSettings';
 import { toast } from 'sonner';
 import { getProductById } from '@/api/products';
 
@@ -23,6 +24,11 @@ export default function BookDetail() {
   const { addToCart, buyNow } = useCart();
   const { addToWishlist, removeFromWishlist, isInWishlist } = useWishlist();
   const { formatPrice, currency } = useCurrency();
+  const { settings } = useSettings();
+
+  const taxRate = settings?.tax_rate ?? 16;
+  const taxInclusivePrice = book ? book.price * (1 + taxRate / 100) : 0;
+  const taxInclusiveSalePrice = book?.sale_price ? book.sale_price * (1 + taxRate / 100) : null;
 
   useEffect(() => {
     async function loadBook() {
@@ -95,7 +101,9 @@ export default function BookDetail() {
       price: book.price,
       image: book.image_url || book.metadata?.image_url,
       category: book.category?.name || 'General',
-      type: book.type || 'physical'
+      type: book.type || 'physical',
+      weight: book.weight,
+      volume: book.volume
     });
     toast.success(`${book.title} added to cart!`);
   };
@@ -109,7 +117,9 @@ export default function BookDetail() {
       price: book.price,
       image: book.image_url || book.metadata?.image_url,
       category: book.category?.name || 'General',
-      type: book.type || 'physical'
+      type: book.type || 'physical',
+      weight: book.weight,
+      volume: book.volume
     });
     navigate('/checkout');
   };
@@ -188,9 +198,9 @@ export default function BookDetail() {
           </div>
 
           <div className="flex items-end gap-4">
-            <span className="text-5xl font-black text-primary">{formatPrice(book.price)}</span>
-            {book.sale_price && (
-              <span className="text-muted-foreground line-through text-xl mb-1.5">{formatPrice(book.sale_price)}</span>
+            <span className="text-5xl font-black text-primary">{formatPrice(taxInclusivePrice)}</span>
+            {taxInclusiveSalePrice && (
+              <span className="text-muted-foreground line-through text-xl mb-1.5">{formatPrice(taxInclusiveSalePrice)}</span>
             )}
             <span className="bg-green-500/10 text-green-500 px-4 py-1.5 rounded-xl text-sm font-black mb-1.5 border border-green-500/20">
               NEW COLLECTION

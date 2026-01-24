@@ -61,10 +61,16 @@ export async function createOrder(orderData: OrderData) {
 
   if (itemsError) throw itemsError;
 
-  return order;
+  // Filter VAT for customer
+  const { tax_amount, tax_rate, ...orderForCustomer } = order;
+  return orderForCustomer;
 }
 
 export async function getOrder(orderId: string) {
+  const { data: { user } } = await supabase.auth.getUser();
+  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user?.id).single();
+  const isAdmin = profile?.role === 'founder' || profile?.role === 'admin';
+
   const { data, error } = await supabase
     .from('orders')
     .select('*, order_items(*, products(*))')
@@ -72,5 +78,11 @@ export async function getOrder(orderId: string) {
     .single();
 
   if (error) throw error;
+
+  if (!isAdmin) {
+    const { tax_amount, tax_rate, ...dataForCustomer } = data;
+    return dataForCustomer;
+  }
+
   return data;
 }

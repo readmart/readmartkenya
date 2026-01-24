@@ -4,11 +4,11 @@ import {
   LayoutDashboard, Package, ShoppingCart, Users, 
   Settings, Image as ImageIcon, Truck, MessageSquare, 
   Users2, Calendar, FileText, Tag, Loader2, Plus, 
-  Search, Edit, Trash2, 
-  CheckCircle, XCircle, AlertCircle,
+  Search, Edit, Trash2, Mail, Eye,
+  CheckCircle, XCircle, AlertCircle, Sparkles,
   RefreshCw, Shield, Globe, Bell, DollarSign,
   TrendingUp, BarChart2, Briefcase, UserPlus,
-  Clock, MapPin
+  Clock, MapPin, FileUp
 } from 'lucide-react';
 import { 
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -26,7 +26,9 @@ import {
   getCMSContent, updateCMSContent, createCMSContent,
   sendAbandonedCartReminders, updateRecord, createRecord
 } from '@/api/dashboards';
-import { uploadSiteAsset, uploadProductImage } from '@/api/storage';
+import { uploadSiteAsset, uploadProductImage, uploadEbookFile, uploadAgreementFile } from '@/api/storage';
+import { getEventRSVPs } from '@/api/community';
+import { getNewsletterSubscriptions, updateNewsletterStatus } from '@/api/newsletter';
 
 // Tabs definition
 const TABS = [
@@ -37,12 +39,15 @@ const TABS = [
   { id: 'settings', label: 'Global Logic', icon: Settings },
   { id: 'identity', label: 'Identity', icon: Globe },
   { id: 'banners', label: 'Banners', icon: ImageIcon },
-  { id: 'shipping', label: 'Shipping', icon: Truck },
+  { id: 'author_of_day', label: 'Author of the Day', icon: Sparkles },
+  { id: 'shipping', label: 'Shipping Methods', icon: Truck },
+  { id: 'areas', label: 'City/Area Management', icon: MapPin },
   { id: 'inquiries', label: 'Inquiries', icon: MessageSquare },
   { id: 'clubs', label: 'Clubs', icon: Users2 },
   { id: 'events', label: 'Events', icon: Calendar },
   { id: 'agreements', label: 'Agreements', icon: FileText },
   { id: 'promos', label: 'Promos', icon: Tag },
+  { id: 'newsletter', label: 'Newsletter', icon: Mail },
 ];
 
 export default function FounderDashboard() {
@@ -62,7 +67,8 @@ export default function FounderDashboard() {
     categories: [],
     shippingZones: [],
     promos: [],
-    cmsContent: []
+    cmsContent: [],
+    newsletterSubscriptions: []
   });
 
   // Fetch all required data
@@ -80,6 +86,7 @@ export default function FounderDashboard() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'contact_messages' }, () => fetchAllData())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'author_applications' }, () => fetchAllData())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'partnership_applications' }, () => fetchAllData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'newsletter_subscriptions' }, () => fetchAllData())
       .subscribe();
 
     return () => {
@@ -103,14 +110,15 @@ export default function FounderDashboard() {
         getCategories(),
         getShippingZones(),
         getPromos(),
-        getCMSContent()
+        getCMSContent(),
+        getNewsletterSubscriptions()
       ]);
 
       const [
         analytics, inventory, orders, users, 
         settings, inquiries, partnerships, 
         authors, approvedAuthors, categories, shippingZones, promos,
-        cmsContent
+        cmsContent, newsletterSubscriptions
       ] = results.map(res => res.status === 'fulfilled' ? res.value : null);
 
       setData({ 
@@ -126,7 +134,8 @@ export default function FounderDashboard() {
         categories: categories || [],
         shippingZones: shippingZones || [],
         promos: promos || [],
-        cmsContent: cmsContent || []
+        cmsContent: cmsContent || [],
+        newsletterSubscriptions: newsletterSubscriptions || []
       });
 
       if (results.some(res => res.status === 'rejected')) {
@@ -230,7 +239,22 @@ export default function FounderDashboard() {
             {activeTab === 'settings' && <SettingsView settings={data.settings} onUpdate={fetchAllData} />}
             {activeTab === 'identity' && <IdentityView settings={data.settings} onUpdate={fetchAllData} />}
             {activeTab === 'banners' && <BannersView settings={data.settings} cmsContent={data.cmsContent} onUpdate={fetchAllData} />}
+            {activeTab === 'author_of_day' && (
+              <AuthorOfDayView 
+                settings={data.settings} 
+                authors={data.approvedAuthors}
+                inventory={data.inventory}
+                onUpdate={fetchAllData} 
+              />
+            )}
             {activeTab === 'shipping' && <ShippingView data={data.shippingZones} onUpdate={fetchAllData} />}
+            {activeTab === 'areas' && (
+              <AreasView 
+                data={data.shippingZones} 
+                onUpdate={fetchAllData} 
+                formatPrice={formatPrice}
+              />
+            )}
             {activeTab === 'inquiries' && <InquiriesView data={data.inquiries} onUpdate={fetchAllData} />}
             {activeTab === 'clubs' && (
               <ClubsView 
@@ -246,9 +270,358 @@ export default function FounderDashboard() {
             )}
             {activeTab === 'agreements' && <AgreementsView partnerships={data.partnerships} authors={data.authors} onUpdate={fetchAllData} />}
             {activeTab === 'promos' && <PromosView data={data.promos} onUpdate={fetchAllData} />}
+            {activeTab === 'newsletter' && <NewsletterView data={data.newsletterSubscriptions} onUpdate={fetchAllData} />}
           </motion.div>
         </AnimatePresence>
       </main>
+    </div>
+  );
+}
+
+function AuthorOfDayView({ settings, authors, inventory, onUpdate }: any) {
+  const [selectedAuthorId, setSelectedAuthorId] = useState(settings.author_of_the_day_id || '');
+  const [isEnabled, setIsEnabled] = useState(settings.author_of_the_day_enabled || false);
+  const [selectedBooks, setSelectedBooks] = useState<string[]>(settings.author_of_the_day_books || []);
+  const [customImage, setCustomImage] = useState(settings.author_of_the_day_image || '');
+  const [isUploading, setIsUploading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+
+  // Filter books by selected author
+  const authorBooks = useMemo(() => {
+    if (!selectedAuthorId) return [];
+    return inventory.filter((book: any) => book.author_id === selectedAuthorId);
+  }, [selectedAuthorId, inventory]);
+
+  const handleAuthorChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setSelectedAuthorId(e.target.value);
+    setSelectedBooks([]); // Reset books when author changes
+  };
+
+  const handleBookToggle = (bookId: string) => {
+    if (selectedBooks.includes(bookId)) {
+      setSelectedBooks(selectedBooks.filter(id => id !== bookId));
+    } else {
+      if (selectedBooks.length >= 5) {
+        toast.error('Maximum 5 books can be selected');
+        return;
+      }
+      setSelectedBooks([...selectedBooks, bookId]);
+    }
+  };
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploading(true);
+    const loadingToast = toast.loading('Uploading author image...');
+
+    try {
+      const url = await uploadSiteAsset(file, 'author_of_day');
+      setCustomImage(url);
+      toast.success('Image uploaded successfully', { id: loadingToast });
+    } catch (error) {
+      console.error('Upload failed:', error);
+      toast.error('Failed to upload image', { id: loadingToast });
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleSave = async () => {
+    if (isEnabled && !selectedAuthorId) {
+      toast.error('Please select an author');
+      return;
+    }
+
+    setIsSaving(true);
+    const loadingToast = toast.loading('Saving configuration...');
+
+    try {
+      await updateSiteSettings({
+        author_of_the_day_id: selectedAuthorId || null,
+        author_of_the_day_enabled: isEnabled,
+        author_of_the_day_books: selectedBooks,
+        author_of_the_day_image: customImage
+      });
+      toast.success('Author of the Day updated', { id: loadingToast });
+      onUpdate();
+    } catch (error) {
+      console.error('Save failed:', error);
+      toast.error('Failed to save configuration', { id: loadingToast });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <div className="space-y-8">
+      <div>
+        <h1 className="text-4xl font-black tracking-tighter uppercase mb-2">Author of the Day</h1>
+        <p className="text-slate-500 font-medium">Spotlight a featured author on the homepage</p>
+      </div>
+
+      <div className="grid lg:grid-cols-2 gap-8">
+        {/* Configuration Panel */}
+        <div className="space-y-6">
+          <div className="bg-white p-8 rounded-[40px] border border-slate-100 shadow-sm space-y-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-bold">Enable Feature</h3>
+                <p className="text-sm text-slate-500">Show this section on the homepage</p>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input 
+                  type="checkbox" 
+                  checked={isEnabled}
+                  onChange={(e) => setIsEnabled(e.target.checked)}
+                  className="sr-only peer" 
+                />
+                <div className="w-14 h-7 bg-slate-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary/20 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[4px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-primary"></div>
+              </label>
+            </div>
+
+            <div className="space-y-4">
+              <label className="block text-sm font-bold text-slate-700">Select Author</label>
+              <select 
+                value={selectedAuthorId}
+                onChange={handleAuthorChange}
+                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-primary/20 font-bold transition-all text-sm"
+              >
+                <option value="">-- Choose an Author --</option>
+                {authors.map((author: any) => (
+                  <option key={author.id} value={author.id}>{author.full_name} ({author.email})</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="space-y-4">
+              <label className="block text-sm font-bold text-slate-700">Custom Feature Image (Optional)</label>
+              <div className="flex items-center gap-4">
+                {customImage && (
+                  <div className="w-20 h-20 rounded-xl overflow-hidden border border-slate-200">
+                    <img src={customImage} alt="Feature" className="w-full h-full object-cover" />
+                  </div>
+                )}
+                <label className="flex-1 cursor-pointer group">
+                  <div className="flex items-center justify-center gap-2 w-full h-20 border-2 border-dashed border-slate-200 rounded-xl text-slate-400 group-hover:border-primary/50 group-hover:text-primary transition-all">
+                    {isUploading ? <Loader2 className="w-5 h-5 animate-spin" /> : <ImageIcon className="w-5 h-5" />}
+                    <span className="text-sm font-bold">{isUploading ? 'Uploading...' : 'Upload Image'}</span>
+                  </div>
+                  <input type="file" className="hidden" accept="image/*" onChange={handleImageUpload} disabled={isUploading} />
+                </label>
+              </div>
+              <p className="text-xs text-slate-400">Recommended size: 1200x800px. If not provided, the author's profile picture will be used.</p>
+            </div>
+
+            <button 
+              onClick={handleSave}
+              disabled={isSaving}
+              className="w-full bg-slate-900 text-white py-4 rounded-xl font-bold hover:bg-slate-800 transition-all shadow-lg flex items-center justify-center gap-2"
+            >
+              {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+              Save Configuration
+            </button>
+          </div>
+        </div>
+
+        {/* Book Selection Panel */}
+        <div className="bg-white p-8 rounded-[40px] border border-slate-100 shadow-sm h-fit">
+          <div className="mb-6">
+            <h3 className="text-lg font-bold">Select Books to Feature</h3>
+            <p className="text-sm text-slate-500">Choose 3-5 representative books ({selectedBooks.length} selected)</p>
+          </div>
+
+          {!selectedAuthorId ? (
+            <div className="text-center py-12 text-slate-400 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+              <Users className="w-8 h-8 mx-auto mb-2 opacity-50" />
+              <p>Please select an author first</p>
+            </div>
+          ) : authorBooks.length === 0 ? (
+            <div className="text-center py-12 text-slate-400 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+              <Package className="w-8 h-8 mx-auto mb-2 opacity-50" />
+              <p>No books found for this author</p>
+            </div>
+          ) : (
+            <div className="space-y-2 max-h-[500px] overflow-y-auto custom-scrollbar pr-2">
+              {authorBooks.map((book: any) => (
+                <div 
+                  key={book.id}
+                  onClick={() => handleBookToggle(book.id)}
+                  className={`flex items-center gap-4 p-3 rounded-xl border cursor-pointer transition-all ${
+                    selectedBooks.includes(book.id)
+                      ? 'bg-primary/5 border-primary shadow-sm'
+                      : 'bg-white border-slate-100 hover:bg-slate-50'
+                  }`}
+                >
+                  <div className={`w-5 h-5 rounded-full border flex items-center justify-center transition-all ${
+                    selectedBooks.includes(book.id)
+                      ? 'bg-primary border-primary text-white'
+                      : 'border-slate-300'
+                  }`}>
+                    {selectedBooks.includes(book.id) && <CheckCircle className="w-3 h-3" />}
+                  </div>
+                  <div className="w-10 h-14 bg-slate-100 rounded overflow-hidden flex-shrink-0">
+                    {book.image_url ? (
+                      <img src={book.image_url} alt={book.title} className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-slate-300">
+                        <ImageIcon className="w-4 h-4" />
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h4 className="font-bold text-sm truncate text-slate-900">{book.title}</h4>
+                    <p className="text-xs text-slate-500 truncate">{book.category?.name || 'Uncategorized'}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function NewsletterView({ data, onUpdate }: any) {
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+
+  const filteredData = useMemo(() => {
+    return data.filter((sub: any) => {
+      const matchesSearch = sub.email?.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesStatus = statusFilter === 'all' || sub.status === statusFilter;
+      return matchesSearch && matchesStatus;
+    });
+  }, [data, searchTerm, statusFilter]);
+
+  const handleToggleStatus = async (id: string, currentStatus: string) => {
+    const newStatus = currentStatus === 'active' ? 'unsubscribed' : 'active';
+    const loadingToast = toast.loading(`Updating subscription status...`);
+    try {
+      await updateNewsletterStatus(id, newStatus);
+      toast.success(`Subscription ${newStatus === 'active' ? 'activated' : 'deactivated'}`, { id: loadingToast });
+      onUpdate();
+    } catch (error) {
+      toast.error('Failed to update status', { id: loadingToast });
+    }
+  };
+
+  const handleExportEmails = () => {
+    const activeEmails = data
+      .filter((sub: any) => sub.status === 'active')
+      .map((sub: any) => sub.email)
+      .join('\n');
+    
+    const blob = new Blob([activeEmails], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `newsletter_subscribers_${new Date().toISOString().split('T')[0]}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast.success('Active email list exported');
+  };
+
+  return (
+    <div className="space-y-8">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
+        <div>
+          <h1 className="text-4xl font-black tracking-tighter uppercase mb-2">Newsletter Management</h1>
+          <p className="text-slate-500 font-medium">Subscription stream and audience engagement</p>
+        </div>
+        
+        <div className="flex flex-wrap gap-4 w-full md:w-auto">
+          <button 
+            onClick={handleExportEmails}
+            className="bg-slate-900 text-white px-6 py-3 rounded-xl font-bold text-sm hover:bg-slate-800 transition-all flex items-center gap-2 shadow-lg"
+          >
+            <FileText className="w-4 h-4" />
+            Export Active Emails
+          </button>
+          <div className="relative flex-1 md:w-64">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <input 
+              type="text" 
+              placeholder="Search by email..." 
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-10 pr-4 py-3 bg-white border border-slate-100 rounded-xl outline-none focus:ring-2 focus:ring-primary/20 font-bold transition-all text-sm"
+            />
+          </div>
+          <select 
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="px-4 py-3 bg-white border border-slate-100 rounded-xl outline-none focus:ring-2 focus:ring-primary/20 font-bold transition-all text-sm"
+          >
+            <option value="all">All Status</option>
+            <option value="active">Active</option>
+            <option value="unsubscribed">Unsubscribed</option>
+          </select>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-[40px] border border-slate-100 shadow-sm overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse">
+            <thead>
+              <tr className="bg-slate-50/50">
+                <th className="px-8 py-6 text-left text-[10px] font-black uppercase tracking-widest text-slate-400">Subscriber Email</th>
+                <th className="px-8 py-6 text-left text-[10px] font-black uppercase tracking-widest text-slate-400">Join Date</th>
+                <th className="px-8 py-6 text-left text-[10px] font-black uppercase tracking-widest text-slate-400">Status</th>
+                <th className="px-8 py-6 text-right text-[10px] font-black uppercase tracking-widest text-slate-400">Operations</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-50">
+              {filteredData.map((sub: any) => (
+                <tr key={sub.id} className="hover:bg-slate-50/30 transition-all group">
+                  <td className="px-8 py-6">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 bg-slate-100 rounded-full flex items-center justify-center text-slate-400 group-hover:bg-primary/10 group-hover:text-primary transition-all">
+                        <Mail className="w-4 h-4" />
+                      </div>
+                      <span className="font-bold text-slate-900">{sub.email}</span>
+                    </div>
+                  </td>
+                  <td className="px-8 py-6 font-medium text-slate-500">
+                    {new Date(sub.created_at).toLocaleDateString()}
+                  </td>
+                  <td className="px-8 py-6">
+                    <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-tighter ${
+                      sub.status === 'active' ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'
+                    }`}>
+                      {sub.status}
+                    </span>
+                  </td>
+                  <td className="px-8 py-6 text-right">
+                    <button 
+                      onClick={() => handleToggleStatus(sub.id, sub.status)}
+                      className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${
+                        sub.status === 'active' 
+                          ? 'bg-red-50 text-red-600 hover:bg-red-500 hover:text-white' 
+                          : 'bg-green-50 text-green-600 hover:bg-green-500 hover:text-white'
+                      }`}
+                    >
+                      {sub.status === 'active' ? 'Unsubscribe' : 'Activate'}
+                    </button>
+                  </td>
+                </tr>
+              ))}
+              {filteredData.length === 0 && (
+                <tr>
+                  <td colSpan={4} className="px-8 py-20 text-center">
+                    <Mail className="w-12 h-12 text-slate-200 mx-auto mb-4" />
+                    <p className="font-black uppercase tracking-widest text-slate-400">No subscribers found</p>
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   );
 }
@@ -404,6 +777,8 @@ function InventoryView({ data, categories, approvedAuthors, onUpdate }: any) {
     image_url: '',
     description: '',
     type: 'physical',
+    weight: '0.5',
+    volume: '0.001',
     is_ebook: false,
     ebook_url: '',
     is_active: true,
@@ -433,6 +808,8 @@ function InventoryView({ data, categories, approvedAuthors, onUpdate }: any) {
       image_url: item.image_url || '',
       description: item.description || '',
       type: item.type || 'physical',
+      weight: (item.weight || 0.5).toString(),
+      volume: (item.volume || 0.001).toString(),
       is_ebook: item.type === 'ebook',
       ebook_url: ebookUrl,
       is_active: item.is_active ?? true,
@@ -454,6 +831,8 @@ function InventoryView({ data, categories, approvedAuthors, onUpdate }: any) {
       image_url: '',
       description: '',
       type: 'physical',
+      weight: '0.5',
+      volume: '0.001',
       is_ebook: false,
       ebook_url: '',
       is_active: true,
@@ -476,6 +855,27 @@ function InventoryView({ data, categories, approvedAuthors, onUpdate }: any) {
     }
   };
 
+  const handleEbookUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.type !== 'application/pdf') {
+      toast.error('Please upload a PDF file for the e-book');
+      return;
+    }
+
+    const loadingToast = toast.loading('Uploading secure digital asset...');
+    try {
+      // Use a temporary identifier if we're creating a new product
+      const identifier = editingItem?.id || `temp_${Date.now()}`;
+      const path = await uploadEbookFile(file, identifier);
+      setFormData({ ...formData, ebook_url: path });
+      toast.success('Digital asset synchronized', { id: loadingToast });
+    } catch (error: any) {
+      toast.error(error.message || 'Upload failed', { id: loadingToast });
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const loadingToast = toast.loading(editingItem ? 'Updating Asset...' : 'Registering Asset...');
@@ -485,6 +885,10 @@ function InventoryView({ data, categories, approvedAuthors, onUpdate }: any) {
         price: parseFloat(formData.price) || 0,
         sale_price: formData.sale_price ? parseFloat(formData.sale_price) : null,
         stock_quantity: parseInt(formData.stock_quantity) || 0,
+        category_id: formData.category_id || null,
+        author_id: formData.author_id || null,
+        weight: parseFloat(formData.weight) || 0.5,
+        volume: parseFloat(formData.volume) || 0.001,
         is_ebook: formData.type === 'ebook',
         ebook_metadata: formData.type === 'ebook' ? {
           file_path: formData.ebook_url,
@@ -733,6 +1137,31 @@ function InventoryView({ data, categories, approvedAuthors, onUpdate }: any) {
                       </div>
                     </div>
 
+                    {formData.type === 'physical' && (
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Weight (KG)</label>
+                          <input 
+                            type="number" 
+                            step="0.001"
+                            value={formData.weight}
+                            onChange={(e) => setFormData({...formData, weight: e.target.value})}
+                            className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-2 focus:ring-primary/20 font-bold" 
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Volume (m³)</label>
+                          <input 
+                            type="number" 
+                            step="0.000001"
+                            value={formData.volume}
+                            onChange={(e) => setFormData({...formData, volume: e.target.value})}
+                            className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-2 focus:ring-primary/20 font-bold" 
+                          />
+                        </div>
+                      </div>
+                    )}
+
                     {formData.type === 'ebook' && (
                       <motion.div 
                         initial={{ opacity: 0, y: -10 }}
@@ -740,15 +1169,33 @@ function InventoryView({ data, categories, approvedAuthors, onUpdate }: any) {
                         className="p-6 bg-purple-50 rounded-3xl border-2 border-purple-100 space-y-4"
                       >
                         <h4 className="text-[10px] font-black uppercase tracking-widest text-purple-400">Digital Distribution Protocol</h4>
-                        <div>
-                          <label className="block text-[10px] font-black uppercase tracking-widest text-purple-300 mb-2">E-Book Secure URL</label>
-                          <input 
-                            type="text" 
-                            placeholder="https://storage.readmartke.com/ebooks/..."
-                            value={formData.ebook_url}
-                            onChange={(e) => setFormData({...formData, ebook_url: e.target.value})}
-                            className="w-full px-6 py-4 bg-white rounded-2xl border-none outline-none focus:ring-2 focus:ring-purple-200 font-bold text-purple-900" 
-                          />
+                        <div className="space-y-4">
+                          <div>
+                            <label className="block text-[10px] font-black uppercase tracking-widest text-purple-300 mb-2">E-Book Secure Path / URL</label>
+                            <div className="flex gap-2">
+                              <input 
+                                type="text" 
+                                placeholder="Path in ebooks bucket..."
+                                value={formData.ebook_url}
+                                onChange={(e) => setFormData({...formData, ebook_url: e.target.value})}
+                                className="flex-1 px-6 py-4 bg-white rounded-2xl border-none outline-none focus:ring-2 focus:ring-purple-200 font-bold text-purple-900" 
+                              />
+                              <label className="cursor-pointer bg-purple-500 text-white p-4 rounded-2xl hover:bg-purple-600 transition-all shadow-lg shadow-purple-200">
+                                <FileUp className="w-6 h-6" />
+                                <input 
+                                  type="file" 
+                                  accept=".pdf" 
+                                  onChange={handleEbookUpload} 
+                                  className="hidden" 
+                                />
+                              </label>
+                            </div>
+                            {formData.ebook_url && (
+                              <p className="mt-2 text-[10px] font-bold text-purple-400 truncate">
+                                Current path: {formData.ebook_url}
+                              </p>
+                            )}
+                          </div>
                         </div>
                       </motion.div>
                     )}
@@ -1034,21 +1481,35 @@ function OrdersView({ data, formatPrice, onUpdate }: any) {
                   </div>
                 </div>
 
-                <div className="pt-6 border-t border-slate-100 flex justify-between items-end">
-                  <div>
-                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Total Valuation</p>
-                    <h3 className="text-3xl font-black text-primary">{formatPrice(selectedOrder.total_amount)}</h3>
+                <div className="pt-6 border-t border-slate-100 space-y-4">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-slate-400 font-bold uppercase tracking-widest text-[10px]">Subtotal (Excl. VAT)</span>
+                    <span className="font-bold text-slate-600">{formatPrice(selectedOrder.subtotal_amount)}</span>
                   </div>
-                  <button 
-                    onClick={() => {
-                      const status = selectedOrder.status === 'pending' ? 'processing' : 'completed';
-                      handleUpdateStatus(selectedOrder.id, status);
-                      setSelectedOrder(null);
-                    }}
-                    className="bg-slate-900 text-white px-8 py-4 rounded-2xl font-black uppercase tracking-tighter hover:opacity-90 transition-all"
-                  >
-                    Transition to {selectedOrder.status === 'pending' ? 'Processing' : 'Completed'}
-                  </button>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-slate-400 font-bold uppercase tracking-widest text-[10px]">Shipping Fee</span>
+                    <span className="font-bold text-slate-600">{formatPrice(selectedOrder.shipping_amount)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-slate-400 font-bold uppercase tracking-widest text-[10px]">VAT (Computed)</span>
+                    <span className="font-bold text-slate-600">{formatPrice(selectedOrder.tax_amount)}</span>
+                  </div>
+                  <div className="pt-4 border-t border-slate-100 flex justify-between items-end">
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Total Valuation (Incl. VAT)</p>
+                      <h3 className="text-3xl font-black text-primary">{formatPrice(selectedOrder.total_amount)}</h3>
+                    </div>
+                    <button 
+                      onClick={() => {
+                        const status = selectedOrder.status === 'pending' ? 'processing' : 'completed';
+                        handleUpdateStatus(selectedOrder.id, status);
+                        setSelectedOrder(null);
+                      }}
+                      className="bg-slate-900 text-white px-8 py-4 rounded-2xl font-black uppercase tracking-tighter hover:opacity-90 transition-all"
+                    >
+                      Transition to {selectedOrder.status === 'pending' ? 'Processing' : 'Completed'}
+                    </button>
+                  </div>
                 </div>
               </div>
             </motion.div>
@@ -1516,6 +1977,26 @@ function IdentityView({ settings, onUpdate }: any) {
                 placeholder="https://linkedin.com/..."
               />
             </div>
+            <div>
+              <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">YouTube Channel</label>
+              <input 
+                type="text" 
+                value={formData.youtube_url}
+                onChange={(e) => setFormData({...formData, youtube_url: e.target.value})}
+                className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-2 focus:ring-primary/20 font-bold transition-all" 
+                placeholder="https://youtube.com/@..."
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Threads Pulse</label>
+              <input 
+                type="text" 
+                value={formData.threads_url}
+                onChange={(e) => setFormData({...formData, threads_url: e.target.value})}
+                className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-2 focus:ring-primary/20 font-bold transition-all" 
+                placeholder="https://threads.net/@..."
+              />
+            </div>
             <button 
               type="submit"
               className="w-full bg-slate-900 text-white py-6 rounded-[32px] font-black uppercase tracking-widest shadow-2xl shadow-slate-900/30 hover:scale-[1.02] active:scale-[0.98] transition-all mt-6"
@@ -1887,12 +2368,18 @@ function ShippingView({ data, onUpdate }: any) {
     name: '',
     price: '',
     estimated_days: '3',
+    country_code: 'KE',
+    region: '',
+    postal_codes: '',
+    shipping_method: 'Standard',
     is_active: true
   });
 
   const filteredZones = useMemo(() => {
     return data.filter((zone: any) => 
-      zone.name?.toLowerCase().includes(searchTerm.toLowerCase())
+      zone.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      zone.region?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      zone.country_code?.toLowerCase().includes(searchTerm.toLowerCase())
     );
   }, [data, searchTerm]);
 
@@ -1900,8 +2387,12 @@ function ShippingView({ data, onUpdate }: any) {
     setEditingZone(zone);
     setFormData({
       name: zone.name,
-      price: zone.price.toString(),
-      estimated_days: zone.estimated_days.toString(),
+      price: (zone.price ?? zone.rate ?? zone.base_rate ?? 0).toString(),
+      estimated_days: (zone.estimated_days ?? 3).toString(),
+      country_code: zone.country_code || 'KE',
+      region: zone.region || '',
+      postal_codes: zone.postal_codes || '',
+      shipping_method: zone.shipping_method || 'Standard',
       is_active: zone.is_active ?? true
     });
     setIsModalOpen(true);
@@ -1913,6 +2404,10 @@ function ShippingView({ data, onUpdate }: any) {
       name: '',
       price: '',
       estimated_days: '3',
+      country_code: 'KE',
+      region: '',
+      postal_codes: '',
+      shipping_method: 'Standard',
       is_active: true
     });
     setIsModalOpen(true);
@@ -1922,10 +2417,20 @@ function ShippingView({ data, onUpdate }: any) {
     e.preventDefault();
     const loadingToast = toast.loading(editingZone ? 'Updating Region...' : 'Registering Region...');
     try {
+      const numericPrice = parseFloat(formData.price) || 0;
+      const numericDays = parseInt(formData.estimated_days) || 3;
+
+      // The database schema has been unified to use 'price' and 'estimated_days'
+      // Sending 'rate' or 'base_rate' will cause failures if those columns were renamed.
       const payload = {
-        ...formData,
-        price: parseFloat(formData.price),
-        estimated_days: parseInt(formData.estimated_days)
+        name: formData.name,
+        price: numericPrice,
+        estimated_days: numericDays,
+        country_code: formData.country_code,
+        region: formData.region,
+        postal_codes: formData.postal_codes,
+        shipping_method: formData.shipping_method,
+        is_active: formData.is_active
       };
 
       if (editingZone) {
@@ -1937,8 +2442,13 @@ function ShippingView({ data, onUpdate }: any) {
       }
       setIsModalOpen(false);
       onUpdate();
-    } catch (error) {
-      toast.error('Operation failed', { id: loadingToast });
+    } catch (error: any) {
+      console.error('Shipping operation failed:', error);
+      // Provide more specific feedback if it's a duplicate key error
+      const message = error.message?.includes('duplicate key') 
+        ? 'A region with this name already exists' 
+        : (error.message || 'Operation failed');
+      toast.error(message, { id: loadingToast });
     }
   };
 
@@ -1988,7 +2498,8 @@ function ShippingView({ data, onUpdate }: any) {
           <table className="w-full border-collapse">
             <thead>
               <tr className="bg-slate-50/50">
-                <th className="px-8 py-6 text-left text-[10px] font-black uppercase tracking-widest text-slate-400">Region Name</th>
+                <th className="px-8 py-6 text-left text-[10px] font-black uppercase tracking-widest text-slate-400">Region/Town</th>
+                <th className="px-8 py-6 text-left text-[10px] font-black uppercase tracking-widest text-slate-400">Country/Region</th>
                 <th className="px-8 py-6 text-left text-[10px] font-black uppercase tracking-widest text-slate-400">Logistics Fee</th>
                 <th className="px-8 py-6 text-left text-[10px] font-black uppercase tracking-widest text-slate-400">ETA</th>
                 <th className="px-8 py-6 text-left text-[10px] font-black uppercase tracking-widest text-slate-400">Status</th>
@@ -1998,9 +2509,18 @@ function ShippingView({ data, onUpdate }: any) {
             <tbody className="divide-y divide-slate-50">
               {filteredZones.map((zone: any) => (
                 <tr key={zone.id} className="hover:bg-slate-50/30 transition-all group">
-                  <td className="px-8 py-6 font-black text-slate-900">{zone.name}</td>
-                  <td className="px-8 py-6 font-black text-primary">KES {zone.price}</td>
-                  <td className="px-8 py-6 font-bold text-slate-500">{zone.estimated_days} Days</td>
+                  <td className="px-8 py-6">
+                    <p className="font-black text-slate-900 uppercase tracking-tighter">{zone.name}</p>
+                    {zone.postal_codes && <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Codes: {zone.postal_codes}</p>}
+                  </td>
+                  <td className="px-8 py-6">
+                    <div className="flex flex-col">
+                      <span className="font-black text-slate-700 text-xs uppercase tracking-tighter">{zone.country_code || 'KE'}</span>
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{zone.region || 'Standard'}</span>
+                    </div>
+                  </td>
+                  <td className="px-8 py-6 font-black text-primary">KES {zone.price || zone.rate || zone.base_rate || 0}</td>
+                  <td className="px-8 py-6 font-bold text-slate-500">{zone.estimated_days || 3} Days</td>
                   <td className="px-8 py-6">
                     <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-tighter ${
                       zone.is_active ? 'bg-green-100 text-green-600' : 'bg-slate-100 text-slate-400'
@@ -2053,7 +2573,7 @@ function ShippingView({ data, onUpdate }: any) {
               initial={{ scale: 0.9, opacity: 0, y: 20 }}
               animate={{ scale: 1, opacity: 1, y: 0 }}
               exit={{ scale: 0.9, opacity: 0, y: 20 }}
-              className="relative bg-white w-full max-w-lg rounded-[40px] shadow-2xl overflow-hidden"
+              className="relative bg-white w-full max-w-2xl rounded-[40px] shadow-2xl overflow-hidden max-h-[90vh] flex flex-col"
             >
               <div className="p-8 border-b border-slate-50 flex justify-between items-center bg-slate-50/50">
                 <div>
@@ -2065,20 +2585,69 @@ function ShippingView({ data, onUpdate }: any) {
                 </button>
               </div>
 
-              <form onSubmit={handleSubmit} className="p-10 space-y-6">
-                <div>
-                  <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Region/Town Name</label>
-                  <input 
-                    required
-                    type="text" 
-                    value={formData.name}
-                    onChange={(e) => setFormData({...formData, name: e.target.value})}
-                    placeholder="e.g. Nairobi CBD, Mombasa, Kisumu"
-                    className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-2 focus:ring-primary/20 font-bold" 
-                  />
-                </div>
-                
-                <div className="grid grid-cols-2 gap-4">
+              <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-10 space-y-8 custom-scrollbar">
+                <div className="grid grid-cols-2 gap-6">
+                  <div className="col-span-2">
+                    <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Region/Town Name</label>
+                    <input 
+                      required
+                      type="text" 
+                      value={formData.name}
+                      onChange={(e) => setFormData({...formData, name: e.target.value})}
+                      placeholder="e.g. Nairobi CBD, Mombasa, Kisumu"
+                      className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-2 focus:ring-primary/20 font-bold" 
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Country Code</label>
+                    <input 
+                      required
+                      type="text" 
+                      value={formData.country_code}
+                      onChange={(e) => setFormData({...formData, country_code: e.target.value.toUpperCase()})}
+                      placeholder="KE"
+                      maxLength={2}
+                      className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-2 focus:ring-primary/20 font-bold" 
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Region/Province</label>
+                    <input 
+                      type="text" 
+                      value={formData.region}
+                      onChange={(e) => setFormData({...formData, region: e.target.value})}
+                      placeholder="e.g. Nairobi, Coast, Rift Valley"
+                      className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-2 focus:ring-primary/20 font-bold" 
+                    />
+                  </div>
+
+                  <div className="col-span-2">
+                    <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Postal Codes (Comma separated)</label>
+                    <input 
+                      type="text" 
+                      value={formData.postal_codes}
+                      onChange={(e) => setFormData({...formData, postal_codes: e.target.value})}
+                      placeholder="e.g. 00100, 00200 or 80100-80105"
+                      className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-2 focus:ring-primary/20 font-bold" 
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Shipping Method</label>
+                    <select 
+                      value={formData.shipping_method}
+                      onChange={(e) => setFormData({...formData, shipping_method: e.target.value})}
+                      className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-2 focus:ring-primary/20 font-bold"
+                    >
+                      <option value="Standard">Standard Delivery</option>
+                      <option value="Express">Express Delivery</option>
+                      <option value="Pickup">Station Pickup</option>
+                      <option value="Global">International</option>
+                    </select>
+                  </div>
+
                   <div>
                     <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Delivery Fee (KES)</label>
                     <input 
@@ -2090,6 +2659,7 @@ function ShippingView({ data, onUpdate }: any) {
                       className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-2 focus:ring-primary/20 font-bold" 
                     />
                   </div>
+
                   <div>
                     <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Estimated Days</label>
                     <input 
@@ -2101,32 +2671,486 @@ function ShippingView({ data, onUpdate }: any) {
                       className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-2 focus:ring-primary/20 font-bold" 
                     />
                   </div>
-                </div>
 
-                <div>
-                  <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Regional Status</label>
-                  <button
-                    type="button"
-                    onClick={() => setFormData({ ...formData, is_active: !formData.is_active })}
-                    className={`w-full flex items-center justify-between px-6 py-4 rounded-2xl font-bold transition-all ${
-                      formData.is_active 
-                        ? 'bg-green-50 text-green-600 border-2 border-green-100' 
-                        : 'bg-slate-50 text-slate-400 border-2 border-slate-100'
-                    }`}
-                  >
-                    <span className="uppercase tracking-widest text-[10px]">Region is {formData.is_active ? 'Active' : 'Inactive'}</span>
-                    <div className={`w-10 h-5 rounded-full relative transition-all ${formData.is_active ? 'bg-green-500' : 'bg-slate-300'}`}>
-                      <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${formData.is_active ? 'left-6' : 'left-1'}`} />
-                    </div>
-                  </button>
+                  <div>
+                    <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Regional Status</label>
+                    <button
+                      type="button"
+                      onClick={() => setFormData({ ...formData, is_active: !formData.is_active })}
+                      className={`w-full flex items-center justify-between px-6 py-4 rounded-2xl font-bold transition-all ${
+                        formData.is_active 
+                          ? 'bg-green-50 text-green-600 border-2 border-green-100' 
+                          : 'bg-slate-50 text-slate-400 border-2 border-slate-100'
+                      }`}
+                    >
+                      <span className="uppercase tracking-widest text-[10px]">{formData.is_active ? 'Active' : 'Inactive'}</span>
+                      <div className={`w-10 h-5 rounded-full relative transition-all ${formData.is_active ? 'bg-green-500' : 'bg-slate-300'}`}>
+                        <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${formData.is_active ? 'left-6' : 'left-1'}`} />
+                      </div>
+                    </button>
+                  </div>
                 </div>
 
                 <button 
                   type="submit"
-                  className="w-full bg-primary text-white py-6 rounded-[32px] font-black uppercase tracking-widest shadow-2xl shadow-primary/30 hover:scale-[1.02] active:scale-[0.98] transition-all"
+                  className="w-full bg-primary text-white py-6 rounded-[32px] font-black uppercase tracking-widest shadow-2xl shadow-primary/30 hover:scale-[1.02] active:scale-[0.98] transition-all mt-4"
                 >
                   {editingZone ? 'Commit Changes' : 'Register Region'}
                 </button>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+function AreasView({ data, onUpdate, formatPrice }: any) {
+  const [searchTerm, setSearchTerm] = useState('');
+  const [countyFilter, setCountyFilter] = useState('all');
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingArea, setEditingArea] = useState<any>(null);
+  const [formData, setFormData] = useState({
+    name: '',
+    price: '',
+    weight_surcharge: '0',
+    volume_surcharge: '0',
+    estimated_days: '3',
+    country_code: 'KE',
+    region: '',
+    county: '',
+    postal_codes: '',
+    shipping_method: 'Standard',
+    valid_from: new Date().toISOString().split('T')[0],
+    valid_until: '',
+    is_active: true
+  });
+
+  const counties = useMemo(() => {
+    const uniqueCounties = new Set<string>();
+    data.forEach((item: any) => {
+      if (item.county) uniqueCounties.add(item.county);
+    });
+    return Array.from(uniqueCounties).sort();
+  }, [data]);
+
+  const filteredData = useMemo(() => {
+    return data.filter((area: any) => {
+      const matchesSearch = 
+        area.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        area.postal_codes?.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesCounty = countyFilter === 'all' || area.county === countyFilter;
+      return matchesSearch && matchesCounty;
+    });
+  }, [data, searchTerm, countyFilter]);
+
+  const handleAddNew = () => {
+    setEditingArea(null);
+    setFormData({
+      name: '',
+      price: '',
+      weight_surcharge: '0',
+      volume_surcharge: '0',
+      estimated_days: '3',
+      country_code: 'KE',
+      region: '',
+      county: '',
+      postal_codes: '',
+      shipping_method: 'Standard',
+      valid_from: new Date().toISOString().split('T')[0],
+      valid_until: '',
+      is_active: true
+    });
+    setIsModalOpen(true);
+  };
+
+  const handleEdit = (area: any) => {
+    setEditingArea(area);
+    setFormData({
+      name: area.name,
+      price: (area.price || 0).toString(),
+      weight_surcharge: (area.weight_surcharge || 0).toString(),
+      volume_surcharge: (area.volume_surcharge || 0).toString(),
+      estimated_days: (area.estimated_days || 3).toString(),
+      country_code: area.country_code || 'KE',
+      region: area.region || '',
+      county: area.county || '',
+      postal_codes: area.postal_codes || '',
+      shipping_method: area.shipping_method || 'Standard',
+      valid_from: area.valid_from ? new Date(area.valid_from).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+      valid_until: area.valid_until ? new Date(area.valid_until).toISOString().split('T')[0] : '',
+      is_active: area.is_active ?? true
+    });
+    setIsModalOpen(true);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const loadingToast = toast.loading(editingArea ? 'Updating area...' : 'Creating area...');
+    try {
+      const payload = {
+        ...formData,
+        price: parseFloat(formData.price),
+        weight_surcharge: parseFloat(formData.weight_surcharge),
+        volume_surcharge: parseFloat(formData.volume_surcharge),
+        estimated_days: parseInt(formData.estimated_days),
+        valid_from: formData.valid_from ? new Date(formData.valid_from).toISOString() : null,
+        valid_until: formData.valid_until ? new Date(formData.valid_until).toISOString() : null
+      };
+
+      if (editingArea) {
+        await updateRecord('shipping_zones', editingArea.id, payload);
+        toast.success('Area updated successfully', { id: loadingToast });
+      } else {
+        await createRecord('shipping_zones', payload);
+        toast.success('Area created successfully', { id: loadingToast });
+      }
+      setIsModalOpen(false);
+      onUpdate();
+    } catch (error) {
+      toast.error('Failed to save area', { id: loadingToast });
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this area?')) return;
+    const loadingToast = toast.loading('Deleting area...');
+    try {
+      await deleteRecord('shipping_zones', id);
+      toast.success('Area deleted', { id: loadingToast });
+      onUpdate();
+    } catch (error) {
+      toast.error('Failed to delete area', { id: loadingToast });
+    }
+  };
+
+  const handleExport = () => {
+    const headers = ['Name', 'Price', 'Weight Surcharge', 'Volume Surcharge', 'County', 'Postal Codes', 'Method'];
+    const csvContent = [
+      headers.join(','),
+      ...filteredData.map((area: any) => [
+        `"${area.name}"`,
+        area.price,
+        area.weight_surcharge,
+        area.volume_surcharge,
+        `"${area.county}"`,
+        `"${area.postal_codes}"`,
+        area.shipping_method
+      ].join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `shipping_areas_${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success('Data exported successfully');
+  };
+
+  const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      const text = event.target?.result as string;
+      const lines = text.split('\n').filter(line => line.trim());
+      const loadingToast = toast.loading(`Importing ${lines.length - 1} areas...`);
+      
+      try {
+        // Skip header
+        for (let i = 1; i < lines.length; i++) {
+          const cols = lines[i].split(',').map(c => c.replace(/^"|"$/g, '').trim());
+          if (cols.length >= 2) {
+            await createRecord('shipping_zones', {
+              name: cols[0],
+              price: parseFloat(cols[1]) || 0,
+              weight_surcharge: parseFloat(cols[2]) || 0,
+              volume_surcharge: parseFloat(cols[3]) || 0,
+              county: cols[4] || '',
+              postal_codes: cols[5] || '',
+              shipping_method: cols[6] || 'Standard',
+              country_code: 'KE',
+              is_active: true
+            });
+          }
+        }
+        toast.success('Import completed', { id: loadingToast });
+        onUpdate();
+      } catch (error) {
+        toast.error('Import failed partially', { id: loadingToast });
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  return (
+    <div className="space-y-8">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
+        <div>
+          <h1 className="text-4xl font-black tracking-tighter uppercase mb-2">City/Area Management</h1>
+          <p className="text-slate-500 font-medium">Manage Kenyan towns, counties and shipping surcharges</p>
+        </div>
+        
+        <div className="flex flex-wrap gap-4 w-full md:w-auto">
+          <label className="cursor-pointer bg-slate-900 text-white px-6 py-4 rounded-2xl font-black uppercase tracking-tighter flex items-center gap-2 hover:opacity-90 transition-all shadow-xl shadow-slate-900/10">
+            <FileUp className="w-5 h-5" />
+            Import CSV
+            <input type="file" accept=".csv" onChange={handleImport} className="hidden" />
+          </label>
+          <button 
+            onClick={handleExport}
+            className="bg-slate-100 text-slate-900 px-6 py-4 rounded-2xl font-black uppercase tracking-tighter flex items-center gap-2 hover:bg-slate-200 transition-all"
+          >
+            <FileText className="w-5 h-5" />
+            Export
+          </button>
+          <button 
+            onClick={handleAddNew}
+            className="bg-primary text-white px-8 py-4 rounded-2xl font-black uppercase tracking-tighter flex items-center gap-2 hover:opacity-90 transition-all shadow-xl shadow-primary/20"
+          >
+            <Plus className="w-5 h-5" />
+            Add New Area
+          </button>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-[40px] border border-slate-100 shadow-sm overflow-hidden">
+        <div className="p-8 border-b border-slate-50 flex flex-col md:flex-row gap-6">
+          <div className="relative flex-1">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+            <input 
+              type="text" 
+              placeholder="Search by town name or postal code..." 
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-12 pr-6 py-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-2 focus:ring-primary/20 font-bold transition-all"
+            />
+          </div>
+          <select 
+            value={countyFilter}
+            onChange={(e) => setCountyFilter(e.target.value)}
+            className="px-6 py-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-2 focus:ring-primary/20 font-bold transition-all min-w-[200px]"
+          >
+            <option value="all">All Counties</option>
+            {counties.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse">
+            <thead>
+              <tr className="bg-slate-50/50">
+                <th className="px-8 py-6 text-left text-[10px] font-black uppercase tracking-widest text-slate-400">Town / County</th>
+                <th className="px-8 py-6 text-left text-[10px] font-black uppercase tracking-widest text-slate-400">Base Price</th>
+                <th className="px-8 py-6 text-left text-[10px] font-black uppercase tracking-widest text-slate-400">Surcharges (W/V)</th>
+                <th className="px-8 py-6 text-left text-[10px] font-black uppercase tracking-widest text-slate-400">Validity</th>
+                <th className="px-8 py-6 text-left text-[10px] font-black uppercase tracking-widest text-slate-400">Status</th>
+                <th className="px-8 py-6 text-right text-[10px] font-black uppercase tracking-widest text-slate-400">Operations</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-50">
+              {filteredData.map((area: any) => (
+                <tr key={area.id} className="hover:bg-slate-50/30 transition-all group">
+                  <td className="px-8 py-6">
+                    <p className="font-black text-slate-900 uppercase tracking-tighter">{area.name}</p>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{area.county || 'No County'}</span>
+                      <span className="w-1 h-1 bg-slate-300 rounded-full"></span>
+                      <span className="text-[10px] font-bold text-primary uppercase tracking-widest">{area.postal_codes || 'N/A'}</span>
+                    </div>
+                  </td>
+                  <td className="px-8 py-6">
+                    <span className="font-black text-slate-900">{formatPrice(area.price)}</span>
+                  </td>
+                  <td className="px-8 py-6">
+                    <div className="flex flex-col gap-1">
+                      <span className="text-[10px] font-bold text-slate-500">Weight: +{formatPrice(area.weight_surcharge || 0)}/kg</span>
+                      <span className="text-[10px] font-bold text-slate-500">Volume: +{formatPrice(area.volume_surcharge || 0)}/m³</span>
+                    </div>
+                  </td>
+                  <td className="px-8 py-6">
+                    <div className="flex flex-col gap-1">
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">From: {new Date(area.valid_from).toLocaleDateString()}</span>
+                      {area.valid_until && (
+                        <span className="text-[10px] font-bold text-orange-400 uppercase tracking-widest">Until: {new Date(area.valid_until).toLocaleDateString()}</span>
+                      )}
+                    </div>
+                  </td>
+                  <td className="px-8 py-6">
+                    <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-tighter ${
+                      area.is_active ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'
+                    }`}>
+                      {area.is_active ? 'Active' : 'Deactivated'}
+                    </span>
+                  </td>
+                  <td className="px-8 py-6 text-right">
+                    <div className="flex justify-end gap-2">
+                      <button 
+                        onClick={() => handleEdit(area)}
+                        className="p-2 bg-slate-50 text-slate-400 rounded-lg hover:bg-primary/10 hover:text-primary transition-all"
+                      >
+                        <Edit className="w-4 h-4" />
+                      </button>
+                      <button 
+                        onClick={() => handleDelete(area.id)}
+                        className="p-2 bg-slate-50 text-slate-400 rounded-lg hover:bg-red-50 hover:text-red-500 transition-all"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <AnimatePresence>
+        {isModalOpen && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsModalOpen(false)}
+              className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="relative w-full max-w-2xl bg-white rounded-[40px] shadow-2xl overflow-hidden"
+            >
+              <div className="p-10 border-b border-slate-50">
+                <h2 className="text-3xl font-black tracking-tighter uppercase">{editingArea ? 'Edit Area Strategy' : 'New Area Protocol'}</h2>
+                <p className="text-slate-500 font-medium">Configure logistics parameters for this geographic node</p>
+              </div>
+
+              <form onSubmit={handleSubmit} className="p-10 max-h-[70vh] overflow-y-auto custom-scrollbar">
+                <div className="grid grid-cols-2 gap-6">
+                  <div className="col-span-2">
+                    <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Town/Area Name</label>
+                    <input 
+                      required
+                      type="text" 
+                      value={formData.name}
+                      onChange={(e) => setFormData({...formData, name: e.target.value})}
+                      placeholder="e.g. Nairobi Central"
+                      className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-2 focus:ring-primary/20 font-bold" 
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">County</label>
+                    <input 
+                      type="text" 
+                      value={formData.county}
+                      onChange={(e) => setFormData({...formData, county: e.target.value})}
+                      placeholder="e.g. Nairobi"
+                      className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-2 focus:ring-primary/20 font-bold" 
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Postal Codes</label>
+                    <input 
+                      type="text" 
+                      value={formData.postal_codes}
+                      onChange={(e) => setFormData({...formData, postal_codes: e.target.value})}
+                      placeholder="e.g. 00100"
+                      className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-2 focus:ring-primary/20 font-bold" 
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Base Delivery Fee (KES)</label>
+                    <input 
+                      required
+                      type="number" 
+                      min="0"
+                      value={formData.price}
+                      onChange={(e) => setFormData({...formData, price: e.target.value})}
+                      placeholder="0.00"
+                      className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-2 focus:ring-primary/20 font-bold" 
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Weight Surcharge (per KG)</label>
+                    <input 
+                      type="number" 
+                      min="0"
+                      value={formData.weight_surcharge}
+                      onChange={(e) => setFormData({...formData, weight_surcharge: e.target.value})}
+                      placeholder="0.00"
+                      className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-2 focus:ring-primary/20 font-bold" 
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Volume Surcharge (per m³)</label>
+                    <input 
+                      type="number" 
+                      min="0"
+                      value={formData.volume_surcharge}
+                      onChange={(e) => setFormData({...formData, volume_surcharge: e.target.value})}
+                      placeholder="0.00"
+                      className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-2 focus:ring-primary/20 font-bold" 
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Valid From</label>
+                    <input 
+                      type="date" 
+                      value={formData.valid_from}
+                      onChange={(e) => setFormData({...formData, valid_from: e.target.value})}
+                      className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-2 focus:ring-primary/20 font-bold" 
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Valid Until (Optional)</label>
+                    <input 
+                      type="date" 
+                      value={formData.valid_until}
+                      onChange={(e) => setFormData({...formData, valid_until: e.target.value})}
+                      className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-2 focus:ring-primary/20 font-bold" 
+                    />
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <input 
+                      type="checkbox" 
+                      id="is_active_area"
+                      checked={formData.is_active}
+                      onChange={(e) => setFormData({...formData, is_active: e.target.checked})}
+                      className="w-5 h-5 rounded-lg border-slate-200 text-primary focus:ring-primary"
+                    />
+                    <label htmlFor="is_active_area" className="text-sm font-bold text-slate-700">Active Strategy</label>
+                  </div>
+                </div>
+
+                <div className="mt-10 flex gap-4">
+                  <button 
+                    type="submit"
+                    className="flex-1 bg-primary text-white py-4 rounded-2xl font-black uppercase tracking-tighter hover:opacity-90 transition-all shadow-xl shadow-primary/20"
+                  >
+                    {editingArea ? 'Commit Strategy' : 'Initialize Protocol'}
+                  </button>
+                  <button 
+                    type="button"
+                    onClick={() => setIsModalOpen(false)}
+                    className="flex-1 bg-slate-100 text-slate-500 py-4 rounded-2xl font-black uppercase tracking-tighter hover:bg-slate-200 transition-all"
+                  >
+                    Abort
+                  </button>
+                </div>
               </form>
             </motion.div>
           </div>
@@ -2313,6 +3337,7 @@ function ClubsView({ data, onUpdate }: any) {
     content: '',
     image_url: '',
     is_active: true,
+    membership_price: 0,
     metadata: {
       category: 'General',
       member_limit: 100,
@@ -2341,6 +3366,7 @@ function ClubsView({ data, onUpdate }: any) {
       content: club.content || '',
       image_url: club.image_url || '',
       is_active: club.is_active ?? true,
+      membership_price: club.membership_price || 0,
       metadata: {
         category: club.metadata?.category || 'General',
         member_limit: club.metadata?.member_limit || 100,
@@ -2357,6 +3383,7 @@ function ClubsView({ data, onUpdate }: any) {
       content: '',
       image_url: '',
       is_active: true,
+      membership_price: 0,
       metadata: {
         category: 'General',
         member_limit: 100,
@@ -2548,7 +3575,7 @@ function ClubsView({ data, onUpdate }: any) {
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-3 gap-4">
                   <div>
                     <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Category</label>
                     <input 
@@ -2572,6 +3599,19 @@ function ClubsView({ data, onUpdate }: any) {
                       onChange={(e) => setFormData({
                         ...formData, 
                         metadata: { ...formData.metadata, member_limit: parseInt(e.target.value) }
+                      })}
+                      className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-2 focus:ring-primary/20 font-bold" 
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Price (KES)</label>
+                    <input 
+                      required
+                      type="number" 
+                      value={formData.membership_price}
+                      onChange={(e) => setFormData({
+                        ...formData, 
+                        membership_price: parseFloat(e.target.value)
                       })}
                       className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-2 focus:ring-primary/20 font-bold" 
                     />
@@ -2606,6 +3646,8 @@ function ClubsView({ data, onUpdate }: any) {
 
 function EventsView({ data, onUpdate }: any) {
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isRSVPModalOpen, setIsRSVPModalOpen] = useState(false);
+  const [selectedEventRSVPs, setSelectedEventRSVPs] = useState<any[]>([]);
   const [editingEvent, setEditingEvent] = useState<any>(null);
   const [formData, setFormData] = useState({
     title: '',
@@ -2619,6 +3661,12 @@ function EventsView({ data, onUpdate }: any) {
       type: 'Workshop'
     }
   });
+
+  const fetchRSVPs = async (eventId: string) => {
+    const rsvps = await getEventRSVPs(eventId);
+    setSelectedEventRSVPs(rsvps);
+    setIsRSVPModalOpen(true);
+  };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -2759,6 +3807,13 @@ function EventsView({ data, onUpdate }: any) {
               </div>
 
               <div className="flex gap-2 pt-2">
+                <button 
+                  onClick={() => fetchRSVPs(event.id)}
+                  className="w-12 h-12 flex items-center justify-center bg-primary/5 text-primary rounded-2xl hover:bg-primary/10 transition-all"
+                  title="View RSVPs"
+                >
+                  <Users className="w-5 h-5" />
+                </button>
                 <button 
                   onClick={() => handleEdit(event)}
                   className="flex-1 bg-slate-50 text-slate-900 py-3 rounded-2xl font-black uppercase tracking-tighter text-xs hover:bg-slate-100 transition-all"
@@ -2919,22 +3974,275 @@ function EventsView({ data, onUpdate }: any) {
             </motion.div>
           </div>
         )}
+
+        {isRSVPModalOpen && (
+          <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsRSVPModalOpen(false)}
+              className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
+            />
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              className="relative bg-white w-full max-w-xl rounded-[40px] shadow-2xl overflow-hidden max-h-[80vh] flex flex-col"
+            >
+              <div className="p-8 border-b border-slate-50 flex justify-between items-center bg-slate-50/50">
+                <div>
+                  <h2 className="text-2xl font-black uppercase tracking-tighter">Event RSVPs</h2>
+                  <p className="text-sm font-bold text-slate-400 uppercase tracking-widest">Attendance Protocol</p>
+                </div>
+                <button onClick={() => setIsRSVPModalOpen(false)} className="p-2 hover:bg-white rounded-full transition-all">
+                  <XCircle className="w-8 h-8 text-slate-300 hover:text-red-500" />
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-8 space-y-4 custom-scrollbar">
+                {selectedEventRSVPs.map((rsvp: any) => (
+                  <div key={rsvp.id} className="flex items-center justify-between p-6 bg-slate-50 rounded-[32px] border border-slate-100">
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center text-primary font-black">
+                        {rsvp.profiles?.full_name?.[0] || 'U'}
+                      </div>
+                      <div>
+                        <p className="font-black text-slate-900 uppercase tracking-tight">{rsvp.profiles?.full_name || 'User'}</p>
+                        <p className="text-xs font-bold text-slate-400">{rsvp.profiles?.email}</p>
+                      </div>
+                    </div>
+                    <span className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest ${
+                      rsvp.status === 'attending' ? 'bg-green-100 text-green-600' : 
+                      rsvp.status === 'interested' ? 'bg-blue-100 text-blue-600' : 
+                      'bg-rose-100 text-rose-600'
+                    }`}>
+                      {rsvp.status}
+                    </span>
+                  </div>
+                ))}
+
+                {selectedEventRSVPs.length === 0 && (
+                  <div className="py-20 text-center">
+                    <Users className="w-16 h-16 text-slate-200 mx-auto mb-4" />
+                    <p className="font-black uppercase tracking-widest text-slate-400">No RSVPs detected</p>
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          </div>
+        )}
       </AnimatePresence>
     </div>
   );
 }
 
 function AgreementsView({ partnerships, authors, onUpdate }: any) {
-  const handleApprove = async (table: string, id: string, name: string) => {
-    const loadingToast = toast.loading(`Approving ${name}...`);
+  const [selectedApp, setSelectedApp] = useState<any>(null);
+  const [isUploading, setIsUploading] = useState(false);
+
+  const handleStatusUpdate = async (table: string, id: string, status: string, name: string) => {
+    const loadingToast = toast.loading(`Updating status for ${name}...`);
     try {
-      await updateRecord(table, id, { status: 'approved' });
-      toast.success(`${name} Approved`, { id: loadingToast });
+      // Use the applications API to ensure notifications are sent
+      const type = table === 'author_applications' ? 'author' : 'partner';
+      const response = await fetch('/api/applications', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, type, status })
+      });
+
+      if (!response.ok) throw new Error('API request failed');
+      
+      toast.success(`Status updated to ${status}`, { id: loadingToast });
       onUpdate();
+      if (selectedApp && selectedApp.id === id) {
+        setSelectedApp({ ...selectedApp, status });
+      }
     } catch (error) {
-      toast.error('Approval failed', { id: loadingToast });
+      console.error('Status update error:', error);
+      // Fallback to direct DB update if API fails (e.g. in dev without local API)
+      try {
+        await updateRecord(table, id, { status });
+        toast.success(`Status updated (Direct DB)`, { id: loadingToast });
+        onUpdate();
+      } catch (dbError) {
+        toast.error('Status update failed', { id: loadingToast });
+      }
     }
   };
+
+  const handleUploadAgreement = async (table: string, id: string, file: File, name: string, userId: string) => {
+    setIsUploading(true);
+    const loadingToast = toast.loading(`Uploading agreement for ${name}...`);
+    try {
+      const path = await uploadAgreementFile(file, `${id}_agreement`);
+      
+      // 1. Sync with the applications API
+      const type = table === 'author_applications' ? 'author' : 'partner';
+      const response = await fetch('/api/applications', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          id, 
+          type, 
+          status: 'agreement_sent',
+          agreement_url: path
+        })
+      });
+
+      if (!response.ok) throw new Error('API request failed');
+
+      // 2. Create/Update record in the agreements table for the applicant's dashboard
+      const { error: agreementError } = await supabase
+        .from('agreements')
+        .upsert({
+          title: `${type === 'author' ? 'Author' : 'Partnership'} Collaboration Protocol`,
+          description: `Terms and conditions for your ${type} collaboration with ReadMart.`,
+          template_url: path,
+          partner_id: userId,
+          type: type as any,
+          status: 'pending'
+        }, { onConflict: 'partner_id, type' });
+
+      if (agreementError) console.error('Agreement record sync failed:', agreementError);
+
+      toast.success('Agreement issued and notification sent', { id: loadingToast });
+      onUpdate();
+      if (selectedApp && selectedApp.id === id) {
+        setSelectedApp({ ...selectedApp, agreement_url: path, status: 'agreement_sent' });
+      }
+    } catch (error: any) {
+      console.error('Agreement upload error:', error);
+      // Fallback to direct DB update
+      try {
+        const path = await uploadAgreementFile(file, `${id}_agreement`);
+        await updateRecord(table, id, { 
+          agreement_url: path,
+          status: 'agreement_sent'
+        });
+        
+        // Try to sync agreement table even in fallback
+        await supabase.from('agreements').upsert({
+          title: `${table.includes('author') ? 'Author' : 'Partnership'} Collaboration Protocol`,
+          template_url: path,
+          partner_id: userId,
+          type: table.includes('author') ? 'author' : 'partner' as any,
+          status: 'pending'
+        }, { onConflict: 'partner_id, type' });
+
+        toast.success('Agreement uploaded (Direct DB)', { id: loadingToast });
+        onUpdate();
+      } catch (dbError) {
+        toast.error(error.message || 'Upload failed', { id: loadingToast });
+      }
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleViewFile = async (path: string) => {
+    if (!path) {
+      toast.error('No document file found');
+      return;
+    }
+    
+    const { data, error } = await supabase.storage
+      .from('partnership_documents')
+      .createSignedUrl(path, 600); // 10 minutes
+
+    if (error) {
+      toast.error('Could not generate document link');
+      return;
+    }
+
+    window.open(data.signedUrl, '_blank');
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'pending': return 'bg-orange-50 text-orange-600 border-orange-100';
+      case 'agreement_sent': return 'bg-blue-50 text-blue-600 border-blue-100';
+      case 'agreement_confirming': return 'bg-indigo-50 text-indigo-600 border-indigo-100';
+      case 'activating': return 'bg-purple-50 text-purple-600 border-purple-100';
+      case 'completed': return 'bg-green-50 text-green-600 border-green-100';
+      case 'rejected': return 'bg-red-50 text-red-600 border-red-100';
+      default: return 'bg-slate-50 text-slate-600 border-slate-100';
+    }
+  };
+
+  const getStatusLabel = (status: string) => {
+    switch (status) {
+      case 'pending': return 'Pending Review';
+      case 'agreement_sent': return 'Agreement Sent';
+      case 'agreement_confirming': return 'Confirming Terms';
+      case 'activating': return 'Activating Account';
+      case 'completed': return 'Fully Activated';
+      case 'rejected': return 'Rejected';
+      default: return status;
+    }
+  };
+
+  const ApplicationCard = ({ app, table, type }: any) => (
+    <div className="p-6 bg-slate-50 rounded-[32px] border border-slate-100 space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="font-black text-slate-900 text-lg">{app.company_name || app.organization || app.full_name}</p>
+          <p className="text-xs font-bold text-slate-400">{app.email}</p>
+        </div>
+        <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border ${getStatusColor(app.status)}`}>
+          {getStatusLabel(app.status)}
+        </span>
+      </div>
+
+      <div className="flex gap-2">
+        <button 
+          onClick={() => setSelectedApp({ ...app, _table: table, _type: type })}
+          className="flex-1 flex items-center justify-center gap-2 bg-white text-slate-900 py-3 rounded-xl font-bold text-xs hover:bg-slate-900 hover:text-white transition-all shadow-sm border border-slate-100"
+        >
+          <Eye className="w-4 h-4" />
+          View Details
+        </button>
+        
+        {app.status === 'pending' && (
+          <label className={`flex-1 flex items-center justify-center gap-2 bg-primary text-white py-3 rounded-xl font-bold text-xs hover:opacity-90 transition-all shadow-lg shadow-primary/20 cursor-pointer ${isUploading ? 'opacity-50 cursor-not-allowed' : ''}`}>
+            {isUploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileUp className="w-4 h-4" />}
+            {isUploading ? 'Uploading...' : 'Upload Agreement'}
+            <input 
+              type="file" 
+              className="hidden" 
+              accept=".pdf,.docx" 
+              disabled={isUploading}
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) handleUploadAgreement(table, app.id, file, app.full_name, app.user_id);
+              }}
+            />
+          </label>
+        )}
+
+        {app.status === 'agreement_confirming' && (
+          <button 
+            onClick={() => handleStatusUpdate(table, app.id, 'activating', app.full_name)}
+            className="flex-1 flex items-center justify-center gap-2 bg-indigo-600 text-white py-3 rounded-xl font-bold text-xs hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-600/20"
+          >
+            <CheckCircle className="w-4 h-4" />
+            Process Activation
+          </button>
+        )}
+
+        {app.status === 'activating' && (
+          <button 
+            onClick={() => handleStatusUpdate(table, app.id, 'completed', app.full_name)}
+            className="flex-1 flex items-center justify-center gap-2 bg-green-600 text-white py-3 rounded-xl font-bold text-xs hover:bg-green-700 transition-all shadow-lg shadow-green-600/20"
+          >
+            <Sparkles className="w-4 h-4" />
+            Final Activation
+          </button>
+        )}
+      </div>
+    </div>
+  );
 
   return (
     <div className="space-y-8">
@@ -2944,6 +4252,7 @@ function AgreementsView({ partnerships, authors, onUpdate }: any) {
       </div>
 
       <div className="grid lg:grid-cols-2 gap-8">
+        {/* Partnership Applications */}
         <div className="bg-white p-10 rounded-[40px] border border-slate-100 shadow-sm">
           <h3 className="text-xl font-black tracking-tighter uppercase mb-8 flex items-center gap-2">
             <Briefcase className="w-6 h-6 text-primary" />
@@ -2951,59 +4260,187 @@ function AgreementsView({ partnerships, authors, onUpdate }: any) {
           </h3>
           <div className="space-y-4">
             {partnerships.map((app: any) => (
-              <div key={app.id} className="p-6 bg-slate-50 rounded-[32px] border border-slate-100 flex items-center justify-between">
-                <div>
-                  <p className="font-black text-slate-900">{app.company_name}</p>
-                  <p className="text-xs font-bold text-slate-400">{app.email}</p>
-                </div>
-                <div className="flex gap-2">
-                  <button className="p-2 bg-white text-primary rounded-xl hover:bg-primary hover:text-white transition-all shadow-sm">
-                    <FileText className="w-5 h-5" />
-                  </button>
-                  {app.status !== 'approved' && (
-                    <button 
-                      onClick={() => handleApprove('partnership_applications', app.id, app.company_name)}
-                      className="p-2 bg-white text-green-600 rounded-xl hover:bg-green-600 hover:text-white transition-all shadow-sm"
-                    >
-                      <CheckCircle className="w-5 h-5" />
-                    </button>
-                  )}
-                </div>
-              </div>
+              <ApplicationCard key={app.id} app={app} table="partnership_applications" type="partner" />
             ))}
+            {partnerships.length === 0 && (
+              <p className="text-center py-8 text-slate-400 font-bold uppercase text-xs tracking-widest">No partnership protocols found</p>
+            )}
           </div>
         </div>
 
+        {/* Author Applications */}
         <div className="bg-white p-10 rounded-[40px] border border-slate-100 shadow-sm">
           <h3 className="text-xl font-black tracking-tighter uppercase mb-8 flex items-center gap-2">
             <Edit className="w-6 h-6 text-primary" />
-            Author Manuscripts
+            Author Applications
           </h3>
           <div className="space-y-4">
             {authors.map((app: any) => (
-              <div key={app.id} className="p-6 bg-slate-50 rounded-[32px] border border-slate-100 flex items-center justify-between">
+              <ApplicationCard key={app.id} app={app} table="author_applications" type="author" />
+            ))}
+            {authors.length === 0 && (
+              <p className="text-center py-8 text-slate-400 font-bold uppercase text-xs tracking-widest">No author protocols found</p>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Detail Modal */}
+      <AnimatePresence>
+        {selectedApp && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setSelectedApp(null)}
+              className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
+            />
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              className="relative bg-white w-full max-w-2xl rounded-[40px] shadow-2xl overflow-hidden max-h-[90vh] flex flex-col"
+            >
+              <div className="p-8 border-b border-slate-50 flex justify-between items-center bg-slate-50/50">
                 <div>
-                  <p className="font-black text-slate-900">{app.full_name}</p>
-                  <p className="text-xs font-bold text-slate-400">{app.genre_preference}</p>
+                  <h2 className="text-2xl font-black uppercase tracking-tighter">Application Details</h2>
+                  <p className="text-sm font-bold text-slate-400 uppercase tracking-widest">ID: {selectedApp.id.slice(0, 8)}...</p>
                 </div>
-                <div className="flex gap-2">
-                   <button className="p-2 bg-white text-primary rounded-xl hover:bg-primary hover:text-white transition-all shadow-sm">
-                    <FileText className="w-5 h-5" />
-                  </button>
-                  {app.status !== 'approved' && (
+                <button onClick={() => setSelectedApp(null)} className="p-2 hover:bg-white rounded-full transition-all">
+                  <XCircle className="w-8 h-8 text-slate-300 hover:text-red-500" />
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-10 space-y-8 custom-scrollbar">
+                <div className="grid grid-cols-2 gap-8">
+                  <div>
+                    <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Full Name</label>
+                    <p className="font-bold text-slate-900">{selectedApp.full_name}</p>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Email Address</label>
+                    <p className="font-bold text-slate-900">{selectedApp.email}</p>
+                  </div>
+                  {selectedApp.organization && (
+                    <div>
+                      <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Organization</label>
+                      <p className="font-bold text-slate-900">{selectedApp.organization}</p>
+                    </div>
+                  )}
+                  {selectedApp.service_type && (
+                    <div>
+                      <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Service Type</label>
+                      <p className="font-bold text-slate-900">{selectedApp.service_type}</p>
+                    </div>
+                  )}
+                  {selectedApp.contact_info && (
+                    <div className="col-span-2">
+                      <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Contact Info</label>
+                      <p className="font-bold text-slate-900 bg-slate-50 p-4 rounded-xl">{selectedApp.contact_info}</p>
+                    </div>
+                  )}
+                  {selectedApp.collaboration_intent && (
+                    <div className="col-span-2">
+                      <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Collaboration Intent</label>
+                      <p className="font-bold text-slate-900 bg-slate-50 p-4 rounded-xl">{selectedApp.collaboration_intent}</p>
+                    </div>
+                  )}
+                </div>
+
+                <div className="space-y-4">
+                  <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400">Documents</label>
+                  <div className="grid grid-cols-2 gap-4">
+                    {selectedApp.proof_url && (
+                      <button 
+                        onClick={() => handleViewFile(selectedApp.proof_url)}
+                        className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl hover:bg-slate-100 transition-all text-left"
+                      >
+                        <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-sm">
+                          <Shield className="w-5 h-5 text-primary" />
+                        </div>
+                        <div>
+                          <p className="text-xs font-black uppercase tracking-tight">Qualification Proof</p>
+                          <p className="text-[10px] font-bold text-slate-400">View Document</p>
+                        </div>
+                      </button>
+                    )}
+                    {selectedApp.agreement_url && (
+                      <button 
+                        onClick={() => handleViewFile(selectedApp.agreement_url)}
+                        className="flex items-center gap-3 p-4 bg-blue-50 rounded-2xl hover:bg-blue-100 transition-all text-left"
+                      >
+                        <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-sm">
+                          <FileText className="w-5 h-5 text-blue-600" />
+                        </div>
+                        <div>
+                          <p className="text-xs font-black uppercase tracking-tight text-blue-900">Agreement Draft</p>
+                          <p className="text-[10px] font-bold text-blue-400">View Document</p>
+                        </div>
+                      </button>
+                    )}
+                    {selectedApp.signed_agreement_url && (
+                      <button 
+                        onClick={() => handleViewFile(selectedApp.signed_agreement_url)}
+                        className="flex items-center gap-3 p-4 bg-green-50 rounded-2xl hover:bg-green-100 transition-all text-left"
+                      >
+                        <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-sm">
+                          <CheckCircle className="w-5 h-5 text-green-600" />
+                        </div>
+                        <div>
+                          <p className="text-xs font-black uppercase tracking-tight text-green-900">Signed Agreement</p>
+                          <p className="text-[10px] font-bold text-green-400">View Document</p>
+                        </div>
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <div className="pt-8 border-t border-slate-50 flex gap-4">
+                  {selectedApp.status === 'pending' && (
+                    <>
+                      <button 
+                        onClick={() => handleStatusUpdate(selectedApp._table, selectedApp.id, 'rejected', selectedApp.full_name)}
+                        className="flex-1 bg-red-50 text-red-600 py-4 rounded-2xl font-black uppercase tracking-widest hover:bg-red-600 hover:text-white transition-all"
+                      >
+                        Reject Application
+                      </button>
+                      <label className="flex-[2] bg-primary text-white py-4 rounded-2xl font-black uppercase tracking-widest hover:opacity-90 transition-all flex items-center justify-center gap-2 cursor-pointer shadow-xl shadow-primary/20">
+                        <FileUp className="w-5 h-5" />
+                        Issue Agreement
+                        <input 
+                          type="file" 
+                          className="hidden" 
+                          accept=".pdf,.docx" 
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) handleUploadAgreement(selectedApp._table, selectedApp.id, file, selectedApp.full_name, selectedApp.user_id);
+                          }}
+                        />
+                      </label>
+                    </>
+                  )}
+                  {selectedApp.status === 'agreement_sent' && (
+                    <div className="flex-1 text-center p-6 bg-blue-50 rounded-3xl border border-blue-100">
+                      <Clock className="w-8 h-8 text-blue-600 mx-auto mb-2" />
+                      <p className="text-sm font-bold text-blue-900">Waiting for Applicant Signature</p>
+                      <p className="text-xs text-blue-400 mt-1">Status: {getStatusLabel(selectedApp.status)}</p>
+                    </div>
+                  )}
+                  {(selectedApp.status === 'agreement_confirming' || selectedApp.status === 'activating') && (
                     <button 
-                      onClick={() => handleApprove('author_applications', app.id, app.full_name)}
-                      className="p-2 bg-white text-green-600 rounded-xl hover:bg-green-600 hover:text-white transition-all shadow-sm"
+                      onClick={() => handleStatusUpdate(selectedApp._table, selectedApp.id, selectedApp.status === 'agreement_confirming' ? 'activating' : 'completed', selectedApp.full_name)}
+                      className="flex-1 bg-green-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest hover:bg-green-700 transition-all shadow-xl shadow-green-600/20"
                     >
-                      <CheckCircle className="w-5 h-5" />
+                      {selectedApp.status === 'agreement_confirming' ? 'Proceed to Activation' : 'Finalize Activation'}
                     </button>
                   )}
                 </div>
               </div>
-            ))}
+            </motion.div>
           </div>
-        </div>
-      </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

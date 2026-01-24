@@ -4,6 +4,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useCart } from '@/contexts/CartContext';
 import { useWishlist } from '@/contexts/WishlistContext';
 import { useCurrency } from '@/contexts/CurrencyContext';
+import { useSettings } from '@/hooks/useSettings';
 import { toast } from 'sonner';
 
 interface BookCardProps {
@@ -16,25 +17,31 @@ interface BookCardProps {
   rating: number;
   category: string;
   type?: 'physical' | 'ebook';
+  weight?: number;
+  volume?: number;
 }
 
-export default function BookCard({ id, title, author, author_id, price, image, rating, category, type }: BookCardProps) {
+export default function BookCard({ id, title, author, author_id, price, image, rating, category, type, weight, volume }: BookCardProps) {
   const navigate = useNavigate();
   const { addToCart, buyNow } = useCart();
   const { addToWishlist, removeFromWishlist, isInWishlist } = useWishlist();
   const { formatPrice } = useCurrency();
+  const { settings } = useSettings();
+
+  const taxRate = settings?.tax_rate ?? 16;
+  const taxInclusivePrice = price * (1 + taxRate / 100);
 
   const handleAddToCart = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    addToCart({ id, title, author, author_id, price, image, category, type });
+    addToCart({ id, title, author, author_id, price, image, category, type, weight, volume });
     toast.success(`${title} added to cart!`);
   };
 
   const handleBuyNow = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    buyNow({ id, title, author, author_id, price, image, category, type });
+    buyNow({ id, title, author, author_id, price, image, category, type, weight, volume });
     navigate('/checkout');
   };
 
@@ -92,7 +99,7 @@ export default function BookCard({ id, title, author, author_id, price, image, r
         <p className="text-sm text-muted-foreground mb-4">{author}</p>
         
         <div className="flex items-center justify-between gap-2">
-          <span className="text-xl font-bold text-primary">{formatPrice(price)}</span>
+          <span className="text-xl font-bold text-primary">{formatPrice(taxInclusivePrice)}</span>
           <div className="flex gap-2">
             <button 
               onClick={handleAddToCart}

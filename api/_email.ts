@@ -197,6 +197,82 @@ export const renderApplicationStatusEmail = (status: 'approved' | 'rejected', ty
   `;
 };
 
+export const renderAgreementNotificationEmail = (type: string, data: any) => {
+  const protocolName = type === 'author' ? 'Author Protocol' : 'Partnership Agreement';
+  const dashboardLink = 'https://readmartke.com/account?tab=agreements';
+  
+  return `
+    <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; color: #333;">
+      <h2 style="color: #6366f1;">Action Required: ${protocolName} Ready for Review</h2>
+      <p>Hello ${data.full_name},</p>
+      <p>We are pleased to inform you that the agreement for your <strong>ReadMart ${type}</strong> application has been prepared and is now ready for your review and signature.</p>
+      
+      <div style="background: #f9fafb; padding: 20px; border-radius: 8px; border: 1px solid #e5e7eb; margin: 20px 0;">
+        <p><strong>Next Steps:</strong></p>
+        <ol>
+          <li>Login to your ReadMart account.</li>
+          <li>Navigate to "My Account" > "Agreements".</li>
+          <li>Download and review the attached document.</li>
+          <li>Sign and upload the completed agreement to proceed with account activation.</li>
+        </ol>
+      </div>
+
+      <p style="margin-top: 20px;">
+        <a href="${dashboardLink}" style="display: inline-block; background: #6366f1; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">Review Agreement</a>
+      </p>
+      
+      <p style="font-size: 12px; color: #6b7280; margin-top: 30px;">
+        If you have any questions regarding the terms, please reply to this email or contact us via our official channels.
+      </p>
+      <p>Best regards,<br/>The ReadMart Team</p>
+    </div>
+  `;
+};
+
+export const renderActivationNotificationEmail = (type: string, data: any) => {
+  const roleName = type === 'author' ? 'Author' : 'Partner';
+  const dashboardLink = type === 'author' ? 'https://readmartke.com/dashboard/author' : 'https://readmartke.com/dashboard/partner';
+  
+  return `
+    <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; color: #333;">
+      <h1 style="color: #22c55e;">Account Activated!</h1>
+      <p>Hello ${data.full_name},</p>
+      <p>Congratulations! Your <strong>ReadMart ${roleName}</strong> account has been successfully activated.</p>
+      
+      <div style="background: #f0fdf4; padding: 20px; border-radius: 8px; border: 1px solid #dcfce7; margin: 20px 0;">
+        <p><strong>What's Next?</strong></p>
+        <p>You now have full access to your specialized dashboard where you can:</p>
+        <ul>
+          ${type === 'author' 
+            ? `
+            <li>Submit new manuscripts and manage publications</li>
+            <li>Track sales and royalties in real-time</li>
+            <li>Engage with your readers and view feedback</li>
+            `
+            : `
+            <li>Manage partnership projects and inventory</li>
+            <li>Analyze revenue and performance metrics</li>
+            <li>Access our partner resource library</li>
+            `
+          }
+        </ul>
+      </div>
+
+      <p style="text-align: center; margin: 30px 0;">
+        <a href="${dashboardLink}" style="display: inline-block; background: #6366f1; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">Go to My Dashboard</a>
+      </p>
+      
+      <p><strong>Login Credentials:</strong> Use your registered email address and password to sign in.</p>
+      
+      <p style="font-size: 12px; color: #6b7280; margin-top: 30px;">
+        Need help getting started? Check out our <a href="https://readmartke.com/help" style="color: #6366f1;">Guide for ${roleName}s</a>.
+      </p>
+      <p>Welcome to the ReadMart ecosystem!</p>
+      <p>Best regards,<br/>The ReadMart Team</p>
+    </div>
+  `;
+};
+
 export const renderOrderConfirmationEmail = (data: any) => {
   const { order, items } = data;
   const id = order.id.slice(0, 8).toUpperCase();

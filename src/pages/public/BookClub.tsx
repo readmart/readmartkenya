@@ -21,41 +21,60 @@ import {
   getInsights,
   getEvents,
   getRecentReviews,
+  getUserRSVPs,
+  rsvpToEvent,
+  getClubDiscussions,
   type CMSContent,
+  type BookClub,
   type BookClubMembership,
-  type Review
+  type Review,
+  type EventRSVP,
+  type ClubDiscussion
 } from '@/api/community';
 import { useAuth } from '@/contexts/AuthContext';
+import { useCurrency } from '@/contexts/CurrencyContext';
 import { toast } from 'sonner';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { PaymentWall } from '@/components/membership/PaymentWall';
 
 type Tab = 'communities' | 'insights' | 'reviews' | 'events';
 
 export default function BookClub() {
   const [activeTab, setActiveTab] = useState<Tab>('communities');
-  const [clubs, setClubs] = useState<CMSContent[]>([]);
+  const [clubs, setClubs] = useState<BookClub[]>([]);
   const [insights, setInsights] = useState<CMSContent[]>([]);
   const [events, setEvents] = useState<CMSContent[]>([]);
   const [reviews, setReviews] = useState<Review[]>([]);
   const [membership, setMembership] = useState<BookClubMembership | null>(null);
+  const [userRSVPs, setUserRSVPs] = useState<EventRSVP[]>([]);
+  const [clubDiscussions, setClubDiscussions] = useState<ClubDiscussion[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isJoining, setIsJoining] = useState<string | null>(null);
+  const [isRSVPing, setIsRSVPing] = useState<string | null>(null);
   const { user } = useAuth();
+  const { formatPrice } = useCurrency();
+  const navigate = useNavigate();
 
   useEffect(() => {
     fetchData();
   }, [user]);
 
+  useEffect(() => {
+    if (membership?.club_id) {
+      fetchDiscussions(membership.club_id);
+    }
+  }, [membership]);
+
   const fetchData = async () => {
     setIsLoading(true);
     try {
-      const [clubsData, insightsData, eventsData, reviewsData, membershipData] = await Promise.all([
+      const [clubsData, insightsData, eventsData, reviewsData, membershipData, rsvpsData] = await Promise.all([
         getAvailableBookClubs(),
         getInsights(),
         getEvents(),
         getRecentReviews(),
-        getUserMembership()
+        getUserMembership(),
+        getUserRSVPs()
       ]);
 
       setClubs(clubsData);
@@ -63,11 +82,40 @@ export default function BookClub() {
       setEvents(eventsData);
       setReviews(reviewsData);
       setMembership(membershipData);
+      setUserRSVPs(rsvpsData);
     } catch (error) {
       console.error('Error fetching book club data:', error);
       toast.error('Failed to load community data');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const fetchDiscussions = async (clubId: string) => {
+    try {
+      const discussions = await getClubDiscussions(clubId);
+      setClubDiscussions(discussions);
+    } catch (error) {
+      console.error('Error fetching discussions:', error);
+    }
+  };
+
+  const handleRSVP = async (eventId: string) => {
+    if (!user) {
+      toast.error('Please login to RSVP');
+      return;
+    }
+
+    setIsRSVPing(eventId);
+    try {
+      await rsvpToEvent(eventId);
+      toast.success('RSVP confirmed!');
+      const rsvps = await getUserRSVPs();
+      setUserRSVPs(rsvps);
+    } catch (error) {
+      toast.error('Failed to RSVP');
+    } finally {
+      setIsRSVPing(null);
     }
   };
 
@@ -131,7 +179,7 @@ export default function BookClub() {
         </motion.div>
       </div>
 
-      <PaymentWall>
+      <PaymentWall clubId={membership?.club_id}>
         {/* Tabs Navigation */}
         <div className="flex flex-wrap justify-center gap-4 mb-12">
           {(['communities', 'insights', 'reviews', 'events'] as Tab[]).map((tab) => (
@@ -159,7 +207,8 @@ export default function BookClub() {
         >
           {/* Communities Section */}
           {activeTab === 'communities' && (
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+            <div className="space-y-12">
+              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
               {clubs.map((club) => (
                 <motion.div
                   key={club.id}
@@ -182,10 +231,10 @@ export default function BookClub() {
                   </div>
                   
                   <h3 className="text-2xl font-black mb-4 tracking-tight group-hover:text-primary transition-colors">
-                    {club.title}
+                    {club.name}
                   </h3>
                   <p className="text-muted-foreground text-sm leading-relaxed mb-6 font-medium">
-                    {club.content}
+                    {club.description}
                   </p>
                   
                   <div className="space-y-4 mb-8">
@@ -197,36 +246,116 @@ export default function BookClub() {
                       <MessageSquare className="w-4 h-4" />
                       <span>{club.metadata?.members_count || 0} active members</span>
                     </div>
+                    <div className="flex items-center gap-3 text-sm font-bold text-primary bg-primary/5 px-4 py-2 rounded-xl">
+                      <span>{club.membership_price > 0 ? formatPrice(club.membership_price) : 'Free to Join'}</span>
+                    </div>
                   </div>
                   
-                  {membership?.club_id === club.id ? (
-                    <button 
-                      onClick={() => handleLeaveClub(club.id)}
-                      className="w-full glass text-red-500 py-4 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-red-500 hover:text-white transition-all"
-                    >
-                      Leave Club
-                    </button>
-                  ) : (
-                    <button 
-                      onClick={() => handleJoinClub(club.id)}
-                      disabled={isJoining === club.id || membership !== null}
-                      className={`w-full py-4 rounded-2xl font-black uppercase tracking-widest text-xs transition-all flex items-center justify-center gap-2 ${
-                        membership !== null 
-                          ? 'bg-muted text-muted-foreground cursor-not-allowed'
-                          : 'bg-white text-black hover:bg-primary hover:text-white'
-                      }`}
-                    >
-                      {isJoining === club.id ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                      ) : membership !== null ? (
-                        'One-Club Policy Active'
-                      ) : (
-                        <>Join This Club <ArrowRight className="w-4 h-4" /></>
-                      )}
-                    </button>
-                  )}
+                    {membership?.club_id === club.id ? (
+                      <div className="space-y-4">
+                        <button 
+                          onClick={() => handleLeaveClub(club.id)}
+                          className="w-full glass text-red-500 py-4 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-red-500 hover:text-white transition-all"
+                        >
+                          Leave Club
+                        </button>
+                      </div>
+                    ) : (
+                      <button 
+                        onClick={() => {
+                          if (club.membership_price > 0) {
+                            // Redirect to a membership/payment page for this specific club
+                            navigate(`/membership?club=${club.id}`);
+                          } else {
+                            handleJoinClub(club.id);
+                          }
+                        }}
+                        disabled={isJoining === club.id || membership !== null}
+                        className={`w-full py-4 rounded-2xl font-black uppercase tracking-widest text-xs transition-all flex items-center justify-center gap-2 ${
+                          membership !== null 
+                            ? 'bg-muted text-muted-foreground cursor-not-allowed'
+                            : 'bg-white text-black hover:bg-primary hover:text-white shadow-lg'
+                        }`}
+                      >
+                        {isJoining === club.id ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : membership !== null ? (
+                          'One-Club Policy Active'
+                        ) : club.membership_price > 0 ? (
+                          <>Unlock Membership <ArrowRight className="w-4 h-4" /></>
+                        ) : (
+                          <>Join This Club <ArrowRight className="w-4 h-4" /></>
+                        )}
+                      </button>
+                    )}
+                  </motion.div>
+                ))}
+              </div>
+
+              {/* Member-Only Discussions Section */}
+              {membership && (
+                <motion.div 
+                  initial={{ opacity: 0, y: 40 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="mt-20 pt-20 border-t border-slate-100"
+                >
+                  <div className="flex items-center justify-between mb-12">
+                    <div>
+                      <span className="text-primary font-black uppercase tracking-widest text-xs mb-2 block">Member Exclusive</span>
+                      <h2 className="text-4xl font-black tracking-tighter uppercase">Club <span className="text-primary">Discussions</span></h2>
+                    </div>
+                    <div className="hidden md:flex items-center gap-3 glass px-6 py-3 rounded-2xl">
+                      <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                      <span className="text-xs font-black uppercase tracking-widest">{clubDiscussions.length} Active Threads</span>
+                    </div>
+                  </div>
+
+                  <div className="grid lg:grid-cols-3 gap-8">
+                    {clubDiscussions.map((discussion) => (
+                      <motion.div
+                        key={discussion.id}
+                        whileHover={{ y: -5 }}
+                        className="glass p-8 rounded-[3rem] border-primary/10 relative overflow-hidden"
+                      >
+                        {discussion.is_pinned && (
+                          <div className="absolute top-6 right-6 text-primary">
+                            <Star className="w-5 h-5 fill-current" />
+                          </div>
+                        )}
+                        <div className="flex items-center gap-3 mb-6">
+                          <div className="w-10 h-10 rounded-full bg-slate-100 overflow-hidden border-2 border-white shadow-sm">
+                            {discussion.author?.avatar_url ? (
+                              <img src={discussion.author.avatar_url} alt="" className="w-full h-full object-cover" />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center bg-primary/10 text-primary font-bold text-xs">
+                                {discussion.author?.full_name?.[0] || 'A'}
+                              </div>
+                            )}
+                          </div>
+                          <div>
+                            <p className="text-xs font-black uppercase tracking-tight">{discussion.author?.full_name || 'Anonymous'}</p>
+                            <p className="text-[10px] text-muted-foreground font-bold">{new Date(discussion.created_at).toLocaleDateString()}</p>
+                          </div>
+                        </div>
+                        <h4 className="text-xl font-black mb-3 tracking-tight leading-tight">{discussion.title}</h4>
+                        <p className="text-sm text-muted-foreground leading-relaxed mb-6 line-clamp-3 font-medium">
+                          {discussion.content}
+                        </p>
+                        <button className="text-primary font-black uppercase tracking-widest text-[10px] flex items-center gap-2 hover:translate-x-2 transition-all">
+                          Read Discussion <ArrowRight className="w-3 h-3" />
+                        </button>
+                      </motion.div>
+                    ))}
+                    {clubDiscussions.length === 0 && (
+                      <div className="col-span-full py-20 text-center glass rounded-[3rem] border-dashed border-2 border-slate-100">
+                        <MessageSquare className="w-12 h-12 text-slate-200 mx-auto mb-4" />
+                        <p className="text-slate-400 font-black uppercase tracking-widest text-sm">No discussions yet in this club</p>
+                        <p className="text-xs text-slate-400 mt-2">Check back later for updates from the founder!</p>
+                      </div>
+                    )}
+                  </div>
                 </motion.div>
-              ))}
+              )}
             </div>
           )}
 
@@ -348,8 +477,22 @@ export default function BookClub() {
                         <span>{event.metadata?.location || 'Virtual / ReadMart Hub'}</span>
                       </div>
                     </div>
-                    <button className="w-full bg-primary text-white py-4 rounded-2xl font-black uppercase tracking-widest text-xs hover:scale-105 transition-all shadow-lg shadow-primary/20">
-                      RSVP NOW
+                    <button 
+                      onClick={() => handleRSVP(event.id)}
+                      disabled={isRSVPing === event.id || userRSVPs.some(r => r.event_id === event.id)}
+                      className={`w-full py-4 rounded-2xl font-black uppercase tracking-widest text-xs transition-all shadow-lg ${
+                        userRSVPs.some(r => r.event_id === event.id)
+                          ? 'bg-green-500 text-white cursor-default'
+                          : 'bg-primary text-white hover:scale-105 shadow-primary/20'
+                      }`}
+                    >
+                      {isRSVPing === event.id ? (
+                        <Loader2 className="w-4 h-4 animate-spin mx-auto" />
+                      ) : userRSVPs.some(r => r.event_id === event.id) ? (
+                        'RSVP CONFIRMED'
+                      ) : (
+                        'RSVP NOW'
+                      )}
                     </button>
                   </div>
                 </motion.div>

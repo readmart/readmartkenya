@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { supabase, json, badRequest, serverError } from './_utils.ts';
-import { sendEmail, renderApplicationNotificationEmail, renderApplicationStatusEmail } from './_email.ts';
+import { sendEmail, renderApplicationNotificationEmail, renderApplicationStatusEmail, renderAgreementNotificationEmail, renderActivationNotificationEmail } from './_email.ts';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -52,17 +52,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // 2. Update Application Status (PUT) - Used by Dashboard
     if (req.method === 'PUT') {
-      const { id, type, status } = req.body;
+      const { id, type, status, agreement_url } = req.body;
 
       if (!id || !type || !status) {
         return badRequest(res, 'Missing required fields for update');
       }
 
       const table = type === 'author' ? 'author_applications' : 'partnership_applications';
+      
+      const updateData: any = { status };
+      if (agreement_url) updateData.agreement_url = agreement_url;
 
       const { data: application, error: dbError } = await supabase
         .from(table)
-        .update({ status })
+        .update(updateData)
         .eq('id', id)
         .select()
         .single();
@@ -75,6 +78,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           to: application.email,
           subject: `Your ReadMart ${type} application status: ${status}`,
           html: renderApplicationStatusEmail(status as 'approved' | 'rejected', type, application)
+        });
+      } else if (status === 'agreement_sent') {
+        await sendEmail({
+          to: application.email,
+          subject: `ReadMart ${type === 'author' ? 'Author Protocol' : 'Partnership Agreement'} Ready for Review`,
+          html: renderAgreementNotificationEmail(type, application)
+        });
+      } else if (status === 'completed') {
+        await sendEmail({
+          to: application.email,
+          subject: `Account Activated: Welcome to ReadMart ${type === 'author' ? 'Author' : 'Partner'} Program`,
+          html: renderActivationNotificationEmail(type, application)
         });
       }
 

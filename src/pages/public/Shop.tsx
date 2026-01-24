@@ -331,6 +331,8 @@ export default function Shop() {
                           category={book.category?.name || 'General'}
                           image={book.image_url || book.metadata?.image_url || 'https://images.unsplash.com/photo-1544947950-fa07a98d237f?auto=format&fit=crop&q=80&w=800'}
                           type={book.type}
+                          weight={book.weight}
+                          volume={book.volume}
                         />
                       </motion.div>
                     ))}

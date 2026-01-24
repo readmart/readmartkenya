@@ -21,7 +21,7 @@ export const getK2CallbackUrl = (orderId?: string) => {
   const cleanDomain = domain.replace(/^https?:\/\//, '').replace(/\/$/, '');
   const baseUrl = `https://${cleanDomain}`;
   
-  return `${baseUrl}/api/kopokopo/webhook${orderId ? `?orderId=${orderId}` : ''}`;
+  return `${baseUrl}/api/payments/webhook${orderId ? `?orderId=${orderId}` : ''}`;
 };
 
 export interface K2StkPushRequest {
