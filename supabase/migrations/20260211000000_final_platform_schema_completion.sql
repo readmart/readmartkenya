@@ -84,7 +84,7 @@ END $$;
 
 -- 7. Complete Missing RLS Policies for Founder Dashboard
 
--- 7.0 Ensure Dependent Tables Exist
+-- 7.0 Ensure Dependent Tables Exist & Enable RLS
 CREATE TABLE IF NOT EXISTS public.transactions (
     id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
     order_id uuid REFERENCES public.orders(id),
@@ -93,6 +93,7 @@ CREATE TABLE IF NOT EXISTS public.transactions (
     status text DEFAULT 'pending',
     created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
 );
+ALTER TABLE public.transactions ENABLE ROW LEVEL SECURITY;
 
 CREATE TABLE IF NOT EXISTS public.event_rsvps (
     id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -102,6 +103,7 @@ CREATE TABLE IF NOT EXISTS public.event_rsvps (
     created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL,
     UNIQUE(user_id, event_id)
 );
+ALTER TABLE public.event_rsvps ENABLE ROW LEVEL SECURITY;
 
 CREATE TABLE IF NOT EXISTS public.club_discussions (
     id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -111,14 +113,15 @@ CREATE TABLE IF NOT EXISTS public.club_discussions (
     content text NOT NULL,
     created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
 );
+ALTER TABLE public.club_discussions ENABLE ROW LEVEL SECURITY;
 
 -- 7.1 Transactions Table Admin Policies
 DO $$ 
 BEGIN
     IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'transactions') THEN
         IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'transactions' AND policyname = 'Admins manage all transactions') THEN
-            CREATE POLICY "Admins manage all transactions" ON public.transactions
-                FOR ALL USING (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role IN ('admin', 'founder')));
+            EXECUTE 'CREATE POLICY "Admins manage all transactions" ON public.transactions
+                FOR ALL USING (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role IN (''admin'', ''founder'')))';
         END IF;
     END IF;
 END $$;
@@ -128,8 +131,8 @@ DO $$
 BEGIN
     IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'notification_logs') THEN
         IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'notification_logs' AND policyname = 'Admins manage notification logs') THEN
-            CREATE POLICY "Admins manage notification logs" ON public.notification_logs
-                FOR ALL USING (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role IN ('admin', 'founder')));
+            EXECUTE 'CREATE POLICY "Admins manage notification logs" ON public.notification_logs
+                FOR ALL USING (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role IN (''admin'', ''founder'')))';
         END IF;
     END IF;
 END $$;
@@ -139,8 +142,8 @@ DO $$
 BEGIN
     IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'partnership_services') THEN
         IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'partnership_services' AND policyname = 'Admins manage partnership services') THEN
-            CREATE POLICY "Admins manage partnership services" ON public.partnership_services
-                FOR ALL USING (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role IN ('admin', 'founder')));
+            EXECUTE 'CREATE POLICY "Admins manage partnership services" ON public.partnership_services
+                FOR ALL USING (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role IN (''admin'', ''founder'')))';
         END IF;
     END IF;
 END $$;
@@ -150,8 +153,8 @@ DO $$
 BEGIN
     IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'event_rsvps') THEN
         IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'event_rsvps' AND policyname = 'Admins view all RSVPs') THEN
-            CREATE POLICY "Admins view all RSVPs" ON public.event_rsvps
-                FOR SELECT USING (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role IN ('admin', 'founder')));
+            EXECUTE 'CREATE POLICY "Admins view all RSVPs" ON public.event_rsvps
+                FOR SELECT USING (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role IN (''admin'', ''founder'')))';
         END IF;
     END IF;
 END $$;
@@ -161,8 +164,8 @@ DO $$
 BEGIN
     IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'club_discussions') THEN
         IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'club_discussions' AND policyname = 'Admins manage all discussions') THEN
-            CREATE POLICY "Admins manage all discussions" ON public.club_discussions
-                FOR ALL USING (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role IN ('admin', 'founder')));
+            EXECUTE 'CREATE POLICY "Admins manage all discussions" ON public.club_discussions
+                FOR ALL USING (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role IN (''admin'', ''founder'')))';
         END IF;
     END IF;
 END $$;
@@ -170,9 +173,11 @@ END $$;
 -- 7.6 Book Club Memberships Management Policy
 DO $$ 
 BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'book_club_memberships' AND policyname = 'Admins manage all memberships') THEN
-        CREATE POLICY "Admins manage all memberships" ON public.book_club_memberships
-            FOR ALL USING (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role IN ('admin', 'founder')));
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'book_club_memberships') THEN
+        IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'book_club_memberships' AND policyname = 'Admins manage all memberships') THEN
+            EXECUTE 'CREATE POLICY "Admins manage all memberships" ON public.book_club_memberships
+                FOR ALL USING (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role IN (''admin'', ''founder'')))';
+        END IF;
     END IF;
 END $$;
 
