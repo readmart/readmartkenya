@@ -13,30 +13,30 @@ export async function getMyEbooks() {
     .select(`
       id,
       product_id,
-      products!inner (
+      product:products!inner (
         id,
         title,
         metadata,
         image_url,
-        type
+        is_ebook
       ),
-      orders!inner (
+      order:orders!inner (
         status,
         user_id,
         created_at
       )
     `)
-    .eq('orders.user_id', user.id)
-    .eq('products.type', 'ebook')
-    .in('orders.status', ['completed', 'paid']);
+    .eq('order.user_id', user.id)
+    .eq('product.is_ebook', true)
+    .in('order.status', ['completed', 'paid']);
 
   if (error) throw error;
 
   // Transform data to a flatter structure for the UI
   return data.map((item: any) => ({
     id: item.product_id, // Use product_id as the unique key for the ebook entry
-    created_at: item.orders.created_at,
-    products: item.products
+    created_at: item.order.created_at,
+    products: item.product
   }));
 }
 
