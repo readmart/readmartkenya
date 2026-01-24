@@ -7,11 +7,9 @@ import { supabase } from '../lib/supabase/client';
  */
 export async function subscribeToNewsletter(email: string) {
   try {
-    const { data, error } = await supabase
+    const { error } = await supabase
       .from('newsletter_subscriptions')
-      .insert([{ email, status: 'active' }])
-      .select()
-      .single();
+      .insert([{ email, status: 'active' }]);
 
     if (error) {
       // Handle unique constraint violation (already subscribed)
@@ -21,7 +19,7 @@ export async function subscribeToNewsletter(email: string) {
       throw error;
     }
 
-    return { success: true, data, message: 'Successfully subscribed to our newsletter!' };
+    return { success: true, message: 'Successfully subscribed to our newsletter!' };
   } catch (error: any) {
     console.error('Newsletter subscription failed:', error);
     return { 

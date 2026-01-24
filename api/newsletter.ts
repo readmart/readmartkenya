@@ -15,11 +15,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const { email } = req.body;
       if (!email) return badRequest(res, 'Email is required');
 
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from('newsletter_subscriptions')
-        .insert([{ email, status: 'active' }])
-        .select()
-        .single();
+        .insert([{ email, status: 'active' }]);
 
       if (error) {
         if (error.code === '23505') {
