@@ -6,7 +6,20 @@
 
 BEGIN;
 
--- 1. Enhance Site Settings with missing fields
+-- 1. Ensure notification_logs table exists
+CREATE TABLE IF NOT EXISTS public.notification_logs (
+    id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+    recipient text NOT NULL,
+    subject text NOT NULL,
+    status text CHECK (status IN ('pending', 'sent', 'failed')) DEFAULT 'pending',
+    error_message text,
+    metadata jsonb DEFAULT '{}'::jsonb,
+    created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+ALTER TABLE public.notification_logs ENABLE ROW LEVEL SECURITY;
+
+-- 2. Enhance Site Settings with missing fields
 ALTER TABLE public.site_settings 
 ADD COLUMN IF NOT EXISTS headquarters_address text DEFAULT 'Nairobi, Kenya',
 ADD COLUMN IF NOT EXISTS global_support_whatsapp text DEFAULT 'https://wa.me/254700000000',
