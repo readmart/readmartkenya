@@ -916,40 +916,53 @@ export async function getSiteSettings() {
   try {
     await verifyAdmin();
     // Try site_settings first with the author_of_the_day join
-    // We use a fallback-safe approach for the join
+    // We use the simplest join syntax first
     let { data: siteData, error: siteError } = await supabase
       .from('site_settings')
-      .select('*, author_of_the_day:profiles!author_of_the_day_id(id, full_name, avatar_url, bio)')
+      .select('*, author_of_the_day:profiles(id, full_name, avatar_url, bio)')
       .maybeSingle();
 
-    // If any error (likely author_of_the_day_id column missing, bio missing, or join failed), try without the join
+    // If join fails, try with explicit hint
+    if (siteError) {
+      console.warn('site_settings simple join failed, trying with explicit hint:', siteError.message);
+      const { data: hintData, error: hintError } = await supabase
+        .from('site_settings')
+        .select('*, author_of_the_day:profiles!author_of_the_day_id(id, full_name, avatar_url, bio)')
+        .maybeSingle();
+      
+      if (!hintError) {
+        siteData = hintData;
+        siteError = null;
+      } else {
+        siteError = hintError;
+      }
+    }
+
+    // If still error, try without bio (some profiles might not have it)
     if (siteError) {
       console.warn('site_settings join failed, checking for specific column issues:', siteError.message);
       
-      // If it's a bio column issue, try without bio
-      if (siteError.message?.includes('bio')) {
-        const { data: noBioData, error: noBioError } = await supabase
-          .from('site_settings')
-          .select('*, author_of_the_day:profiles!author_of_the_day_id(id, full_name, avatar_url)')
-          .maybeSingle();
-        
-        if (!noBioError) {
-          siteData = noBioData;
-          siteError = null;
-        }
-      }
+      const { data: noBioData, error: noBioError } = await supabase
+        .from('site_settings')
+        .select('*, author_of_the_day:profiles(id, full_name, avatar_url)')
+        .maybeSingle();
       
-      // If still error or was a different error, fallback to simple select
-      if (siteError) {
-        console.warn('Falling back to basic site_settings fetch');
-        const { data: retryData, error: retryError } = await supabase
-          .from('site_settings')
-          .select('*')
-          .maybeSingle();
-        
-        siteData = retryData;
-        siteError = retryError;
+      if (!noBioError) {
+        siteData = noBioData;
+        siteError = null;
       }
+    }
+    
+    // Final fallback to simple select
+    if (siteError) {
+      console.warn('Falling back to basic site_settings fetch');
+      const { data: retryData, error: retryError } = await supabase
+        .from('site_settings')
+        .select('*')
+        .maybeSingle();
+      
+      siteData = retryData;
+      siteError = retryError;
     }
 
     if (!siteError && siteData) {
