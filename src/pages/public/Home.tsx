@@ -46,8 +46,21 @@ export default function Home() {
             .select('*, author_of_the_day:profiles!author_of_the_day_id(id, full_name, avatar_url, bio)')
             .maybeSingle();
           
-          if (error) throw error;
-          settings = data;
+          if (error) {
+            // Handle specific column issues
+            if (error.message?.includes('bio')) {
+              const { data: noBioData, error: noBioError } = await supabase
+                .from('site_settings')
+                .select('*, author_of_the_day:profiles!author_of_the_day_id(id, full_name, avatar_url)')
+                .maybeSingle();
+              if (noBioError) throw noBioError;
+              settings = noBioData;
+            } else {
+              throw error;
+            }
+          } else {
+            settings = data;
+          }
         } catch (err: any) {
           console.warn('Author of the Day join failed, retrying without join:', err.message);
           const { data } = await supabase

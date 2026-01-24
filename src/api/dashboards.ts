@@ -916,21 +916,40 @@ export async function getSiteSettings() {
   try {
     await verifyAdmin();
     // Try site_settings first with the author_of_the_day join
+    // We use a fallback-safe approach for the join
     let { data: siteData, error: siteError } = await supabase
       .from('site_settings')
       .select('*, author_of_the_day:profiles!author_of_the_day_id(id, full_name, avatar_url, bio)')
       .maybeSingle();
 
-    // If any error (likely author_of_the_day_id column missing or join failed), try without the join
+    // If any error (likely author_of_the_day_id column missing, bio missing, or join failed), try without the join
     if (siteError) {
-      console.warn('site_settings join failed, retrying without author_of_the_day join');
-      const { data: retryData, error: retryError } = await supabase
-        .from('site_settings')
-        .select('*')
-        .maybeSingle();
+      console.warn('site_settings join failed, checking for specific column issues:', siteError.message);
       
-      siteData = retryData;
-      siteError = retryError;
+      // If it's a bio column issue, try without bio
+      if (siteError.message?.includes('bio')) {
+        const { data: noBioData, error: noBioError } = await supabase
+          .from('site_settings')
+          .select('*, author_of_the_day:profiles!author_of_the_day_id(id, full_name, avatar_url)')
+          .maybeSingle();
+        
+        if (!noBioError) {
+          siteData = noBioData;
+          siteError = null;
+        }
+      }
+      
+      // If still error or was a different error, fallback to simple select
+      if (siteError) {
+        console.warn('Falling back to basic site_settings fetch');
+        const { data: retryData, error: retryError } = await supabase
+          .from('site_settings')
+          .select('*')
+          .maybeSingle();
+        
+        siteData = retryData;
+        siteError = retryError;
+      }
     }
 
     if (!siteError && siteData) {
