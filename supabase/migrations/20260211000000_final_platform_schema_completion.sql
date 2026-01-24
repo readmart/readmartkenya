@@ -84,48 +84,86 @@ END $$;
 
 -- 7. Complete Missing RLS Policies for Founder Dashboard
 
+-- 7.0 Ensure Dependent Tables Exist
+CREATE TABLE IF NOT EXISTS public.transactions (
+    id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+    order_id uuid REFERENCES public.orders(id),
+    user_id uuid REFERENCES public.profiles(id),
+    amount decimal(12,2) NOT NULL,
+    status text DEFAULT 'pending',
+    created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS public.event_rsvps (
+    id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+    user_id uuid REFERENCES public.profiles(id) ON DELETE CASCADE NOT NULL,
+    event_id uuid REFERENCES public.cms_content(id) ON DELETE CASCADE NOT NULL,
+    status text DEFAULT 'attending' CHECK (status IN ('attending', 'interested', 'cancelled')),
+    created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL,
+    UNIQUE(user_id, event_id)
+);
+
+CREATE TABLE IF NOT EXISTS public.club_discussions (
+    id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+    club_id uuid REFERENCES public.cms_content(id) ON DELETE CASCADE NOT NULL,
+    author_id uuid REFERENCES public.profiles(id) ON DELETE CASCADE NOT NULL,
+    title text NOT NULL,
+    content text NOT NULL,
+    created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
 -- 7.1 Transactions Table Admin Policies
 DO $$ 
 BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'transactions' AND policyname = 'Admins manage all transactions') THEN
-        CREATE POLICY "Admins manage all transactions" ON public.transactions
-            FOR ALL USING (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role IN ('admin', 'founder')));
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'transactions') THEN
+        IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'transactions' AND policyname = 'Admins manage all transactions') THEN
+            CREATE POLICY "Admins manage all transactions" ON public.transactions
+                FOR ALL USING (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role IN ('admin', 'founder')));
+        END IF;
     END IF;
 END $$;
 
 -- 7.2 Notification Logs Table Admin Policies
 DO $$ 
 BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'notification_logs' AND policyname = 'Admins manage notification logs') THEN
-        CREATE POLICY "Admins manage notification logs" ON public.notification_logs
-            FOR ALL USING (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role IN ('admin', 'founder')));
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'notification_logs') THEN
+        IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'notification_logs' AND policyname = 'Admins manage notification logs') THEN
+            CREATE POLICY "Admins manage notification logs" ON public.notification_logs
+                FOR ALL USING (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role IN ('admin', 'founder')));
+        END IF;
     END IF;
 END $$;
 
 -- 7.3 Partnership Services Table Admin Policies
 DO $$ 
 BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'partnership_services' AND policyname = 'Admins manage partnership services') THEN
-        CREATE POLICY "Admins manage partnership services" ON public.partnership_services
-            FOR ALL USING (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role IN ('admin', 'founder')));
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'partnership_services') THEN
+        IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'partnership_services' AND policyname = 'Admins manage partnership services') THEN
+            CREATE POLICY "Admins manage partnership services" ON public.partnership_services
+                FOR ALL USING (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role IN ('admin', 'founder')));
+        END IF;
     END IF;
 END $$;
 
 -- 7.4 Event RSVPs Table Admin Policies
 DO $$ 
 BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'event_rsvps' AND policyname = 'Admins view all RSVPs') THEN
-        CREATE POLICY "Admins view all RSVPs" ON public.event_rsvps
-            FOR SELECT USING (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role IN ('admin', 'founder')));
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'event_rsvps') THEN
+        IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'event_rsvps' AND policyname = 'Admins view all RSVPs') THEN
+            CREATE POLICY "Admins view all RSVPs" ON public.event_rsvps
+                FOR SELECT USING (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role IN ('admin', 'founder')));
+        END IF;
     END IF;
 END $$;
 
 -- 7.5 Club Discussions Table Admin Policies
 DO $$ 
 BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'club_discussions' AND policyname = 'Admins manage all discussions') THEN
-        CREATE POLICY "Admins manage all discussions" ON public.club_discussions
-            FOR ALL USING (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role IN ('admin', 'founder')));
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'club_discussions') THEN
+        IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'club_discussions' AND policyname = 'Admins manage all discussions') THEN
+            CREATE POLICY "Admins manage all discussions" ON public.club_discussions
+                FOR ALL USING (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role IN ('admin', 'founder')));
+        END IF;
     END IF;
 END $$;
 
