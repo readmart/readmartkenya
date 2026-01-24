@@ -23,20 +23,29 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const orderData = req.body;
       
       // 1. Create the order
+      const orderInsertData: any = {
+        user_id: user.id,
+        subtotal_amount: orderData.subtotal_amount,
+        shipping_amount: orderData.shipping_amount,
+        shipping_address: orderData.shipping_address,
+        status: 'pending',
+        payment_method: orderData.payment_method || 'm-pesa'
+      };
+
+      if (orderData.shipping_zone_id && orderData.shipping_zone_id.trim() !== '') {
+        orderInsertData.shipping_zone_id = orderData.shipping_zone_id;
+      }
+
       const { data: order, error: orderError } = await supabase
         .from('orders')
-        .insert({
-          user_id: user.id,
-          subtotal_amount: orderData.subtotal_amount,
-          shipping_amount: orderData.shipping_amount,
-          shipping_zone_id: orderData.shipping_zone_id,
-          shipping_address: orderData.shipping_address,
-          status: 'pending'
-        })
+        .insert(orderInsertData)
         .select()
         .single();
 
-      if (orderError) throw orderError;
+      if (orderError) {
+        console.error('Order creation error in API handler:', orderError);
+        throw orderError;
+      }
 
       // 2. Create order items
       const orderItems = orderData.items.map((item: any) => ({

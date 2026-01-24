@@ -25,26 +25,36 @@ export async function createOrder(orderData: OrderData) {
   if (!user) throw new Error('User must be logged in to place an order');
 
   // 1. Create the order
+  const orderInsertData: any = {
+    user_id: user.id,
+    subtotal_amount: orderData.subtotal_amount,
+    shipping_amount: orderData.shipping_amount,
+    shipping_address: {
+      full_name: orderData.full_name,
+      email: orderData.email,
+      phone: orderData.phone,
+      address: orderData.address,
+      city: orderData.city
+    },
+    status: 'pending',
+    payment_method: orderData.payment_method || 'm-pesa'
+  };
+
+  // Only add shipping_zone_id if it's provided and not empty
+  if (orderData.shipping_zone_id && orderData.shipping_zone_id.trim() !== '') {
+    orderInsertData.shipping_zone_id = orderData.shipping_zone_id;
+  }
+
   const { data: order, error: orderError } = await supabase
     .from('orders')
-    .insert({
-      user_id: user.id,
-      subtotal_amount: orderData.subtotal_amount,
-      shipping_amount: orderData.shipping_amount,
-      shipping_zone_id: orderData.shipping_zone_id,
-      shipping_address: {
-        full_name: orderData.full_name,
-        email: orderData.email,
-        phone: orderData.phone,
-        address: orderData.address,
-        city: orderData.city
-      },
-      status: 'pending'
-    })
+    .insert(orderInsertData)
     .select()
     .single();
 
-  if (orderError) throw orderError;
+  if (orderError) {
+    console.error('Order creation error details:', orderError);
+    throw orderError;
+  }
 
   // 2. Create order items
   const orderItems = orderData.items.map(item => ({
