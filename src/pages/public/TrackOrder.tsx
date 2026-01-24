@@ -13,11 +13,17 @@ export default function TrackOrder() {
 
   const handleTrack = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!orderId.trim()) return;
+    let cleanId = orderId.trim();
+    if (!cleanId) return;
+
+    // Remove #ORD- prefix if present
+    if (cleanId.toUpperCase().startsWith('#ORD-')) {
+      cleanId = cleanId.slice(5);
+    }
 
     setIsLoading(true);
     try {
-      const data = await getOrder(orderId);
+      const data = await getOrder(cleanId);
       setOrder(data);
     } catch (err) {
       toast.error('Order not found. Please check the ID and try again.');

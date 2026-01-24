@@ -22,13 +22,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (authError || !user) return unauthorized(res);
 
       // Check if user has purchased the ebook or has a membership
-      const { data: purchase } = await supabase
+      const { data: purchase, error: purchaseError } = await supabase
         .from('order_items')
         .select('id, orders!inner(status, user_id)')
         .eq('product_id', ebookId)
         .eq('orders.user_id', user.id)
-        .in('orders.status', ['paid', 'completed'])
+        .in('orders.status', ['paid', 'completed', 'delivered'])
         .maybeSingle();
+
+      if (purchaseError) {
+        console.error('Error verifying ebook access:', purchaseError);
+        return serverError(res, purchaseError);
+      }
 
       if (!purchase) {
         return json(res, 403, { error: 'Access denied. Purchase required.' });

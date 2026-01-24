@@ -26,6 +26,7 @@ const tables = [
   'cms_content',
   'shipping_zones',
   'promos',
+  'payment_methods',
   'book_club_memberships',
   'author_applications',
   'partnership_applications',

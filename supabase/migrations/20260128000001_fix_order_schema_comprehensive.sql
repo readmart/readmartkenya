@@ -61,7 +61,7 @@ DECLARE
     v_tax_rate decimal;
 BEGIN
     -- 1. Get current tax rate from settings
-    SELECT tax_rate INTO v_tax_rate FROM public.settings WHERE id = 'global' LIMIT 1;
+    SELECT tax_rate INTO v_tax_rate FROM public.site_settings WHERE id = 'global' LIMIT 1;
     
     -- Default to 16% if settings not found
     IF v_tax_rate IS NULL THEN

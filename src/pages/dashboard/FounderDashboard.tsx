@@ -24,7 +24,8 @@ import {
   createProduct, updateOrderStatus, updateUserStatus,
   getCategories, getShippingZones, getPromos, togglePromoStatus,
   getCMSContent, updateCMSContent, createCMSContent,
-  sendAbandonedCartReminders, updateRecord, createRecord
+  sendAbandonedCartReminders, updateRecord, createRecord,
+  getProtocolAgreements, createProtocolAgreement, updateProtocolAgreement, deleteProtocolAgreement
 } from '@/api/dashboards';
 import { uploadSiteAsset, uploadProductImage, uploadEbookFile, uploadAgreementFile } from '@/api/storage';
 import { getEventRSVPs } from '@/api/community';
@@ -68,7 +69,8 @@ export default function FounderDashboard() {
     shippingZones: [],
     promos: [],
     cmsContent: [],
-    newsletterSubscriptions: []
+    newsletterSubscriptions: [],
+    protocols: []
   });
 
   // Fetch all required data
@@ -86,6 +88,7 @@ export default function FounderDashboard() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'contact_messages' }, () => fetchAllData())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'author_applications' }, () => fetchAllData())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'partnership_applications' }, () => fetchAllData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'partnership_agreements' }, () => fetchAllData())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'newsletter_subscriptions' }, () => fetchAllData())
       .subscribe();
 
@@ -111,14 +114,15 @@ export default function FounderDashboard() {
         getShippingZones(),
         getPromos(),
         getCMSContent(),
-        getNewsletterSubscriptions()
+        getNewsletterSubscriptions(),
+        getProtocolAgreements()
       ]);
 
       const [
         analytics, inventory, orders, users, 
         settings, inquiries, partnerships, 
         authors, approvedAuthors, categories, shippingZones, promos,
-        cmsContent, newsletterSubscriptions
+        cmsContent, newsletterSubscriptions, protocols
       ] = results.map(res => res.status === 'fulfilled' ? res.value : null);
 
       setData({ 
@@ -135,10 +139,27 @@ export default function FounderDashboard() {
         shippingZones: shippingZones || [],
         promos: promos || [],
         cmsContent: cmsContent || [],
-        newsletterSubscriptions: newsletterSubscriptions || []
+        newsletterSubscriptions: newsletterSubscriptions || [],
+        protocols: protocols || []
       });
 
       if (results.some(res => res.status === 'rejected')) {
+        const failedIndices = results
+          .map((res, i) => res.status === 'rejected' ? i : -1)
+          .filter(i => i !== -1);
+        
+        const functionNames = [
+          'getGlobalAnalytics', 'getInventory', 'getOrders', 'getAllUsers', 
+          'getSiteSettings', 'getInquiries', 'getPartnerships', 'getAuthors', 
+          'getApprovedAuthors', 'getCategories', 'getShippingZones', 'getPromos',
+          'getCMSContent', 'getNewsletterSubscriptions', 'getProtocolAgreements'
+        ];
+
+        failedIndices.forEach(idx => {
+          const res = results[idx] as PromiseRejectedResult;
+          console.error(`Dashboard fetch failed for ${functionNames[idx]}:`, res.reason);
+        });
+
         console.warn('Some dashboard data failed to load:', results.filter(res => res.status === 'rejected'));
         toast.error('Some metrics could not be loaded');
       }
@@ -268,7 +289,14 @@ export default function FounderDashboard() {
                 onUpdate={fetchAllData} 
               />
             )}
-            {activeTab === 'agreements' && <AgreementsView partnerships={data.partnerships} authors={data.authors} onUpdate={fetchAllData} />}
+            {activeTab === 'agreements' && (
+              <AgreementsView 
+                partnerships={data.partnerships} 
+                authors={data.authors} 
+                protocols={data.protocols}
+                onUpdate={fetchAllData} 
+              />
+            )}
             {activeTab === 'promos' && <PromosView data={data.promos} onUpdate={fetchAllData} />}
             {activeTab === 'newsletter' && <NewsletterView data={data.newsletterSubscriptions} onUpdate={fetchAllData} />}
           </motion.div>
@@ -692,7 +720,7 @@ function AnalyticsView({ data, formatPrice }: any) {
             </div>
           </div>
           <div className="h-[400px] w-full min-h-[400px]">
-            <ResponsiveContainer width="100%" height="100%" minHeight={400}>
+            <ResponsiveContainer width="100%" height="100%" minHeight={400} debounce={100}>
               <AreaChart data={data.salesData}>
                 <defs>
                   <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
@@ -726,7 +754,7 @@ function AnalyticsView({ data, formatPrice }: any) {
         <div className="bg-white p-10 rounded-[40px] border border-slate-100 shadow-sm">
           <h3 className="text-xl font-black tracking-tighter uppercase mb-10">Category Saturation</h3>
           <div className="h-[400px] w-full min-h-[400px]">
-            <ResponsiveContainer width="100%" height="100%" minHeight={400}>
+            <ResponsiveContainer width="100%" height="100%" minHeight={400} debounce={100}>
               <PieChart>
                 <Pie
                   data={data.categoryStats}
@@ -4058,9 +4086,51 @@ function EventsView({ data, onUpdate }: any) {
   );
 }
 
-function AgreementsView({ partnerships, authors, onUpdate }: any) {
+function AgreementsView({ partnerships, authors, protocols, onUpdate }: any) {
   const [selectedApp, setSelectedApp] = useState<any>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [isProtocolModalOpen, setIsProtocolModalOpen] = useState(false);
+  const [editingProtocol, setEditingProtocol] = useState<any>(null);
+  const [protocolFormData, setProtocolFormData] = useState({
+    title: '',
+    content: '',
+    type: 'author',
+    is_active: true,
+    version: '1.0'
+  });
+
+  const handleProtocolSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const loadingToast = toast.loading(editingProtocol ? 'Updating Protocol...' : 'Creating Protocol...');
+    try {
+      if (editingProtocol) {
+        await updateProtocolAgreement(editingProtocol.id, protocolFormData);
+        toast.success('Protocol updated successfully', { id: loadingToast });
+      } else {
+        await createProtocolAgreement(protocolFormData);
+        toast.success('Protocol created successfully', { id: loadingToast });
+      }
+      setIsProtocolModalOpen(false);
+      setEditingProtocol(null);
+      setProtocolFormData({ title: '', content: '', type: 'author', is_active: true, version: '1.0' });
+      onUpdate();
+    } catch (error) {
+      console.error('Protocol save error:', error);
+      toast.error('Failed to save protocol', { id: loadingToast });
+    }
+  };
+
+  const handleDeleteProtocol = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this protocol?')) return;
+    const loadingToast = toast.loading('Deleting Protocol...');
+    try {
+      await deleteProtocolAgreement(id);
+      toast.success('Protocol deleted', { id: loadingToast });
+      onUpdate();
+    } catch (error) {
+      toast.error('Failed to delete protocol', { id: loadingToast });
+    }
+  };
 
   const handleStatusUpdate = async (table: string, id: string, status: string, name: string) => {
     const loadingToast = toast.loading(`Updating status for ${name}...`);
@@ -4266,10 +4336,79 @@ function AgreementsView({ partnerships, authors, onUpdate }: any) {
   );
 
   return (
-    <div className="space-y-8">
-      <div>
-        <h1 className="text-4xl font-black tracking-tighter uppercase mb-2">Protocol Agreements</h1>
-        <p className="text-slate-500 font-medium">Verify and approve author and partner collaborations</p>
+    <div className="space-y-8 pb-20">
+      <div className="flex justify-between items-end">
+        <div>
+          <h1 className="text-4xl font-black tracking-tighter uppercase mb-2">Protocol Agreements</h1>
+          <p className="text-slate-500 font-medium">Verify and approve author and partner collaborations</p>
+        </div>
+        <button 
+          onClick={() => {
+            setEditingProtocol(null);
+            setProtocolFormData({ title: '', content: '', type: 'author', is_active: true, version: '1.0' });
+            setIsProtocolModalOpen(true);
+          }}
+          className="bg-primary text-white px-8 py-4 rounded-2xl font-black uppercase tracking-tighter flex items-center gap-2 hover:opacity-90 transition-all shadow-xl shadow-primary/20"
+        >
+          <Plus className="w-5 h-5" />
+          Define Protocol
+        </button>
+      </div>
+
+      {/* Protocol Templates Management */}
+      <div className="bg-white p-10 rounded-[40px] border border-slate-100 shadow-sm">
+        <h3 className="text-xl font-black tracking-tighter uppercase mb-8 flex items-center gap-2">
+          <Settings className="w-6 h-6 text-primary" />
+          Active Protocols
+        </h3>
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {protocols.map((protocol: any) => (
+            <div key={protocol.id} className="p-6 bg-slate-50 rounded-[32px] border border-slate-100 group hover:border-primary/30 transition-all">
+              <div className="flex justify-between items-start mb-4">
+                <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border ${
+                  protocol.type === 'author' ? 'bg-purple-50 text-purple-600 border-purple-100' : 'bg-blue-50 text-blue-600 border-blue-100'
+                }`}>
+                  {protocol.type}
+                </span>
+                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                  <button 
+                    onClick={() => {
+                      setEditingProtocol(protocol);
+                      setProtocolFormData({
+                        title: protocol.title,
+                        content: protocol.content,
+                        type: protocol.type,
+                        is_active: protocol.is_active,
+                        version: protocol.version || '1.0'
+                      });
+                      setIsProtocolModalOpen(true);
+                    }}
+                    className="p-2 hover:bg-white rounded-xl text-slate-400 hover:text-primary transition-all"
+                  >
+                    <Edit className="w-4 h-4" />
+                  </button>
+                  <button 
+                    onClick={() => handleDeleteProtocol(protocol.id)}
+                    className="p-2 hover:bg-white rounded-xl text-slate-400 hover:text-red-500 transition-all"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+              <h4 className="font-black text-slate-900 mb-1">{protocol.title}</h4>
+              <p className="text-xs font-bold text-slate-400 mb-4">v{protocol.version || '1.0'}</p>
+              <div className="text-xs text-slate-500 line-clamp-3 font-medium mb-4 whitespace-pre-wrap">
+                {protocol.content}
+              </div>
+            </div>
+          ))}
+          {protocols.length === 0 && (
+            <div className="col-span-full py-12 text-center border-2 border-dashed border-slate-100 rounded-[32px]">
+              <AlertCircle className="w-12 h-12 text-slate-200 mx-auto mb-4" />
+              <p className="text-slate-400 font-bold uppercase text-xs tracking-widest">No active protocols defined</p>
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="grid lg:grid-cols-2 gap-8">
@@ -4284,7 +4423,7 @@ function AgreementsView({ partnerships, authors, onUpdate }: any) {
               <ApplicationCard key={app.id} app={app} table="partnership_applications" type="partner" />
             ))}
             {partnerships.length === 0 && (
-              <p className="text-center py-8 text-slate-400 font-bold uppercase text-xs tracking-widest">No partnership protocols found</p>
+              <p className="text-center py-8 text-slate-400 font-bold uppercase text-xs tracking-widest">No partnership applications found</p>
             )}
           </div>
         </div>
@@ -4300,11 +4439,94 @@ function AgreementsView({ partnerships, authors, onUpdate }: any) {
               <ApplicationCard key={app.id} app={app} table="author_applications" type="author" />
             ))}
             {authors.length === 0 && (
-              <p className="text-center py-8 text-slate-400 font-bold uppercase text-xs tracking-widest">No author protocols found</p>
+              <p className="text-center py-8 text-slate-400 font-bold uppercase text-xs tracking-widest">No author applications found</p>
             )}
           </div>
         </div>
       </div>
+
+      {/* Protocol Modal */}
+      <AnimatePresence>
+        {isProtocolModalOpen && (
+          <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsProtocolModalOpen(false)}
+              className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
+            />
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              className="relative bg-white w-full max-w-2xl rounded-[40px] shadow-2xl overflow-hidden"
+            >
+              <div className="p-8 border-b border-slate-50 flex justify-between items-center bg-slate-50/50">
+                <h2 className="text-2xl font-black uppercase tracking-tighter">
+                  {editingProtocol ? 'Refine Protocol' : 'Define New Protocol'}
+                </h2>
+                <button onClick={() => setIsProtocolModalOpen(false)} className="p-2 hover:bg-white rounded-full transition-all">
+                  <XCircle className="w-8 h-8 text-slate-300 hover:text-red-500" />
+                </button>
+              </div>
+              <form onSubmit={handleProtocolSubmit} className="p-10 space-y-6">
+                <div className="grid grid-cols-2 gap-6">
+                  <div className="col-span-2">
+                    <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Protocol Title</label>
+                    <input 
+                      required
+                      type="text"
+                      value={protocolFormData.title}
+                      onChange={(e) => setProtocolFormData({...protocolFormData, title: e.target.value})}
+                      className="w-full bg-slate-50 border-none rounded-2xl px-6 py-4 font-bold outline-none focus:ring-2 focus:ring-primary transition-all"
+                      placeholder="e.g. Standard Author Collaboration Terms"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Protocol Type</label>
+                    <select 
+                      value={protocolFormData.type}
+                      onChange={(e) => setProtocolFormData({...protocolFormData, type: e.target.value})}
+                      className="w-full bg-slate-50 border-none rounded-2xl px-6 py-4 font-bold outline-none focus:ring-2 focus:ring-primary transition-all appearance-none"
+                    >
+                      <option value="author">Author Collaboration</option>
+                      <option value="service_provider">Service Provider / Partner</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Version</label>
+                    <input 
+                      type="text"
+                      value={protocolFormData.version}
+                      onChange={(e) => setProtocolFormData({...protocolFormData, version: e.target.value})}
+                      className="w-full bg-slate-50 border-none rounded-2xl px-6 py-4 font-bold outline-none focus:ring-2 focus:ring-primary transition-all"
+                      placeholder="1.0"
+                    />
+                  </div>
+                  <div className="col-span-2">
+                    <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Protocol Content (Markdown/Text)</label>
+                    <textarea 
+                      required
+                      rows={8}
+                      value={protocolFormData.content}
+                      onChange={(e) => setProtocolFormData({...protocolFormData, content: e.target.value})}
+                      className="w-full bg-slate-50 border-none rounded-2xl px-6 py-4 font-bold outline-none focus:ring-2 focus:ring-primary transition-all resize-none"
+                      placeholder="Define the core terms, rights, and obligations..."
+                    />
+                  </div>
+                </div>
+                <button 
+                  type="submit"
+                  className="w-full bg-primary text-white py-5 rounded-2xl font-black uppercase tracking-widest hover:opacity-90 transition-all shadow-xl shadow-primary/20"
+                >
+                  {editingProtocol ? 'Synchronize Protocol' : 'Deploy Protocol'}
+                </button>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* Detail Modal */}
       <AnimatePresence>

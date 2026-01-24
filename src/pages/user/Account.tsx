@@ -123,9 +123,18 @@ export default function Account() {
         .select('*')
         .eq('user_id', user.id);
       
-      if (!error) setPaymentMethods(data || []);
+      if (error) {
+        console.error('Error fetching payment methods:', error);
+        // If it's a 404, it might mean the table doesn't exist or isn't accessible
+        if (error.code === 'PGRST204' || error.message.includes('not found')) {
+          console.warn('Payment methods table might be missing or inaccessible');
+        }
+        return;
+      }
+      
+      setPaymentMethods(data || []);
     } catch (err) {
-      console.error('Failed to fetch payment methods');
+      console.error('Failed to fetch payment methods:', err);
     } finally {
       setIsLoadingPayments(false);
     }
@@ -317,7 +326,7 @@ export default function Account() {
                       <label className="text-xs font-black uppercase tracking-widest text-muted-foreground ml-1">Phone Number</label>
                       <div className="glass p-4 rounded-2xl flex items-center gap-4 border-white/5">
                         <Phone className="w-5 h-5 text-primary" />
-                        <span className="font-bold">+254 700 000 000</span>
+                        <span className="font-bold">+254 794 129 958</span>
                       </div>
                     </div>
                     <div className="space-y-4">

@@ -34,13 +34,42 @@ export async function subscribeToNewsletter(email: string) {
  * Gets all newsletter subscriptions (Admin only)
  */
 export async function getNewsletterSubscriptions() {
-  const { data, error } = await supabase
-    .from('newsletter_subscriptions')
-    .select('*')
-    .order('created_at', { ascending: false });
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    
+    // Check if session exists and user is admin/founder
+    let isAdmin = false;
+    if (session) {
+      const { data: profile } = await supabase.from('profiles').select('role').eq('id', session.user.id).single();
+      isAdmin = profile?.role === 'founder' || profile?.role === 'admin';
+    } else {
+      // Dev bypass
+      const devRole = typeof window !== 'undefined' ? localStorage.getItem('rm_dev_role') : null;
+      isAdmin = devRole === 'founder' || devRole === 'admin';
+    }
 
-  if (error) throw error;
-  return data;
+    if (!isAdmin) {
+      throw new Error('Unauthorized access');
+    }
+
+    const { data, error, status } = await supabase
+      .from('newsletter_subscriptions')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      // If table doesn't exist (404), return empty array instead of throwing
+      if (status === 404 || error.code === 'PGRST116' || error.message?.includes('not found')) {
+        console.warn('Newsletter subscriptions table not found, returning empty list');
+        return [];
+      }
+      throw error;
+    }
+    return data || [];
+  } catch (err) {
+    console.error('Failed to fetch newsletter subscriptions:', err);
+    return [];
+  }
 }
 
 /**

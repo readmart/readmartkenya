@@ -44,7 +44,6 @@ export default function Events() {
           </div>
           <div className="flex gap-4">
             <button className="glass px-6 py-3 rounded-2xl font-bold hover:bg-white/10 transition-all">Past Events</button>
-            <button className="bg-primary text-white px-6 py-3 rounded-2xl font-bold shadow-lg shadow-primary/20">Submit Event</button>
           </div>
         </div>
       </header>

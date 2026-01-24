@@ -232,7 +232,7 @@ export default function AuthorApply() {
                     value={formData.contact_info}
                     onChange={(e) => setFormData({...formData, contact_info: e.target.value})}
                     className="glass w-full pl-14 pr-6 py-4 rounded-2xl outline-none focus:ring-2 focus:ring-primary font-bold"
-                    placeholder="+254 700 000 000"
+                    placeholder="+254 794 129 958"
                   />
                 </div>
               </div>

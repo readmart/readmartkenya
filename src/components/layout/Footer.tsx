@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Facebook, Instagram, Youtube, Linkedin, Send, Phone, Mail, MapPin, MessageCircle, Loader2 } from 'lucide-react';
+import { Facebook, Instagram, Youtube, Linkedin, Send, Phone, Mail, MapPin, Loader2 } from 'lucide-react';
 import { useSettings } from '@/hooks/useSettings';
-import { CONTACT_INFO } from '@/lib/constants';
+import { CONTACT_INFO, SOCIAL_LINKS } from '@/lib/constants';
 import { subscribeToNewsletter } from '@/api/newsletter';
 import { toast } from 'sonner';
 
@@ -159,15 +159,53 @@ export default function Footer() {
             </div>
 
             <div className="space-y-4">
+              <h3 className="text-sm font-bold uppercase tracking-widest text-muted-foreground">Video & Documentation</h3>
+              <div className="space-y-3">
+                <a 
+                  href="https://www.youtube.com/watch?v=dQw4w9WgXcQ" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="group block p-2 glass rounded-xl hover:bg-white/10 transition-all border border-white/5"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-red-500/10 text-red-500 rounded-lg group-hover:bg-red-500 group-hover:text-white transition-all">
+                      <Youtube className="w-3.5 h-3.5" />
+                    </div>
+                    <div>
+                      <p className="text-[13px] font-bold leading-tight">Welcome to ReadMart</p>
+                      <p className="text-[11px] text-muted-foreground">2:15 • Watch on YouTube</p>
+                    </div>
+                  </div>
+                </a>
+                <a 
+                  href="https://www.youtube.com/watch?v=dQw4w9WgXcQ" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="group block p-2 glass rounded-xl hover:bg-white/10 transition-all border border-white/5"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-red-500/10 text-red-500 rounded-lg group-hover:bg-red-500 group-hover:text-white transition-all">
+                      <Youtube className="w-3.5 h-3.5" />
+                    </div>
+                    <div>
+                      <p className="text-[13px] font-bold leading-tight">Join the Book Club</p>
+                      <p className="text-[11px] text-muted-foreground">3:45 • Watch on YouTube</p>
+                    </div>
+                  </div>
+                </a>
+              </div>
+            </div>
+
+            <div className="space-y-4">
               <h3 className="text-sm font-bold uppercase tracking-widest text-muted-foreground">Connect With Us</h3>
               <div className="flex flex-wrap gap-3">
                 {[
-                  { icon: 'Facebook', href: settings.facebook_url, label: 'Facebook', color: 'hover:bg-[#1877F2]' },
-                  { icon: 'Instagram', href: settings.instagram_url, label: 'Instagram', color: 'hover:bg-[#E1306C]' },
-                  { icon: 'X', href: settings.twitter_url, label: 'X (Twitter)', color: 'hover:bg-[#000000]' },
-                  { icon: 'Threads', href: settings.threads_url, label: 'Threads', color: 'hover:bg-[#000000]' },
-                  { icon: 'Youtube', href: settings.youtube_url, label: 'YouTube', color: 'hover:bg-[#FF0000]' },
-                  { icon: 'Linkedin', href: settings.linkedin_url, label: 'LinkedIn', color: 'hover:bg-[#0A66C2]' },
+                  { icon: 'Facebook', href: settings.facebook_url || SOCIAL_LINKS.find(l => l.label === 'Facebook')?.href, label: 'Facebook', color: 'hover:bg-[#1877F2]' },
+                  { icon: 'Instagram', href: settings.instagram_url || SOCIAL_LINKS.find(l => l.label === 'Instagram')?.href, label: 'Instagram', color: 'hover:bg-[#E1306C]' },
+                  { icon: 'X', href: settings.twitter_url || settings.x_url || SOCIAL_LINKS.find(l => l.label === 'X (Twitter)')?.href, label: 'X (Twitter)', color: 'hover:bg-[#000000]' },
+                  { icon: 'Threads', href: settings.threads_url || SOCIAL_LINKS.find(l => l.label === 'Threads')?.href, label: 'Threads', color: 'hover:bg-[#000000]' },
+                  { icon: 'Youtube', href: settings.youtube_url || SOCIAL_LINKS.find(l => l.label === 'YouTube')?.href, label: 'YouTube', color: 'hover:bg-[#FF0000]' },
+                  { icon: 'Linkedin', href: settings.linkedin_url || SOCIAL_LINKS.find(l => l.label === 'LinkedIn')?.href, label: 'LinkedIn', color: 'hover:bg-[#0A66C2]' },
                 ].filter(link => link.href).map((link) => {
                   const Icon = socialIcons[link.icon];
                   return (
@@ -184,7 +222,7 @@ export default function Footer() {
                   );
                 })}
                 <a
-                  href={settings.whatsapp_link}
+                  href={settings.whatsapp_link || SOCIAL_LINKS.find(l => l.label === 'WhatsApp')?.href}
                   target="_blank"
                   rel="noopener noreferrer"
                   aria-label="WhatsApp"

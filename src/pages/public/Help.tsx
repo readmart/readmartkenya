@@ -114,13 +114,13 @@ const VIDEO_TUTORIALS = [
     title: 'Welcome to ReadMart',
     duration: '2:15',
     thumbnail: 'https://images.unsplash.com/photo-1512820790803-83ca734da794?auto=format&fit=crop&q=80&w=600',
-    link: 'https://www.youtube.com/watch?v=example1'
+    link: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ'
   },
   {
     title: 'How to Join the Book Club',
     duration: '3:45',
     thumbnail: 'https://images.unsplash.com/photo-1529148482759-b35b25c5f217?auto=format&fit=crop&q=80&w=600',
-    link: 'https://www.youtube.com/watch?v=example2'
+    link: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ'
   }
 ];
 

@@ -26,7 +26,7 @@ CREATE TABLE IF NOT EXISTS public.settings (
     site_logo text DEFAULT '/assets/logo.jpg',
     whatsapp_link text DEFAULT 'https://wa.me/254700000000',
     contact_email text DEFAULT 'hello@readmart.com',
-    contact_phone text DEFAULT '+254 700 000 000',
+    contact_phone text DEFAULT '+254 794 129 958',
     address text DEFAULT 'Nairobi, Kenya',
     working_hours text DEFAULT 'Mon-Fri: 8am - 5pm',
     tax_rate decimal(5,2) DEFAULT 16.00,

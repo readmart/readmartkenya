@@ -87,19 +87,25 @@ export default function Checkout() {
   useEffect(() => {
     async function loadShippingZones() {
       try {
+        console.log('Loading shipping zones...');
         const zones = await getShippingZones();
+        console.log('Loaded zones:', zones.length);
         setShippingZones(zones);
+        
         // Default to first active zone if nothing selected
-        if (zones.length > 0 && !selectedZoneId) {
+        if (zones && zones.length > 0 && !selectedZoneId) {
           const activeZone = zones.find((z: any) => z.is_active) || zones[0];
-          setSelectedZoneId(activeZone.id);
+          if (activeZone) {
+            console.log('Setting default zone:', activeZone.name);
+            setSelectedZoneId(activeZone.id);
+          }
         }
       } catch (error) {
         console.error('Error loading shipping zones:', error);
       }
     }
     loadShippingZones();
-  }, []);
+  }, []); // Reverted dependencies to avoid potential loops
 
   // Auto-match shipping zone based on city or postal code
   useEffect(() => {
@@ -190,7 +196,7 @@ export default function Checkout() {
   const totalVolume = cartItems.reduce((sum, item) => sum + (item.volume || 0.001) * item.quantity, 0);
 
   const selectedZone = shippingZones.find(z => z.id === selectedZoneId);
-  const baseShipping = selectedZone?.price ?? selectedZone?.rate ?? 0;
+  const baseShipping = selectedZone?.base_rate ?? selectedZone?.price ?? selectedZone?.rate ?? 0;
   const weightSurcharge = (selectedZone?.weight_surcharge || 0) * totalWeight;
   const volumeSurcharge = (selectedZone?.volume_surcharge || 0) * totalVolume;
   
@@ -430,7 +436,7 @@ export default function Checkout() {
                       <option value="" disabled className="bg-background">Select delivery option</option>
                       {shippingZones.filter(z => z.is_active).map(zone => (
                         <option key={zone.id} value={zone.id} className="bg-background">
-                          {zone.name} ({zone.shipping_method || 'Standard'}) - {formatPrice(zone.price || zone.rate || 0)}
+                          {zone.name} ({zone.shipping_method || 'Standard'}) - {formatPrice(zone.base_rate || zone.price || zone.rate || 0)}
                         </option>
                       ))}
                     </select>

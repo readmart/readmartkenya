@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { Toaster } from 'sonner';
 import ProtectedRoute from '@/components/auth/ProtectedRoute';
 import Layout from '@/components/layout/Layout';
+import ScrollToTop from '@/components/layout/ScrollToTop';
 import { lazyRetry } from '@/lib/utils';
 
 // Public Pages
@@ -53,6 +54,7 @@ const LoadingSpinner = () => (
 function App() {
   return (
     <Router>
+      <ScrollToTop />
       <Layout>
         <Suspense fallback={<LoadingSpinner />}>
           <Routes>

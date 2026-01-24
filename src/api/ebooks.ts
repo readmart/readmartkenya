@@ -13,30 +13,33 @@ export async function getMyEbooks() {
     .select(`
       id,
       product_id,
-      product:products!inner (
+      products!inner (
         id,
         title,
         metadata,
         image_url,
         is_ebook
       ),
-      order:orders!inner (
+      orders!inner (
         status,
         user_id,
         created_at
       )
     `)
-    .eq('order.user_id', user.id)
-    .eq('product.is_ebook', true)
-    .in('order.status', ['completed', 'paid']);
+    .eq('orders.user_id', user.id)
+    .eq('products.is_ebook', true)
+    .in('orders.status', ['completed', 'paid', 'delivered']);
 
-  if (error) throw error;
+  if (error) {
+    console.error('Error in getMyEbooks:', error);
+    throw error;
+  }
 
   // Transform data to a flatter structure for the UI
   return data.map((item: any) => ({
     id: item.product_id, // Use product_id as the unique key for the ebook entry
-    created_at: item.order.created_at,
-    products: item.product
+    created_at: item.orders.created_at,
+    products: item.products
   }));
 }
 
@@ -53,10 +56,15 @@ export async function getEbookAccessUrl(productId: string) {
     .select('id, orders!inner(status, user_id)')
     .eq('product_id', productId)
     .eq('orders.user_id', user.id)
-    .in('orders.status', ['completed', 'paid'])
+    .in('orders.status', ['completed', 'paid', 'delivered'])
     .maybeSingle();
 
-  if (purchaseError || !purchase) {
+  if (purchaseError) {
+    console.error('Error verifying ebook ownership:', purchaseError);
+    throw purchaseError;
+  }
+
+  if (!purchase) {
     throw new Error('Access Denied: No valid purchase found for this e-book.');
   }
 
