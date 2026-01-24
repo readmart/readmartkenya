@@ -12,7 +12,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useSettings } from '@/hooks/useSettings';
 import { toast } from 'sonner';
 import { createOrder } from '@/api/orders';
-import { initiateSTKPush, checkPaymentStatus } from '@/api/payments';
+import { initiatePayment, checkPaymentStatus } from '@/api/payments';
 import { getShippingZones } from '@/api/dashboards';
 import { supabase } from '@/lib/supabase/client';
 
@@ -260,7 +260,7 @@ export default function Checkout() {
       setOrderNumber(order.id.slice(0, 8).toUpperCase());
 
       // 2. Initiate payment based on selected method
-      const result = await initiateSTKPush(
+      const result = await initiatePayment(
         order.id, 
         formData.phone, 
         order.total_amount, 

@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase/client';
 /**
  * Initiates a payment via ReadMart Backend
  */
-export async function initiateSTKPush(orderId: string, phoneNumber: string, amount: number, paymentMethod: string = 'm-pesa') {
+export async function initiatePayment(orderId: string, phoneNumber: string, amount: number, paymentMethod: string = 'm-pesa') {
   try {
     const { data: { session } } = await supabase.auth.getSession();
     
@@ -28,7 +28,7 @@ export async function initiateSTKPush(orderId: string, phoneNumber: string, amou
 
     return await response.json();
   } catch (error: any) {
-    console.error('STK Push Error:', error);
+    console.error('Payment Error:', error);
     return { error: error.message || 'Failed to initiate payment' };
   }
 }
@@ -53,17 +53,21 @@ export async function checkPaymentStatus(orderId: string) {
 }
 
 /**
- * Checks the status of a membership payment
+ * Checks the status of a membership payment by record ID or user ID
  */
-export async function checkMembershipStatus(userId: string, paymentId?: string) {
+export async function checkMembershipStatus(userId: string, paymentId?: string, recordId?: string) {
   try {
     let query = supabase
       .from('membership_payments')
-      .select('status, payment_id')
-      .eq('user_id', userId);
+      .select('status, payment_id');
 
-    if (paymentId) {
-      query = query.eq('payment_id', paymentId);
+    if (recordId) {
+      query = query.eq('id', recordId);
+    } else {
+      query = query.eq('user_id', userId);
+      if (paymentId) {
+        query = query.eq('payment_id', paymentId);
+      }
     }
 
     const { data, error } = await query
@@ -82,7 +86,7 @@ export async function checkMembershipStatus(userId: string, paymentId?: string) 
 /**
  * Initiates a Membership payment
  */
-export async function initiateMembershipPayment(phoneNumber: string, amount: number, metadata: any = {}) {
+export async function initiateMembershipPayment(phoneNumber: string, amount: number, metadata: any = {}, paymentMethod: string = 'm-pesa') {
   try {
     const { data: { session } } = await supabase.auth.getSession();
     
@@ -96,7 +100,8 @@ export async function initiateMembershipPayment(phoneNumber: string, amount: num
         type: metadata.type || 'membership',
         phone: phoneNumber,
         amount,
-        metadata
+        metadata,
+        paymentMethod
       })
     });
 

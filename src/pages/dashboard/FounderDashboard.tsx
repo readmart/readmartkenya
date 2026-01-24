@@ -74,7 +74,10 @@ export default function FounderDashboard() {
   });
 
   // Fetch all required data
+  const [isMounted, setIsMounted] = useState(false);
+
   useEffect(() => {
+    setIsMounted(true);
     fetchAllData();
 
     // Set up Realtime synchronization for critical tables
@@ -93,6 +96,7 @@ export default function FounderDashboard() {
       .subscribe();
 
     return () => {
+      setIsMounted(false);
       supabase.removeChannel(channel);
     };
   }, []);
@@ -246,7 +250,7 @@ export default function FounderDashboard() {
             exit={{ opacity: 0, y: -20 }}
             transition={{ duration: 0.2 }}
           >
-            {activeTab === 'analytics' && <AnalyticsView data={data.analytics} formatPrice={formatPrice} />}
+            {activeTab === 'analytics' && <AnalyticsView data={data.analytics} formatPrice={formatPrice} isMounted={isMounted} />}
             {activeTab === 'inventory' && (
               <InventoryView 
                 data={data.inventory} 
@@ -656,7 +660,7 @@ function NewsletterView({ data, onUpdate }: any) {
 
 // --- View Components ---
 
-function AnalyticsView({ data, formatPrice }: any) {
+function AnalyticsView({ data, formatPrice, isMounted }: any) {
   if (!data) return null;
 
   const stats = [
@@ -720,58 +724,62 @@ function AnalyticsView({ data, formatPrice }: any) {
             </div>
           </div>
           <div className="h-[400px] w-full min-h-[400px]">
-            <ResponsiveContainer width="100%" height="100%" minHeight={400} debounce={100}>
-              <AreaChart data={data.salesData}>
-                <defs>
-                  <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.1}/>
-                    <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0}/>
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis 
-                  dataKey="created_at" 
-                  axisLine={false} 
-                  tickLine={false} 
-                  tick={{ fontSize: 10, fontWeight: 700, fill: '#94a3b8' }}
-                  tickFormatter={(val: string) => new Date(val).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-                />
-                <YAxis 
-                  axisLine={false} 
-                  tickLine={false} 
-                  tick={{ fontSize: 10, fontWeight: 700, fill: '#94a3b8' }}
-                  tickFormatter={(val: number) => formatPrice(val)}
-                />
-                <Tooltip 
-                  contentStyle={{ borderRadius: '20px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', fontWeight: 700 }}
-                />
-                <Area type="monotone" dataKey="total_amount" stroke="#8b5cf6" strokeWidth={4} fillOpacity={1} fill="url(#colorRevenue)" />
-              </AreaChart>
-            </ResponsiveContainer>
+            {isMounted && (
+              <ResponsiveContainer width="100%" height="100%" minHeight={400} debounce={100}>
+                <AreaChart data={data.salesData}>
+                  <defs>
+                    <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.1}/>
+                      <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                  <XAxis 
+                    dataKey="created_at" 
+                    axisLine={false} 
+                    tickLine={false} 
+                    tick={{ fontSize: 10, fontWeight: 700, fill: '#94a3b8' }}
+                    tickFormatter={(val: string) => new Date(val).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                  />
+                  <YAxis 
+                    axisLine={false} 
+                    tickLine={false} 
+                    tick={{ fontSize: 10, fontWeight: 700, fill: '#94a3b8' }}
+                    tickFormatter={(val: number) => formatPrice(val)}
+                  />
+                  <Tooltip 
+                    contentStyle={{ borderRadius: '20px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', fontWeight: 700 }}
+                  />
+                  <Area type="monotone" dataKey="total_amount" stroke="#8b5cf6" strokeWidth={4} fillOpacity={1} fill="url(#colorRevenue)" />
+                </AreaChart>
+              </ResponsiveContainer>
+            )}
           </div>
         </div>
 
         <div className="bg-white p-10 rounded-[40px] border border-slate-100 shadow-sm">
           <h3 className="text-xl font-black tracking-tighter uppercase mb-10">Category Saturation</h3>
           <div className="h-[400px] w-full min-h-[400px]">
-            <ResponsiveContainer width="100%" height="100%" minHeight={400} debounce={100}>
-              <PieChart>
-                <Pie
-                  data={data.categoryStats}
-                  innerRadius={80}
-                  outerRadius={120}
-                  paddingAngle={5}
-                  dataKey="value"
-                >
-                  {data.categoryStats.map((_: any, index: number) => (
-                    <Cell key={`cell-${index}`} fill={['#8b5cf6', '#3b82f6', '#10b981', '#f59e0b', '#ef4444'][index % 5]} />
-                  ))}
-                </Pie>
-                <Tooltip 
-                  contentStyle={{ borderRadius: '20px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', fontWeight: 700 }}
-                />
-              </PieChart>
-            </ResponsiveContainer>
+            {isMounted && (
+              <ResponsiveContainer width="100%" height="100%" minHeight={400} debounce={100}>
+                <PieChart>
+                  <Pie
+                    data={data.categoryStats}
+                    innerRadius={80}
+                    outerRadius={120}
+                    paddingAngle={5}
+                    dataKey="value"
+                  >
+                    {data.categoryStats.map((_: any, index: number) => (
+                      <Cell key={`cell-${index}`} fill={['#8b5cf6', '#3b82f6', '#10b981', '#f59e0b', '#ef4444'][index % 5]} />
+                    ))}
+                  </Pie>
+                  <Tooltip 
+                    contentStyle={{ borderRadius: '20px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)', fontWeight: 700 }}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+            )}
           </div>
           <div className="mt-6 space-y-3">
             {data.categoryStats.slice(0, 4).map((cat: any, i: number) => (

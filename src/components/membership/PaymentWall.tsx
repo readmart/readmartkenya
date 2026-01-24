@@ -154,7 +154,7 @@ export const PaymentWall: React.FC<PaymentWallProps> = ({
             </Link>
 
             <p className="mt-6 text-[10px] text-muted-foreground font-black uppercase tracking-[0.2em] flex items-center justify-center gap-2">
-              <ShieldCheck className="w-3 h-3" /> Secure Payment via M-Pesa
+              <ShieldCheck className="w-3 h-3" /> Secure Payment via M-Pesa or Card
             </p>
           </div>
         </motion.div>

@@ -182,6 +182,7 @@ export const K2_EVENT_TYPES = {
   B2B_RECEIVED: 'b2b_transaction_received',
   CUSTOMER_CREATED: 'customer_created',
   SETTLEMENT_COMPLETED: 'settlement_transfer_completed',
+  M_PESA_PAYMENT_RECEIVED: 'm-pesa_payment_received',
 };
 
 export const getK2TransactionStatus = async (transactionId: string) => {
@@ -232,24 +233,69 @@ export const verifyK2Signature = (payload: unknown, signature: string) => {
 
 export const extractK2WebhookData = (payload: any) => {
   const data = payload.data?.attributes || payload.attributes || payload;
-  const event = data.event || payload.event || {};
+  const event = payload.data?.attributes?.event || data.event || payload.event || {};
   const resource = event.resource || data.resource || payload.resource || {};
   const metadata = data.metadata || payload.metadata || resource.metadata || {};
 
-  const isSuccess = (
-    data.status === 'Success' || 
-    resource.status === 'Success' || 
-    payload.status === 'Success' ||
-    data.status === 'Completed' ||
-    resource.status === 'Completed' ||
-    data.status === 'Received' ||
-    resource.status === 'Received'
+  // Log for debugging if needed
+  // console.log('Extracting data from payload:', JSON.stringify({ data, event, resource, metadata }));
+
+  const status = (
+    data.status || 
+    resource.status || 
+    payload.status || 
+    (data.state === 'success' ? 'Success' : data.state)
   );
+
+  const isSuccess = (
+    status === 'Success' || 
+    status === 'Completed' || 
+    status === 'Received' ||
+    status === 'success'
+  );
+
   const amountObj = resource.amount || data.amount || payload.amount || {};
   const amount = typeof amountObj === 'object' ? amountObj.value : amountObj;
-  const phone = resource.phone_number || resource.sender_phone_number || resource.subscriber?.phone_number || metadata.phone;
-  const transactionId = resource.transaction_id || resource.id || payload.id;
-  const orderId = metadata.order_id || metadata.customer_reference || resource.reference;
+  
+  const phone = (
+    resource.phone_number || 
+    resource.sender_phone_number || 
+    resource.subscriber?.phone_number || 
+    metadata.phone ||
+    metadata.phone_number
+  );
+
+  const transactionId = (
+    resource.transaction_id || 
+    resource.id || 
+    payload.id || 
+    resource.system_id ||
+    data.id
+  );
+
+  const orderId = (
+    metadata.order_id || 
+    metadata.customer_reference || 
+    metadata.reference ||
+    resource.reference ||
+    resource.external_reference ||
+    resource.system_reference ||
+    (resource.metadata ? (resource.metadata.order_id || resource.metadata.reference) : null) ||
+    data.reference
+  );
+
+  const eventType = (
+    payload.data?.type || 
+    event.type || 
+    data.type || 
+    payload.type
+  );
+
+  const senderName = (
+    resource.sender_first_name 
+      ? `${resource.sender_first_name} ${resource.sender_last_name || ''}`.trim() 
+      : (resource.first_name ? `${resource.first_name} ${resource.last_name || ''}`.trim() : null)
+  );
 
   return {
     transactionId,
@@ -257,8 +303,9 @@ export const extractK2WebhookData = (payload: any) => {
     isSuccess,
     amount,
     phone,
-    eventType: event.type || data.type || payload.type,
-    senderName: resource.sender_first_name ? `${resource.sender_first_name} ${resource.sender_last_name || ''}`.trim() : null,
-    status: data.status || resource.status || payload.status
+    eventType,
+    senderName,
+    status,
+    rawResource: resource
   };
 };

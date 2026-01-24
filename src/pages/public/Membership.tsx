@@ -24,6 +24,7 @@ export default function Membership() {
   const clubId = searchParams.get('club');
   
   const [phone, setPhone] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState<'m-pesa' | 'card'>('m-pesa');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [club, setClub] = useState<BookClub | null>(null);
   const [isClubLoading, setIsClubLoading] = useState(!!clubId);
@@ -72,12 +73,12 @@ export default function Membership() {
     }
 
     if (!phone) {
-      toast.error('Please enter your M-Pesa phone number');
+      toast.error(`Please enter your ${paymentMethod === 'm-pesa' ? 'M-Pesa ' : ''}phone number`);
       return;
     }
 
     if (!phone.match(/^(?:254|\+254|0)?(7|1)\d{8}$/)) {
-      toast.error('Please enter a valid M-Pesa phone number (e.g., 2547XXXXXXXX)');
+      toast.error(`Please enter a valid ${paymentMethod === 'm-pesa' ? 'M-Pesa ' : ''}phone number (e.g., 2547XXXXXXXX)`);
       return;
     }
 
@@ -86,10 +87,28 @@ export default function Membership() {
       const amount = club ? club.membership_price : (settings?.membership_price || 1000);
       const metadata = club ? { club_id: club.id, type: 'club_membership' } : { type: 'site_membership' };
       
-      const response = await initiateMembershipPayment(phone, amount, metadata);
-      if (response.success || response.location) {
+      const response = await initiateMembershipPayment(phone, amount, metadata, paymentMethod);
+      
+      if (response.error) {
+        toast.error(response.error);
+        setIsSubmitting(false);
+        return;
+      }
+
+      if (paymentMethod === 'card' && response.location) {
+        window.location.href = response.location;
+        return;
+      }
+
+      if (response.success || response.location || response.id || response.db_id) {
         const paymentId = response.location || response.id;
-        toast.success('M-Pesa request sent! Please enter your PIN.');
+        const dbRecordId = response.db_id;
+        
+        if (paymentMethod === 'm-pesa') {
+          toast.success('M-Pesa request sent! Please enter your PIN.');
+        } else {
+          toast.success('Redirecting to secure payment...');
+        }
 
         if (response.demo) {
           setTimeout(() => {
@@ -109,7 +128,7 @@ export default function Membership() {
               event: 'UPDATE',
               schema: 'public',
               table: 'membership_payments',
-              filter: `user_id=eq.${user.id}`
+              filter: dbRecordId ? `id=eq.${dbRecordId}` : `user_id=eq.${user.id}`
             },
             (payload) => {
               if (payload.new.status === 'completed') {
@@ -129,9 +148,17 @@ export default function Membership() {
         // Polling fallback
         let attempts = 0;
         const maxAttempts = 20;
-        const pollInterval = setInterval(async () => {
-          attempts++;
-          const status = await checkMembershipStatus(user.id, paymentId);
+        let timeoutId: any;
+
+        const poll = async () => {
+          if (attempts >= maxAttempts) {
+            cleanup();
+            setIsSubmitting(false);
+            toast.error('Payment verification timed out. If you paid, it will be updated soon.');
+            return;
+          }
+          
+          const status = await checkMembershipStatus(user.id, paymentId, dbRecordId);
           if (status?.status === 'completed') {
             cleanup();
             setIsSubmitting(false);
@@ -141,17 +168,18 @@ export default function Membership() {
             cleanup();
             setIsSubmitting(false);
             toast.error('Payment failed. Please try again.');
-          } else if (attempts >= maxAttempts) {
-            cleanup();
-            setIsSubmitting(false);
-            toast.error('Payment timeout. If you paid, please check your account in a moment.');
+          } else {
+            attempts++;
+            timeoutId = setTimeout(poll, 3000);
           }
-        }, 3000);
+        };
 
         const cleanup = () => {
-          clearInterval(pollInterval);
+          if (timeoutId) clearTimeout(timeoutId);
           supabase.removeChannel(channel);
         };
+
+        poll();
 
       } else {
         toast.error(response.error || 'Failed to initiate payment');
@@ -271,9 +299,33 @@ export default function Membership() {
                 </div>
 
                 <form onSubmit={handleJoin} className="space-y-6">
+                  {/* Payment Method Selection */}
+                  <div className="grid grid-cols-2 gap-4 p-2 bg-slate-50 rounded-2xl border-2 border-slate-100">
+                    <button
+                      type="button"
+                      onClick={() => setPaymentMethod('m-pesa')}
+                      className={`flex flex-col items-center gap-2 py-4 rounded-xl transition-all ${paymentMethod === 'm-pesa' ? 'bg-white shadow-lg shadow-slate-200/50 text-primary border-white' : 'text-slate-400 hover:text-slate-600'}`}
+                    >
+                      <div className={`p-2 rounded-lg ${paymentMethod === 'm-pesa' ? 'bg-primary/10' : 'bg-slate-100'}`}>
+                        <Phone className="w-5 h-5" />
+                      </div>
+                      <span className="text-[10px] font-black uppercase tracking-widest">M-Pesa</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPaymentMethod('card')}
+                      className={`flex flex-col items-center gap-2 py-4 rounded-xl transition-all ${paymentMethod === 'card' ? 'bg-white shadow-lg shadow-slate-200/50 text-primary border-white' : 'text-slate-400 hover:text-slate-600'}`}
+                    >
+                      <div className={`p-2 rounded-lg ${paymentMethod === 'card' ? 'bg-primary/10' : 'bg-slate-100'}`}>
+                        <ShieldCheck className="w-5 h-5" />
+                      </div>
+                      <span className="text-[10px] font-black uppercase tracking-widest">Card / Bank</span>
+                    </button>
+                  </div>
+
                   <div className="space-y-3">
                     <label className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground ml-2">
-                      M-Pesa Phone Number
+                      {paymentMethod === 'm-pesa' ? 'M-Pesa Phone Number' : 'Phone Number for Confirmation'}
                     </label>
                     <div className="relative group">
                       <div className="absolute left-6 top-1/2 -translate-y-1/2 text-muted-foreground group-focus-within:text-primary transition-colors">

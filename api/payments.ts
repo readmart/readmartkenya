@@ -46,9 +46,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const orderId = webhookData.orderId || queryOrderId;
 
       // Handle card payments or other transaction types where status might be 'Received'
-      const isSuccess = webhookData.isSuccess || status === 'Success' || status === 'Completed' || status === 'Received';
+      const isSuccess = webhookData.isSuccess;
       
-      console.log(`Processing webhook: Event=${eventType}, OrderId=${orderId}, Success=${isSuccess}, Status=${status}`);
+      console.log(`Processing webhook: Event=${eventType}, OrderId=${orderId}, Success=${isSuccess}, Status=${status}, Transaction=${transactionId}`);
       
       if (orderId) {
         // Handle STK Push results (incoming_payment) and other transaction events
@@ -58,17 +58,31 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           K2_EVENT_TYPES.PAYBILL_RECEIVED,
           K2_EVENT_TYPES.CARD_RECEIVED,
           K2_EVENT_TYPES.B2B_RECEIVED,
-          'incoming_payment' 
-        ].includes(eventType) || eventType?.includes('payment');
+          K2_EVENT_TYPES.M_PESA_PAYMENT_RECEIVED,
+          'incoming_payment',
+          'buygoods_transaction_received',
+          'card_transaction_received',
+          'paybill_transaction_received',
+          'm-pesa_payment_received'
+        ].includes(eventType) || 
+        eventType?.includes('payment_received') || 
+        eventType?.includes('transaction_received') ||
+        (eventType === 'incoming_payment' && status === 'Success');
 
         const isReversalEvent = [
           K2_EVENT_TYPES.CARD_VOIDED,
           K2_EVENT_TYPES.CARD_REVERSED,
-          K2_EVENT_TYPES.BUYGOODS_REVERSED
+          K2_EVENT_TYPES.BUYGOODS_REVERSED,
+          'card_transaction_voided',
+          'card_transaction_reversed',
+          'buygoods_transaction_reversed'
         ].includes(eventType) || eventType?.includes('reversed') || eventType?.includes('voided');
 
         if (isTransactionEvent || isReversalEvent) {
           const finalStatus = isReversalEvent ? 'reversed' : (isSuccess ? 'paid' : 'failed');
+          
+          // For K2, sometimes 'Received' or 'Success' or 'Completed' means success
+          const actuallyPaid = isSuccess && !isReversalEvent;
           const isMembership = orderId.startsWith('MEMB-');
           
           if (isMembership) {
@@ -78,7 +92,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             const { data: membershipPayments, error: membError } = await supabase
               .from('membership_payments')
               .update({ 
-                status: isReversalEvent ? 'reversed' : (isSuccess ? 'completed' : 'failed'),
+                status: isReversalEvent ? 'reversed' : (actuallyPaid ? 'completed' : 'failed'),
                 payment_id: transactionId,
                 metadata: { ...payload, updated_at: new Date().toISOString() }
               })
@@ -87,8 +101,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
             if (membError) console.error('Membership update error:', membError);
 
-            if (isSuccess && !isReversalEvent && membershipPayments?.[0]) {
-              const payment = membershipPayments[0];
+            if (actuallyPaid && (membershipPayments?.length || 0) > 0) {
+              const payment = membershipPayments![0];
               const userId = payment.user_id;
               const metadata = payment.metadata || {};
               const isClubMembership = metadata.type === 'club_membership';
@@ -143,7 +157,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             const updatePayload: any = { 
               status: finalStatus,
               payment_status: finalStatus,
-              is_paid: isSuccess && !isReversalEvent,
+              is_paid: actuallyPaid,
               payment_metadata: payload 
             };
             
@@ -168,12 +182,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 order_id: order.id,
                 user_id: order.user_id,
                 amount: amount || order.total_amount,
-                status: (isSuccess && !isReversalEvent) ? 'completed' : (isReversalEvent ? 'reversed' : 'failed'),
+                status: actuallyPaid ? 'completed' : (isReversalEvent ? 'reversed' : 'failed'),
                 provider_reference: transactionId,
                 metadata: payload
               }]);
 
-              if (isSuccess && !isReversalEvent) {
+              if (actuallyPaid) {
                 // The database trigger public.tr_order_paid_commissions will handle 
                 // calculateOrderCommissions(order.id) automatically when is_paid = true.
                 
@@ -264,7 +278,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (method !== 'POST') return json(res, 405, { error: 'Method not allowed' });
       const { orderId, phone, amount, firstName, lastName, email, type, metadata, paymentMethod } = req.body;
       
-      const isMembership = type === 'membership' || type === 'club_membership';
+      const isMembership = type === 'membership' || type === 'club_membership' || type === 'site_membership';
       if (!isMembership && (!orderId || !phone || !amount)) return badRequest(res, 'Missing payment details');
       if (isMembership && (!phone || !amount)) return badRequest(res, 'Missing phone or amount for membership');
 
@@ -299,15 +313,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         // Update appropriate table with payment request location for polling
         const paymentId = k2Result.location || (k2Result as any).id;
+        let dbRecordId = null;
         
         if (isMembership && user) {
-          await supabase.from('membership_payments').insert([{
+          const { data: membRecord } = await supabase.from('membership_payments').insert([{
             user_id: user.id,
             amount,
             status: 'pending',
             payment_id: paymentId,
             metadata: { ...k2Result, type, ...(metadata || {}) }
-          }]);
+          }]).select('id').single();
+          dbRecordId = membRecord?.id;
         } else if (orderId) {
           const updatePayload: any = { 
             payment_metadata: k2Result 
@@ -316,14 +332,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           await supabase.from('orders').update(updatePayload).eq('id', orderId);
         }
 
-        return json(res, 200, k2Result);
+        return json(res, 200, { ...k2Result, db_id: dbRecordId });
       } catch (err: any) {
         if (err.message.includes('credentials') || err.message.includes('configured')) {
           console.warn('Payment credentials missing, using demo response');
           
           // FOR DEMO: Automatically complete the order/membership
           const { orderId, type, metadata } = req.body;
-          const isMembership = type === 'membership' || type === 'club_membership';
+          const isMembership = type === 'membership' || type === 'club_membership' || type === 'site_membership';
           
           if (!isMembership && orderId) {
             console.log(`Demo mode: Fulfilling order ${orderId}`);
