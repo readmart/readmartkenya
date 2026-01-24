@@ -57,22 +57,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           K2_EVENT_TYPES.BUYGOODS_RECEIVED, 
           K2_EVENT_TYPES.PAYBILL_RECEIVED,
           K2_EVENT_TYPES.CARD_RECEIVED,
+          K2_EVENT_TYPES.B2B_RECEIVED,
           'incoming_payment' 
         ].includes(eventType) || eventType?.includes('payment');
 
-        if (isTransactionEvent) {
-          const finalStatus = isSuccess ? 'paid' : 'failed';
+        const isReversalEvent = [
+          K2_EVENT_TYPES.CARD_VOIDED,
+          K2_EVENT_TYPES.CARD_REVERSED,
+          K2_EVENT_TYPES.BUYGOODS_REVERSED
+        ].includes(eventType) || eventType?.includes('reversed') || eventType?.includes('voided');
+
+        if (isTransactionEvent || isReversalEvent) {
+          const finalStatus = isReversalEvent ? 'reversed' : (isSuccess ? 'paid' : 'failed');
           const isMembership = orderId.startsWith('MEMB-');
           
           if (isMembership) {
             console.log(`Processing membership payment for order ${orderId}, status: ${finalStatus}`);
             
-            // 1. Update membership_payments table - Match by orderId in metadata or payment_id
-            // We'll try to match by payment_id first, then fallback to metadata
+            // 1. Update membership_payments table
             const { data: membershipPayments, error: membError } = await supabase
               .from('membership_payments')
               .update({ 
-                status: isSuccess ? 'completed' : 'failed',
+                status: isReversalEvent ? 'reversed' : (isSuccess ? 'completed' : 'failed'),
                 payment_id: transactionId,
                 metadata: { ...payload, updated_at: new Date().toISOString() }
               })
@@ -81,7 +87,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
             if (membError) console.error('Membership update error:', membError);
 
-            if (isSuccess && membershipPayments?.[0]) {
+            if (isSuccess && !isReversalEvent && membershipPayments?.[0]) {
               const payment = membershipPayments[0];
               const userId = payment.user_id;
               const metadata = payment.metadata || {};
@@ -137,7 +143,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             const updatePayload: any = { 
               status: finalStatus,
               payment_status: finalStatus,
-              is_paid: isSuccess,
+              is_paid: isSuccess && !isReversalEvent,
               payment_metadata: payload 
             };
             
@@ -162,12 +168,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 order_id: order.id,
                 user_id: order.user_id,
                 amount: amount || order.total_amount,
-                status: isSuccess ? 'completed' : 'failed',
+                status: (isSuccess && !isReversalEvent) ? 'completed' : (isReversalEvent ? 'reversed' : 'failed'),
                 provider_reference: transactionId,
                 metadata: payload
               }]);
 
-              if (isSuccess) {
+              if (isSuccess && !isReversalEvent) {
                 // The database trigger public.tr_order_paid_commissions will handle 
                 // calculateOrderCommissions(order.id) automatically when is_paid = true.
                 

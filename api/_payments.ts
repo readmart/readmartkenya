@@ -176,7 +176,12 @@ export const K2_EVENT_TYPES = {
   BUYGOODS_RECEIVED: 'buygoods_transaction_received',
   PAYBILL_RECEIVED: 'paybill_transaction_received',
   CARD_RECEIVED: 'card_transaction_received',
-  REVERSAL: 'buygoods_transaction_reversed',
+  CARD_VOIDED: 'card_transaction_voided',
+  CARD_REVERSED: 'card_transaction_reversed',
+  BUYGOODS_REVERSED: 'buygoods_transaction_reversed',
+  B2B_RECEIVED: 'b2b_transaction_received',
+  CUSTOMER_CREATED: 'customer_created',
+  SETTLEMENT_COMPLETED: 'settlement_transfer_completed',
 };
 
 export const getK2TransactionStatus = async (transactionId: string) => {
