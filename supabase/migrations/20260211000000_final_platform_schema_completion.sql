@@ -194,7 +194,15 @@ ALTER TABLE public.categories
 ADD COLUMN IF NOT EXISTS is_active boolean DEFAULT true,
 ADD COLUMN IF NOT EXISTS display_order integer DEFAULT 0;
 
--- 10. Global Sync Functionality (Placeholder for re-fetching data/refreshing views)
+-- 10. Fix missing shipping_zone_id in orders (Payment Blockage Fix)
+DO $$ 
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'orders' AND column_name = 'shipping_zone_id') THEN
+        ALTER TABLE public.orders ADD COLUMN shipping_zone_id uuid REFERENCES public.shipping_zones(id);
+    END IF;
+END $$;
+
+-- 11. Global Sync Functionality (Placeholder for re-fetching data/refreshing views)
 CREATE OR REPLACE FUNCTION public.execute_global_sync()
 RETURNS jsonb AS $$
 BEGIN
