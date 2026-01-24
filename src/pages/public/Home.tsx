@@ -38,51 +38,28 @@ export default function Home() {
           setHeroData(hero);
         }
 
-        // Get site settings for Author of the Day with resilience
+        // Get site settings for Author of the Day with resilience - no joins to avoid 400 errors
         let settings = null;
         try {
-          // Try simple join first
-          let { data, error } = await supabase
+          const { data, error } = await supabase
             .from('site_settings')
-            .select('*, author_of_the_day:profiles(id, full_name, avatar_url, bio)')
+            .select('*')
             .maybeSingle();
           
-          if (error) {
-            console.warn('Home site_settings join failed, trying with explicit hint:', error.message);
-            // Try with explicit hint
-            const { data: hintData, error: hintError } = await supabase
-              .from('site_settings')
-              .select('*, author_of_the_day:profiles!author_of_the_day_id(id, full_name, avatar_url, bio)')
+          if (error) throw error;
+          settings = data;
+
+          if (settings?.author_of_the_day_id) {
+            // Fetch profile separately
+            const { data: profileData } = await supabase
+              .from('profiles')
+              .select('id, full_name, avatar_url, bio')
+              .eq('id', settings.author_of_the_day_id)
               .maybeSingle();
             
-            if (!hintError) {
-              data = hintData;
-              error = null;
-            } else {
-              // Try without bio
-              const { data: noBioData, error: noBioError } = await supabase
-                .from('site_settings')
-                .select('*, author_of_the_day:profiles(id, full_name, avatar_url)')
-                .maybeSingle();
-              
-              if (!noBioError) {
-                data = noBioData;
-                error = null;
-              } else {
-                error = noBioError;
-              }
+            if (profileData) {
+              settings.author_of_the_day = profileData;
             }
-          }
-
-          if (error) {
-            console.warn('Falling back to basic site_settings fetch in Home');
-            const { data: retryData, error: retryError } = await supabase
-              .from('site_settings')
-              .select('*')
-              .maybeSingle();
-            settings = retryData;
-          } else {
-            settings = data;
           }
         } catch (err: any) {
           console.warn('Author of the Day fetch critical failure:', err.message);

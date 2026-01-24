@@ -915,71 +915,41 @@ export async function getCategories() {
 export async function getSiteSettings() {
   try {
     await verifyAdmin();
-    // Try site_settings first with the author_of_the_day join
-    // We use the simplest join syntax first
-    let { data: siteData, error: siteError } = await supabase
+    // Fetch basic settings first - no joins to avoid 400 errors if schema is out of sync
+    const { data: siteData, error: siteError } = await supabase
       .from('site_settings')
-      .select('*, author_of_the_day:profiles(id, full_name, avatar_url, bio)')
+      .select('*')
       .maybeSingle();
 
-    // If join fails, try with explicit hint
-    if (siteError) {
-      console.warn('site_settings simple join failed, trying with explicit hint:', siteError.message);
-      const { data: hintData, error: hintError } = await supabase
-        .from('site_settings')
-        .select('*, author_of_the_day:profiles!author_of_the_day_id(id, full_name, avatar_url, bio)')
+    if (siteError) throw siteError;
+    if (!siteData) return {};
+
+    // Fetch Author of the Day profile separately if enabled
+    if (siteData.author_of_the_day_id) {
+      const { data: profileData } = await supabase
+        .from('profiles')
+        .select('id, full_name, avatar_url, bio')
+        .eq('id', siteData.author_of_the_day_id)
         .maybeSingle();
       
-      if (!hintError) {
-        siteData = hintData;
-        siteError = null;
-      } else {
-        siteError = hintError;
+      if (profileData) {
+        siteData.author_of_the_day = profileData;
       }
     }
 
-    // If still error, try without bio (some profiles might not have it)
-    if (siteError) {
-      console.warn('site_settings join failed, checking for specific column issues:', siteError.message);
+    // Fetch featured books if present
+    if (siteData.author_of_the_day_books && siteData.author_of_the_day_books.length > 0) {
+      const { data: bookData } = await supabase
+        .from('products')
+        .select('id, title, image_url, price, author_id')
+        .in('id', siteData.author_of_the_day_books);
       
-      const { data: noBioData, error: noBioError } = await supabase
-        .from('site_settings')
-        .select('*, author_of_the_day:profiles(id, full_name, avatar_url)')
-        .maybeSingle();
-      
-      if (!noBioError) {
-        siteData = noBioData;
-        siteError = null;
+      if (bookData) {
+        siteData.featured_books = bookData;
       }
     }
-    
-    // Final fallback to simple select
-    if (siteError) {
-      console.warn('Falling back to basic site_settings fetch');
-      const { data: retryData, error: retryError } = await supabase
-        .from('site_settings')
-        .select('*')
-        .maybeSingle();
-      
-      siteData = retryData;
-      siteError = retryError;
-    }
 
-    if (!siteError && siteData) {
-      if (siteData.author_of_the_day_books && siteData.author_of_the_day_books.length > 0) {
-        const { data: bookData, error: bookError } = await supabase
-          .from('products')
-          .select('id, title, image_url, price, author_id')
-          .in('id', siteData.author_of_the_day_books);
-        
-        if (!bookError) {
-          siteData.featured_books = bookData;
-        }
-      }
-      return siteData;
-    }
-
-    return {};
+    return siteData;
   } catch (err) {
     console.error('Site Settings fetch failed:', err);
     return {};
