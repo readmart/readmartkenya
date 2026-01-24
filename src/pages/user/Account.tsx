@@ -89,8 +89,6 @@ export default function Account() {
   const [passwordForm, setPasswordForm] = useState({ current: '', new: '', confirm: '' });
   const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
 
-  const [isManagingNotifications, setIsManagingNotifications] = useState(false);
-
   const handlePasswordChange = async (e: React.FormEvent) => {
     e.preventDefault();
     if (passwordForm.new !== passwordForm.confirm) {
