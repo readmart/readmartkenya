@@ -66,7 +66,13 @@ export function useSettings() {
           .select('*')
           .maybeSingle();
 
-        if (!siteError && siteData) {
+        if (siteError) {
+          console.warn('Site settings table not found or error fetching, using defaults:', siteError.message);
+          setSettings(defaultSettings);
+          return;
+        }
+
+        if (siteData) {
           // Only overwrite defaults with truthy values from database
           const processedSettings = { ...defaultSettings };
           
@@ -81,35 +87,12 @@ export function useSettings() {
           processedSettings.x_url = siteData.x_url || siteData.twitter_url || defaultSettings.x_url;
 
           setSettings(processedSettings);
-          setIsLoading(false);
-          return;
-        }
-
-        // Fallback to settings
-        const { data: legacyData, error: legacyError } = await supabase
-          .from('settings')
-          .select('*')
-          .maybeSingle();
-
-        if (legacyError) {
-          console.warn('Site settings table not found or error fetching, using defaults:', legacyError.message);
-          setSettings(defaultSettings);
-          return;
-        }
-        
-        if (legacyData) {
-          const processedLegacy = { ...defaultSettings };
-          Object.keys(legacyData).forEach(key => {
-            if (legacyData[key] !== null && legacyData[key] !== undefined && legacyData[key] !== '') {
-              (processedLegacy as any)[key] = legacyData[key];
-            }
-          });
-          setSettings(processedLegacy);
         } else {
           setSettings(defaultSettings);
         }
       } catch (error) {
         console.error('Unexpected error fetching site settings:', error);
+        setSettings(defaultSettings);
       } finally {
         setIsLoading(false);
       }

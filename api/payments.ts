@@ -132,11 +132,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             console.log(`Updating order ${orderId} status to ${finalStatus}`);
             const updatePayload: any = { 
               status: finalStatus,
+              payment_status: finalStatus,
+              is_paid: isSuccess,
               payment_metadata: payload 
             };
             
             if (transactionId) {
               updatePayload.payment_id = transactionId;
+              updatePayload.mpesa_receipt_number = transactionId;
             }
             
             const { data: updatedOrders, error: orderError } = await supabase
@@ -161,7 +164,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               }]);
 
               if (isSuccess) {
-                await calculateOrderCommissions(order.id);
+                // The database trigger public.tr_order_paid_commissions will handle 
+                // calculateOrderCommissions(order.id) automatically when is_paid = true.
+                
                 await logAction(req, order.user_id, 'payment_received', 'orders', { orderId: order.id, amount });
                 
                 // Fetch items with product type and ebook metadata to check for digital-only order
@@ -297,8 +302,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           if (!isMembership && orderId) {
             console.log(`Demo mode: Fulfilling order ${orderId}`);
             // Update order to paid
-            await supabase.from('orders').update({ status: 'paid' }).eq('id', orderId);
-            // Trigger commission calculation
+            await supabase.from('orders').update({ 
+              status: 'paid',
+              is_paid: true,
+              payment_status: 'paid'
+            }).eq('id', orderId);
+            // Trigger commission calculation (will be handled by trigger if is_paid updated, 
+            // but we call it explicitly here for immediate effect in demo)
             await calculateOrderCommissions(orderId);
           } else if (isMembership) {
             const { data: { user } } = await supabase.auth.getUser(req.headers.authorization?.split(' ')[1] || '');

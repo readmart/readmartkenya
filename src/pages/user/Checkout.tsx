@@ -194,13 +194,14 @@ export default function Checkout() {
   
   const totalWeight = cartItems.reduce((sum, item) => sum + (item.weight || 0.5) * item.quantity, 0);
   const totalVolume = cartItems.reduce((sum, item) => sum + (item.volume || 0.001) * item.quantity, 0);
+  const isDigitalOnly = cartItems.every(item => item.type === 'ebook');
 
   const selectedZone = shippingZones.find(z => z.id === selectedZoneId);
   const baseShipping = selectedZone?.base_rate ?? selectedZone?.price ?? selectedZone?.rate ?? 0;
   const weightSurcharge = (selectedZone?.weight_surcharge || 0) * totalWeight;
   const volumeSurcharge = (selectedZone?.volume_surcharge || 0) * totalVolume;
   
-  const shippingAmount = baseShipping + weightSurcharge + volumeSurcharge;
+  const shippingAmount = isDigitalOnly ? 0 : (baseShipping + weightSurcharge + volumeSurcharge);
   const taxRate = settings?.tax_rate ?? 16;
   const estimatedTax = cartTotal * (taxRate / 100);
   

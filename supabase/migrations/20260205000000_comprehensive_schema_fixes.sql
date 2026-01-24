@@ -45,6 +45,7 @@ CREATE TABLE IF NOT EXISTS public.agreements (
     signed_at timestamp with time zone,
     approved_at timestamp with time zone,
     approved_by uuid REFERENCES public.profiles(id),
+    key_terms jsonb DEFAULT '[]'::jsonb,
     created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 

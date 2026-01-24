@@ -4169,8 +4169,11 @@ function AgreementsView({ partnerships, authors, protocols, onUpdate }: any) {
     try {
       const path = await uploadAgreementFile(file, `${id}_agreement`);
       
-      // 1. Sync with the applications API
+      // 1. Find the latest active protocol for this type to link it
       const type = table === 'author_applications' ? 'author' : 'partner';
+      const protocol = protocols.find((p: any) => p.type === type && p.is_active);
+
+      // 2. Sync with the applications API
       const response = await fetch('/api/applications', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -4184,16 +4187,18 @@ function AgreementsView({ partnerships, authors, protocols, onUpdate }: any) {
 
       if (!response.ok) throw new Error('API request failed');
 
-      // 2. Create/Update record in the agreements table for the applicant's dashboard
+      // 3. Create/Update record in the agreements table for the applicant's dashboard
       const { error: agreementError } = await supabase
         .from('agreements')
         .upsert({
-          title: `${type === 'author' ? 'Author' : 'Partnership'} Collaboration Protocol`,
-          description: `Terms and conditions for your ${type} collaboration with ReadMart.`,
+          title: protocol?.title || `${type === 'author' ? 'Author' : 'Partnership'} Collaboration Protocol`,
+          description: protocol?.content || `Terms and conditions for your ${type} collaboration with ReadMart.`,
           template_url: path,
           partner_id: userId,
           type: type as any,
-          status: 'pending'
+          status: 'pending',
+          protocol_id: protocol?.id,
+          key_terms: protocol?.metadata?.key_terms || []
         }, { onConflict: 'partner_id, type' });
 
       if (agreementError) console.error('Agreement record sync failed:', agreementError);
@@ -4213,13 +4218,18 @@ function AgreementsView({ partnerships, authors, protocols, onUpdate }: any) {
           status: 'agreement_sent'
         });
         
+        const type = table === 'author_applications' ? 'author' : 'partner';
+        const protocol = protocols.find((p: any) => p.type === type && p.is_active);
+
         // Try to sync agreement table even in fallback
         await supabase.from('agreements').upsert({
-          title: `${table.includes('author') ? 'Author' : 'Partnership'} Collaboration Protocol`,
+          title: protocol?.title || `${table.includes('author') ? 'Author' : 'Partnership'} Collaboration Protocol`,
+          description: protocol?.content || `Terms and conditions for your collaboration.`,
           template_url: path,
           partner_id: userId,
-          type: table.includes('author') ? 'author' : 'partner' as any,
-          status: 'pending'
+          type: type as any,
+          status: 'pending',
+          protocol_id: protocol?.id
         }, { onConflict: 'partner_id, type' });
 
         toast.success('Agreement uploaded (Direct DB)', { id: loadingToast });
@@ -4238,8 +4248,11 @@ function AgreementsView({ partnerships, authors, protocols, onUpdate }: any) {
       return;
     }
     
+    // Determine bucket based on path or context
+    const bucket = path.includes('signed') ? 'signed_agreements' : 'agreements';
+    
     const { data, error } = await supabase.storage
-      .from('partnership_documents')
+      .from(bucket)
       .createSignedUrl(path, 600); // 10 minutes
 
     if (error) {

@@ -49,7 +49,8 @@ export default function AgreementsSection({ userId, type }: AgreementsSectionPro
 
     setIsUploading(agreementId);
     try {
-      const fileUrl = await uploadAgreementFile(file, `${userId}_${agreementId}`);
+      // Use the specific agreement ID in the path to avoid collisions if multiple exist
+      const fileUrl = await uploadAgreementFile(file, `${userId}_${agreementId}`, 'signed_agreements');
       await submitSignedAgreement(agreementId, fileUrl);
       toast.success('Agreement signed and account activated! Welcome aboard.');
       setSelectedAgreement(null);

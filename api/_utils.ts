@@ -83,6 +83,18 @@ export const createNotification = async (params: {
  */
 export const calculateOrderCommissions = async (orderId: string) => {
   try {
+    // 0. Prevent duplicate calculation
+    const { data: existing } = await supabase
+      .from('fulfillment_ledger')
+      .select('id')
+      .eq('order_id', orderId)
+      .limit(1);
+    
+    if (existing && existing.length > 0) {
+      console.log(`Commissions already calculated for order ${orderId}`);
+      return true;
+    }
+
     // 1. Get order and items
     const { data: order, error: orderError } = await supabase
       .from('orders')

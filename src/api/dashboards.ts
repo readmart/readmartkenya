@@ -602,6 +602,8 @@ export async function getUserAgreements(userId: string) {
  */
 export async function submitSignedAgreement(agreementId: string, signedUrl: string) {
   // 1. Update the agreement record
+  // The trigger public.sync_agreement_to_application will handle 
+  // updating the application status and the user role automatically.
   const { data: agreement, error: agreementError } = await supabase
     .from('agreements')
     .update({
@@ -614,56 +616,6 @@ export async function submitSignedAgreement(agreementId: string, signedUrl: stri
     .single();
 
   if (agreementError) throw agreementError;
-
-  // 2. Automatically activate the account (Update user role)
-  if (agreement.partner_id) {
-    const { error: roleError } = await supabase
-      .from('profiles')
-      .update({
-        role: agreement.type === 'author' ? 'author' : 'partner'
-      })
-      .eq('id', agreement.partner_id);
-    
-    if (roleError) console.error('Failed to auto-activate role:', roleError);
-
-    // 3. Update the corresponding application status to 'completed'
-  const table = agreement.type === 'author' ? 'author_applications' : 'partnership_applications';
-  
-  try {
-    // Try to use the applications API to ensure activation emails are sent
-    // We need the application ID. We can find it by user_id.
-    const { data: appData } = await supabase
-      .from(table)
-      .select('id')
-      .eq('user_id', agreement.partner_id)
-      .single();
-
-    if (appData) {
-      await fetch('/api/applications', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          id: appData.id, 
-          type: agreement.type, 
-          status: 'completed' 
-        })
-      });
-    } else {
-      // Fallback if application record not found
-      await supabase
-        .from(table)
-        .update({ status: 'completed' })
-        .eq('user_id', agreement.partner_id);
-    }
-  } catch (err) {
-    console.error('Failed to update application via API, falling back to direct DB:', err);
-    await supabase
-      .from(table)
-      .update({ status: 'completed' })
-      .eq('user_id', agreement.partner_id);
-    }
-  }
-
   return agreement;
 }
 
@@ -994,13 +946,6 @@ export async function getSiteSettings() {
       }
       return siteData;
     }
-
-    const { data: legacyData, error: legacyError } = await supabase
-      .from('settings')
-      .select('*')
-      .maybeSingle();
-
-    if (!legacyError && legacyData) return legacyData;
 
     return {};
   } catch (err) {
