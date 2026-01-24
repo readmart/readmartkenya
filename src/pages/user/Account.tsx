@@ -85,6 +85,37 @@ export default function Account() {
   const [isLoadingPayments, setIsLoadingPayments] = useState(false);
   const [newPaymentPhone, setNewPaymentPhone] = useState('');
 
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
+  const [passwordForm, setPasswordForm] = useState({ current: '', new: '', confirm: '' });
+  const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
+
+  const [isManagingNotifications, setIsManagingNotifications] = useState(false);
+
+  const handlePasswordChange = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (passwordForm.new !== passwordForm.confirm) {
+      toast.error('New passwords do not match');
+      return;
+    }
+
+    setIsUpdatingPassword(true);
+    try {
+      const { error } = await supabase.auth.updateUser({ 
+        password: passwordForm.new 
+      });
+
+      if (error) throw error;
+
+      toast.success('Password updated successfully');
+      setIsChangingPassword(false);
+      setPasswordForm({ current: '', new: '', confirm: '' });
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to update password');
+    } finally {
+      setIsUpdatingPassword(false);
+    }
+  };
+
   const fetchPaymentMethods = async () => {
     if (!user) return;
     setIsLoadingPayments(true);
@@ -303,25 +334,92 @@ export default function Account() {
                   <div className="pt-8 border-t border-white/10">
                     <h3 className="text-xl font-black mb-6 uppercase tracking-tight">Account Security</h3>
                     <div className="grid md:grid-cols-2 gap-6">
-                      <button className="glass p-6 rounded-3xl flex items-center gap-6 hover:bg-white/5 transition-all text-left group">
-                        <div className="p-4 rounded-2xl bg-blue-500/10 text-blue-500 group-hover:scale-110 transition-transform">
-                          <Shield className="w-6 h-6" />
-                        </div>
-                        <div>
-                          <p className="font-black text-sm uppercase tracking-widest mb-1">Password</p>
-                          <p className="text-xs text-muted-foreground">Change your account password</p>
-                        </div>
-                      </button>
-                      <button className="glass p-6 rounded-3xl flex items-center gap-6 hover:bg-white/5 transition-all text-left group">
-                        <div className="p-4 rounded-2xl bg-purple-500/10 text-purple-500 group-hover:scale-110 transition-transform">
-                          <Bell className="w-6 h-6" />
-                        </div>
-                        <div>
-                          <p className="font-black text-sm uppercase tracking-widest mb-1">Notifications</p>
-                          <p className="text-xs text-muted-foreground">Manage your alerts & updates</p>
-                        </div>
-                      </button>
+                      <div className="relative">
+                        <button 
+                          onClick={() => setIsChangingPassword(!isChangingPassword)}
+                          className={`w-full glass p-6 rounded-3xl flex items-center gap-6 hover:bg-white/5 transition-all text-left group ${isChangingPassword ? 'border-primary/50' : ''}`}
+                        >
+                          <div className="p-4 rounded-2xl bg-blue-500/10 text-blue-500 group-hover:scale-110 transition-transform">
+                            <Shield className="w-6 h-6" />
+                          </div>
+                          <div>
+                            <p className="font-black text-sm uppercase tracking-widest mb-1">Password</p>
+                            <p className="text-xs text-muted-foreground">Change your account password</p>
+                          </div>
+                        </button>
+                      </div>
+
+                      <div className="relative">
+                        <button 
+                          onClick={() => {
+                            setActiveTab('settings');
+                            // Scroll to preferences section if needed
+                          }}
+                          className="w-full glass p-6 rounded-3xl flex items-center gap-6 hover:bg-white/5 transition-all text-left group"
+                        >
+                          <div className="p-4 rounded-2xl bg-purple-500/10 text-purple-500 group-hover:scale-110 transition-transform">
+                            <Bell className="w-6 h-6" />
+                          </div>
+                          <div>
+                            <p className="font-black text-sm uppercase tracking-widest mb-1">Notifications</p>
+                            <p className="text-xs text-muted-foreground">Manage your alerts & updates</p>
+                          </div>
+                        </button>
+                      </div>
                     </div>
+
+                    <AnimatePresence>
+                      {isChangingPassword && (
+                        <motion.div
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: 'auto' }}
+                          exit={{ opacity: 0, height: 0 }}
+                          className="mt-6 overflow-hidden"
+                        >
+                          <form onSubmit={handlePasswordChange} className="glass p-8 rounded-3xl border-primary/30 space-y-6">
+                            <div className="grid md:grid-cols-2 gap-6">
+                              <div className="space-y-2">
+                                <label className="text-xs font-black uppercase tracking-widest text-muted-foreground ml-1">New Password</label>
+                                <input 
+                                  type="password" 
+                                  value={passwordForm.new}
+                                  onChange={(e) => setPasswordForm({ ...passwordForm, new: e.target.value })}
+                                  className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 px-6 font-bold focus:border-primary/50 outline-none transition-all"
+                                  required
+                                />
+                              </div>
+                              <div className="space-y-2">
+                                <label className="text-xs font-black uppercase tracking-widest text-muted-foreground ml-1">Confirm New Password</label>
+                                <input 
+                                  type="password" 
+                                  value={passwordForm.confirm}
+                                  onChange={(e) => setPasswordForm({ ...passwordForm, confirm: e.target.value })}
+                                  className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 px-6 font-bold focus:border-primary/50 outline-none transition-all"
+                                  required
+                                />
+                              </div>
+                            </div>
+                            <div className="flex justify-end gap-4">
+                              <button 
+                                type="button"
+                                onClick={() => setIsChangingPassword(false)}
+                                className="px-8 py-4 rounded-2xl font-black uppercase text-xs tracking-widest hover:bg-white/5 transition-all"
+                              >
+                                Cancel
+                              </button>
+                              <button 
+                                type="submit"
+                                disabled={isUpdatingPassword}
+                                className="bg-primary text-white px-10 py-4 rounded-2xl font-black uppercase text-xs tracking-widest hover:scale-105 transition-all shadow-xl shadow-primary/20 flex items-center gap-2"
+                              >
+                                {isUpdatingPassword ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                                Update Password
+                              </button>
+                            </div>
+                          </form>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
                   </div>
                 </div>
               )}
