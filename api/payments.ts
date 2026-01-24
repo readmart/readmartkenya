@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { supabase, json, badRequest, serverError, createNotification, calculateOrderCommissions } from './_utils.ts';
+import { supabase, json, badRequest, serverError, createNotification, calculateOrderCommissions, logAction } from './_utils.ts';
 import {
   verifyK2Signature,
   extractK2WebhookData,
@@ -159,6 +159,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
               if (isSuccess) {
                 await calculateOrderCommissions(order.id);
+                await logAction(req, order.user_id, 'payment_received', 'orders', { orderId: order.id, amount });
                 
                 // Fetch items with product type and ebook metadata to check for digital-only order
                 const { data: items } = await supabase

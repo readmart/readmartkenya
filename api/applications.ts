@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { supabase, json, badRequest, serverError } from './_utils.ts';
+import { supabase, json, badRequest, serverError, logAction } from './_utils.ts';
 import { sendEmail, renderApplicationNotificationEmail, renderApplicationStatusEmail, renderAgreementNotificationEmail, renderActivationNotificationEmail } from './_email.ts';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -39,6 +39,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       if (dbError) throw dbError;
 
+      await logAction(req, null, 'submit_application', table, { applicationId: application.id, type });
+
       // Notify admin
       const adminEmail = type === 'author' ? 'authors@readmartke.com' : 'partners@readmartke.com';
       await sendEmail({
@@ -71,6 +73,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         .single();
 
       if (dbError) throw dbError;
+
+      await logAction(req, null, 'update_application_status', table, { applicationId: application.id, status });
 
       // Notify user of status change
       if (status === 'approved' || status === 'rejected') {

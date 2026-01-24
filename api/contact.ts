@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { supabase, json, badRequest, serverError } from './_utils.ts';
+import { supabase, json, badRequest, serverError, logAction } from './_utils.ts';
 import { sendEmail, renderContactNotificationEmail } from './_email.ts';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -37,6 +37,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .single();
 
     if (dbError) throw dbError;
+
+    await logAction(req, null, 'submit_contact_form', 'contact_messages', { messageId: contactMsg.id });
 
     // 2. Send email notification to support
     const supportEmail = process.env.SUPPORT_EMAIL || 'support@readmartke.com';

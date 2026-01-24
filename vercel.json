@@ -3,6 +3,9 @@
     { "source": "/api/auth/(.*)", "destination": "/api/auth" }, 
     { "source": "/api/payments/(.*)", "destination": "/api/payments" }, 
     { "source": "/api/kopokopo/(.*)", "destination": "/api/payments" }, 
+    { "source": "/api/community/(.*)", "destination": "/api/community" },
+    { "source": "/api/orders/(.*)", "destination": "/api/orders" },
+    { "source": "/api/ebooks/(.*)", "destination": "/api/ebooks" },
     { "source": "/api/(.*)", "destination": "/api/$1" }, 
     { "source": "/((?!api/).*)", "destination": "/index.html" } 
   ], 
