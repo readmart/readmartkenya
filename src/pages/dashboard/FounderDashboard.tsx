@@ -1832,6 +1832,27 @@ function IdentityView({ settings, onUpdate }: any) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Simple URL validation for social links
+    const socialFields = ['instagram_url', 'facebook_url', 'x_url', 'linkedin_url', 'youtube_url', 'threads_url', 'whatsapp_link'];
+    const invalidFields = socialFields.filter(field => {
+      const value = formData[field];
+      if (value && value.trim() !== '') {
+        try {
+          new URL(value);
+          return false;
+        } catch (e) {
+          return true;
+        }
+      }
+      return false;
+    });
+
+    if (invalidFields.length > 0) {
+      toast.error(`Invalid URL format in: ${invalidFields.map(f => f.replace('_url', '').replace('_link', '')).join(', ')}`);
+      return;
+    }
+
     const loadingToast = toast.loading('Synchronizing Identity...');
     try {
       await updateSiteSettings(formData);

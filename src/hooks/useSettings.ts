@@ -67,11 +67,19 @@ export function useSettings() {
           .maybeSingle();
 
         if (!siteError && siteData) {
-          const processedSettings = {
-            ...siteData,
-            twitter_url: siteData.x_url || siteData.twitter_url,
-            x_url: siteData.x_url || siteData.twitter_url
-          };
+          // Only overwrite defaults with truthy values from database
+          const processedSettings = { ...defaultSettings };
+          
+          Object.keys(siteData).forEach(key => {
+            if (siteData[key] !== null && siteData[key] !== undefined && siteData[key] !== '') {
+              (processedSettings as any)[key] = siteData[key];
+            }
+          });
+
+          // Special handling for X/Twitter sync
+          processedSettings.twitter_url = siteData.x_url || siteData.twitter_url || defaultSettings.twitter_url;
+          processedSettings.x_url = siteData.x_url || siteData.twitter_url || defaultSettings.x_url;
+
           setSettings(processedSettings);
           setIsLoading(false);
           return;
@@ -85,11 +93,20 @@ export function useSettings() {
 
         if (legacyError) {
           console.warn('Site settings table not found or error fetching, using defaults:', legacyError.message);
+          setSettings(defaultSettings);
           return;
         }
         
         if (legacyData) {
-          setSettings(legacyData);
+          const processedLegacy = { ...defaultSettings };
+          Object.keys(legacyData).forEach(key => {
+            if (legacyData[key] !== null && legacyData[key] !== undefined && legacyData[key] !== '') {
+              (processedLegacy as any)[key] = legacyData[key];
+            }
+          });
+          setSettings(processedLegacy);
+        } else {
+          setSettings(defaultSettings);
         }
       } catch (error) {
         console.error('Unexpected error fetching site settings:', error);
