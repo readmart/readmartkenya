@@ -4,6 +4,7 @@ import Footer from './Footer';
 import { useSettings } from '@/hooks/useSettings';
 import { Megaphone, Wrench } from 'lucide-react';
 import { useLocation } from 'react-router-dom';
+import { useEffect } from 'react';
 
 interface LayoutProps {
   children: ReactNode;
@@ -12,6 +13,10 @@ interface LayoutProps {
 export default function Layout({ children }: LayoutProps) {
   const { settings, isLoading } = useSettings();
   const location = useLocation();
+
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [location.pathname]);
 
   const isAuthRoute = ['/login', '/signup', '/admin-login', '/forgot-password', '/reset-password'].includes(location.pathname);
   const isDashboardRoute = location.pathname.includes('dashboard');
