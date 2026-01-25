@@ -347,10 +347,20 @@ export default function Contact() {
                   <div>
                     <p className="text-xs font-black uppercase tracking-widest text-muted-foreground mb-1">Primary Support</p>
                     <a href={`tel:${settings.contact_phone}`} className="text-lg font-black hover:text-primary transition-colors">{settings.contact_phone}</a>
-                    <p className="text-xs font-black uppercase tracking-widest text-muted-foreground mb-1 mt-4">Alternative Contact</p>
-                    <a href="tel:0741658548" className="text-lg font-black hover:text-primary transition-colors">0741658548</a>
                   </div>
                 </div>
+
+                {settings.secondary_phone && (
+                  <div className="flex gap-4">
+                    <div className="w-12 h-12 bg-secondary/10 text-secondary rounded-xl flex items-center justify-center shrink-0">
+                      <Phone className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-black uppercase tracking-widest text-muted-foreground mb-1">Secondary Support</p>
+                      <a href={`tel:${settings.secondary_phone}`} className="text-lg font-black hover:text-secondary transition-colors">{settings.secondary_phone}</a>
+                    </div>
+                  </div>
+                )}
 
                 <div className="flex gap-4">
                   <div className="w-12 h-12 bg-secondary/10 text-secondary rounded-xl flex items-center justify-center shrink-0">

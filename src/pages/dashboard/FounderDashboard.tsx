@@ -1978,13 +1978,23 @@ function IdentityView({ settings, onUpdate }: any) {
               />
             </div>
             <div>
-              <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Support Phone</label>
+              <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Support Phone (Primary)</label>
               <input 
                 type="text" 
                 value={formData.contact_phone}
                 onChange={(e) => setFormData({...formData, contact_phone: e.target.value})}
                 className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-2 focus:ring-primary/20 font-bold transition-all" 
                 placeholder="+254 794 129 958"
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Support Phone (Secondary)</label>
+              <input 
+                type="text" 
+                value={formData.secondary_phone}
+                onChange={(e) => setFormData({...formData, secondary_phone: e.target.value})}
+                className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-2 focus:ring-primary/20 font-bold transition-all" 
+                placeholder="+254 741 658 548"
               />
             </div>
             <div>

@@ -22,6 +22,7 @@ import { Link } from 'react-router-dom';
 import { CONTACT_INFO } from '@/lib/constants';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
+import { useSettings } from '@/hooks/useSettings';
 
 // FAQ Data
 const FAQ_CATEGORIES = [
@@ -140,6 +141,8 @@ export default function Help() {
       return matchesSearch && matchesCategory;
     });
   }, [searchQuery, activeCategory]);
+
+  const { settings } = useSettings();
 
   const handleFeedbackSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -323,24 +326,33 @@ export default function Help() {
             {/* Contact Support */}
             <div className="bg-primary text-white rounded-[2.5rem] p-8 shadow-2xl shadow-primary/20">
               <h3 className="text-2xl font-black mb-6">DIRECT SUPPORT</h3>
-              <div className="space-y-6">
-                <a href={`mailto:${CONTACT_INFO.email}`} className="flex items-center gap-4 p-4 rounded-2xl bg-white/10 hover:bg-white/20 transition-all border border-white/10 group">
+              <div className="space-y-4">
+                <a href={`mailto:${settings.contact_email || CONTACT_INFO.email}`} className="flex items-center gap-4 p-4 rounded-2xl bg-white/10 hover:bg-white/20 transition-all border border-white/10 group">
                   <div className="p-3 bg-white/20 rounded-xl group-hover:scale-110 transition-transform">
                     <Mail className="w-5 h-5" />
                   </div>
                   <div>
                     <p className="text-[10px] font-black uppercase tracking-widest text-white/60">Email Us</p>
-                    <p className="font-bold text-sm">{CONTACT_INFO.email}</p>
+                    <p className="font-bold text-sm">{settings.contact_email || CONTACT_INFO.email}</p>
                   </div>
                 </a>
                 
-                <a href={`tel:${CONTACT_INFO.phone1}`} className="flex items-center gap-4 p-4 rounded-2xl bg-white/10 hover:bg-white/20 transition-all border border-white/10 group">
-                  <div className="p-3 bg-white/20 rounded-xl group-hover:scale-110 transition-transform">
-                    <Phone className="w-5 h-5" />
+                <a href={`tel:${settings.contact_phone || CONTACT_INFO.phone1}`} className="flex items-center gap-4 p-4 rounded-2xl bg-white/10 hover:bg-white/20 transition-all border border-white/10 group">
+                  <div className="p-3 bg-white/10 rounded-xl group-hover:scale-110 transition-transform">
+                    <Phone className="w-6 h-6" />
                   </div>
                   <div>
-                    <p className="text-[10px] font-black uppercase tracking-widest text-white/60">Call Us</p>
-                    <p className="font-bold text-sm">{CONTACT_INFO.phone1}</p>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-white/60">Phone Support (Primary)</p>
+                    <p className="font-bold text-sm">{settings.contact_phone || CONTACT_INFO.phone1}</p>
+                  </div>
+                </a>
+                <a href={`tel:${settings.secondary_phone || CONTACT_INFO.phone2}`} className="flex items-center gap-4 p-4 rounded-2xl bg-white/10 hover:bg-white/20 transition-all border border-white/10 group">
+                  <div className="p-3 bg-white/10 rounded-xl group-hover:scale-110 transition-transform">
+                    <Phone className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-white/60">Phone Support (Secondary)</p>
+                    <p className="font-bold text-sm">{settings.secondary_phone || CONTACT_INFO.phone2}</p>
                   </div>
                 </a>
 
@@ -350,7 +362,7 @@ export default function Help() {
                   </div>
                   <div>
                     <p className="text-[10px] font-black uppercase tracking-widest text-white/60">Live Chat</p>
-                    <p className="font-bold text-sm">Mon-Fri: 8am - 5pm</p>
+                    <p className="font-bold text-sm">{settings.working_hours || 'Mon-Fri: 8am - 5pm'}</p>
                   </div>
                 </div>
               </div>

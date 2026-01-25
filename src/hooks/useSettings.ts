@@ -7,6 +7,7 @@ export interface SiteSettings {
   whatsapp_link: string;
   contact_email: string;
   contact_phone: string;
+  secondary_phone?: string;
   address: string;
   working_hours: string;
   tax_rate?: number;
@@ -32,6 +33,7 @@ const defaultSettings: SiteSettings = {
   whatsapp_link: 'https://wa.me/254794129958',
   contact_email: 'hello@readmart.com',
   contact_phone: '+254 794 129 958',
+  secondary_phone: '+254 741 658 548',
   address: 'Nairobi, Kenya',
   working_hours: 'Mon-Fri: 8am - 5pm',
   tax_rate: 16,
