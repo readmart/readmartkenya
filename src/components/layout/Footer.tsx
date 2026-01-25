@@ -54,7 +54,6 @@ export default function Footer() {
   const socialIcons: Record<string, any> = {
     Facebook,
     Instagram,
-    Youtube,
     Linkedin,
     X: XIcon,
     Threads: ThreadsIcon
