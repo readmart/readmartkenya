@@ -22,7 +22,7 @@ ALTER TABLE public.notification_logs ENABLE ROW LEVEL SECURITY;
 -- 2. Enhance Site Settings with missing fields
 ALTER TABLE public.site_settings 
 ADD COLUMN IF NOT EXISTS headquarters_address text DEFAULT 'Nairobi, Kenya',
-ADD COLUMN IF NOT EXISTS global_support_whatsapp text DEFAULT 'https://wa.me/254700000000',
+ADD COLUMN IF NOT EXISTS global_support_whatsapp text DEFAULT 'https://wa.me/254794129958',
 ADD COLUMN IF NOT EXISTS instagram_url text DEFAULT 'https://instagram.com/readmart',
 ADD COLUMN IF NOT EXISTS facebook_url text DEFAULT 'https://facebook.com/readmart',
 ADD COLUMN IF NOT EXISTS x_url text DEFAULT 'https://x.com/readmart',

@@ -24,7 +24,7 @@ CREATE TABLE IF NOT EXISTS public.settings (
     id text PRIMARY KEY DEFAULT 'global',
     site_name text DEFAULT 'ReadMart',
     site_logo text DEFAULT '/assets/logo.jpg',
-    whatsapp_link text DEFAULT 'https://wa.me/254700000000',
+    whatsapp_link text DEFAULT 'https://wa.me/254794129958',
     contact_email text DEFAULT 'hello@readmart.com',
     contact_phone text DEFAULT '+254 794 129 958',
     address text DEFAULT 'Nairobi, Kenya',

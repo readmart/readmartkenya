@@ -773,7 +773,7 @@ export default function Account() {
                                 <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
                                 <input 
                                   type="tel" 
-                                  placeholder="e.g. 254700000000"
+                                  placeholder="e.g. 254794129958"
                                   value={newPaymentPhone}
                                   onChange={(e) => setNewPaymentPhone(e.target.value)}
                                   className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 pl-12 pr-4 font-bold focus:border-primary/50 outline-none transition-all"
