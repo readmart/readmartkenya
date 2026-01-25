@@ -46,12 +46,6 @@ export const SOCIAL_LINKS = [
     icon: "Threads"
   },
   { 
-    label: "YouTube", 
-    href: "https://www.youtube.com/@readmartke", 
-    color: "hover:bg-[#FF0000]",
-    icon: "Youtube"
-  },
-  { 
     label: "LinkedIn", 
     href: "https://www.linkedin.com/company/readmartke", 
     color: "hover:bg-[#0A66C2]",

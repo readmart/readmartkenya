@@ -17,7 +17,6 @@ export interface SiteSettings {
   twitter_url?: string;
   x_url?: string;
   linkedin_url?: string;
-  youtube_url?: string;
   threads_url?: string;
   announcement_text?: string;
   membership_wall_active?: boolean;
@@ -43,7 +42,6 @@ const defaultSettings: SiteSettings = {
   twitter_url: 'https://x.com/readmartke',
   x_url: 'https://x.com/readmartke',
   linkedin_url: 'https://linkedin.com/company/readmartke',
-  youtube_url: 'https://youtube.com/@readmartke',
   threads_url: 'https://threads.net/@readmartke',
   announcement_text: '',
   membership_wall_active: false,

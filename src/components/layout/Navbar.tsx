@@ -226,7 +226,6 @@ export default function Navbar() {
                     </div>
                   ) : (
                     <div className="p-4 space-y-4 text-center">
-                      <p className="text-sm font-medium text-muted-foreground">Welcome to ReadMart</p>
                       <Link 
                         to="/login" 
                         className="block w-full py-3 bg-primary text-white rounded-2xl font-black text-sm hover:shadow-lg hover:shadow-primary/20 transition-all"

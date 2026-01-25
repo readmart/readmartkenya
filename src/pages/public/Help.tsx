@@ -6,8 +6,6 @@ import {
   Mail, 
   Phone, 
   MessageSquare, 
-  PlayCircle, 
-  FileText, 
   HelpCircle, 
   BookOpen, 
   Truck, 
@@ -17,7 +15,6 @@ import {
   AlertTriangle,
   Send,
   Star,
-  ExternalLink,
   ChevronRight,
   Loader2
 } from 'lucide-react';
@@ -105,22 +102,6 @@ const TROUBLESHOOTING = [
     issue: 'E-book not appearing',
     solution: 'Wait a few minutes for the payment to be processed. If it still doesn\'t show, try refreshing the page or logging out and back in.',
     icon: <ShieldCheck className="w-5 h-5 text-blue-500" />
-  }
-];
-
-// Video Tutorials Data
-const VIDEO_TUTORIALS = [
-  {
-    title: 'Welcome to ReadMart',
-    duration: '2:15',
-    thumbnail: 'https://images.unsplash.com/photo-1512820790803-83ca734da794?auto=format&fit=crop&q=80&w=600',
-    link: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ'
-  },
-  {
-    title: 'How to Join the Book Club',
-    duration: '3:45',
-    thumbnail: 'https://images.unsplash.com/photo-1529148482759-b35b25c5f217?auto=format&fit=crop&q=80&w=600',
-    link: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ'
   }
 ];
 
@@ -304,7 +285,7 @@ export default function Help() {
             {/* Tutorials Section */}
             <section className="space-y-8">
               <h2 className="text-3xl font-black flex items-center gap-3 px-4">
-                <PlayCircle className="w-8 h-8 text-primary" />
+                <BookOpen className="w-8 h-8 text-primary" />
                 STEP-BY-STEP TUTORIALS
               </h2>
               <div className="grid md:grid-cols-2 gap-6">
@@ -335,42 +316,6 @@ export default function Help() {
               </div>
             </section>
 
-            {/* Video Tutorials Section */}
-            <section className="space-y-8">
-              <h2 className="text-3xl font-black flex items-center gap-3 px-4">
-                <FileText className="w-8 h-8 text-primary" />
-                VIDEO & DOCUMENTATION
-              </h2>
-              <div className="grid md:grid-cols-2 gap-6">
-                {VIDEO_TUTORIALS.map((vid, i) => (
-                  <div key={i} className="bg-white rounded-[2rem] overflow-hidden shadow-lg border border-slate-100 group">
-                    <div className="relative aspect-video">
-                      <img src={vid.thumbnail} alt={vid.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-                      <div className="absolute inset-0 bg-black/20 group-hover:bg-black/40 transition-colors flex items-center justify-center">
-                        <div className="w-16 h-16 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center text-white group-hover:scale-110 transition-transform">
-                          <PlayCircle className="w-10 h-10 fill-white" />
-                        </div>
-                      </div>
-                      <span className="absolute bottom-4 right-4 bg-black/60 text-white text-[10px] font-black px-2 py-1 rounded-md">
-                        {vid.duration}
-                      </span>
-                    </div>
-                    <div className="p-6">
-                      <h3 className="font-black text-lg mb-4">{vid.title}</h3>
-                      <a 
-                        href={vid.link} 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        className="flex items-center gap-2 text-primary font-bold text-sm hover:underline"
-                      >
-                        Watch on YouTube
-                        <ExternalLink className="w-4 h-4" />
-                      </a>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </section>
           </div>
 
           {/* Sidebar */}
@@ -497,7 +442,7 @@ export default function Help() {
                   className="w-full py-4 bg-primary text-white rounded-xl font-black text-sm flex items-center justify-center gap-2 hover:opacity-90 disabled:opacity-50 transition-all shadow-lg shadow-primary/20"
                 >
                   {isSubmittingFeedback ? (
-                    <Loader2 className="w-5 h-5 animate-spin" />
+                    <Loader2 className="w-4 h-4 animate-spin" />
                   ) : (
                     <>
                       SUBMIT FEEDBACK

@@ -1889,7 +1889,7 @@ function IdentityView({ settings, onUpdate }: any) {
     e.preventDefault();
     
     // Simple URL validation for social links
-    const socialFields = ['instagram_url', 'facebook_url', 'x_url', 'linkedin_url', 'youtube_url', 'threads_url', 'whatsapp_link'];
+    const socialFields = ['instagram_url', 'facebook_url', 'x_url', 'linkedin_url', 'threads_url', 'whatsapp_link'];
     const invalidFields = socialFields.filter(field => {
       const value = formData[field];
       if (value && value.trim() !== '') {
@@ -2051,16 +2051,6 @@ function IdentityView({ settings, onUpdate }: any) {
                 onChange={(e) => setFormData({...formData, linkedin_url: e.target.value})}
                 className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-2 focus:ring-primary/20 font-bold transition-all" 
                 placeholder="https://linkedin.com/..."
-              />
-            </div>
-            <div>
-              <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">YouTube Channel</label>
-              <input 
-                type="text" 
-                value={formData.youtube_url}
-                onChange={(e) => setFormData({...formData, youtube_url: e.target.value})}
-                className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-2 focus:ring-primary/20 font-bold transition-all" 
-                placeholder="https://youtube.com/@..."
               />
             </div>
             <div>
