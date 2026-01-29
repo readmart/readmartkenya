@@ -1,35 +1,51 @@
-import { SignJWT, jwtVerify } from 'jose';
 import { supabase } from '../lib/supabase/client';
 
-const JWT_SECRET = new TextEncoder().encode(
-  import.meta.env.VITE_JWT_SECRET || 'fallback_secret_for_dev_min_32_chars'
-);
-
 export async function createSession(userId: string, email: string) {
-  const role = email === import.meta.env.VITE_FOUNDER_EMAIL ? 'founder' : 'customer';
-  
-  // Grant initial founder/admin rights if email matches env
-  if (role === 'founder') {
-    await supabase
-      .from('profiles')
-      .update({ role: 'founder' })
-      .eq('id', userId);
+  try {
+    const response = await fetch('/api/auth?action=create-session', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId, email })
+    });
+    
+    if (!response.ok) throw new Error('Failed to create session');
+    
+    const { token, role } = await response.json();
+    
+    // Store token and role
+    localStorage.setItem('readmart_token', token);
+    localStorage.setItem('readmart_role', role);
+    
+    return { token, role };
+  } catch (error) {
+    console.error('Session creation failed:', error);
+    return null;
   }
-
-  const token = await new SignJWT({ userId, email, role })
-    .setProtectedHeader({ alg: 'HS256' })
-    .setIssuedAt()
-    .setExpirationTime('7d')
-    .sign(JWT_SECRET);
-
-  return token;
 }
 
-export async function verifySession(token: string) {
+export async function getSession() {
+  const token = localStorage.getItem('readmart_token');
+  if (!token) return null;
+  
   try {
-    const { payload } = await jwtVerify(token, JWT_SECRET);
+    const response = await fetch('/api/auth?action=verify-session', {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    
+    if (!response.ok) {
+      localStorage.removeItem('readmart_token');
+      localStorage.removeItem('readmart_role');
+      return null;
+    }
+    
+    const { payload } = await response.json();
     return payload;
   } catch (error) {
     return null;
   }
+}
+
+export function logout() {
+  localStorage.removeItem('readmart_token');
+  localStorage.removeItem('readmart_role');
 }

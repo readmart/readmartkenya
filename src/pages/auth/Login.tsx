@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { Mail, Lock, ArrowRight, Loader2 } from 'lucide-react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '@/lib/supabase/client';
+import { createSession } from '@/api/auth';
 import { toast } from 'sonner';
 
 export default function Login() {
@@ -18,12 +19,16 @@ export default function Login() {
     setIsLoading(true);
 
     try {
-      const { error } = await supabase.auth.signInWithPassword({
+      const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
 
       if (error) throw error;
+
+      if (data.user) {
+        await createSession(data.user.id, email);
+      }
 
       toast.success('Welcome back!');
       navigate(redirect);

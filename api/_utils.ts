@@ -1,8 +1,29 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { supabase } from './_db.js';
+import { jwtVerify } from 'jose';
 export { supabase };
 
+const JWT_SECRET = new TextEncoder().encode(
+  process.env.JWT_SECRET || process.env.VITE_JWT_SECRET || 'fallback_secret_for_dev_min_32_chars'
+);
+
 export const TAX_RATE = 0.16; // 16% VAT
+
+/**
+ * Verifies the custom JWT from the Authorization header
+ */
+export async function verifyJWT(req: VercelRequest) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith('Bearer ')) return null;
+  
+  const token = authHeader.split(' ')[1];
+  try {
+    const { payload } = await jwtVerify(token, JWT_SECRET);
+    return payload as { userId: string; email: string; role: string };
+  } catch (e) {
+    return null;
+  }
+}
 
 /**
  * Enhanced fetch with timeout to prevent serverless function hangs

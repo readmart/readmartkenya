@@ -47,7 +47,7 @@ export async function verifyRole(allowedRoles: string[]) {
   if (import.meta.env.DEV && typeof window !== 'undefined') {
     const devRole = localStorage.getItem('rm_dev_role');
     if (devRole && allowedRoles.includes(devRole)) {
-      return null; // Authorized via dev bypass
+      return { user: { id: 'dev-id' } }; // Mock session for dev
     }
   }
 
@@ -71,6 +71,13 @@ export async function verifyRole(allowedRoles: string[]) {
  */
 export async function verifyAdmin() {
   return verifyRole(['founder', 'admin']);
+}
+
+/**
+ * Utility to verify author privileges
+ */
+export async function verifyAuthor() {
+  return verifyRole(['founder', 'admin', 'author']);
 }
 
 /**

@@ -1,9 +1,10 @@
-import { motion } from 'framer-motion';
-import { useState, useEffect, useMemo } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   BookOpen, DollarSign, TrendingUp,
   Award, MessageSquare, Plus, Loader2, Shield,
-  FileCheck, Star
+  FileCheck, Star, XCircle, Image as ImageIcon, FileUp,
+  Edit, Trash2, Search
 } from 'lucide-react';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
@@ -15,8 +16,12 @@ import {
   getInventory, 
   getSiteSettings,
   getAuthorPayouts,
-  getAuthorReviews
+  getAuthorReviews,
+  getCategories,
+  createProduct,
+  updateProduct
 } from '@/api/dashboards';
+import { uploadProductImage, uploadEbookFile } from '@/api/storage';
 import { toast } from 'sonner';
 import AgreementsSection from '@/components/dashboard/AgreementsSection';
 
@@ -28,7 +33,28 @@ export default function AuthorDashboard() {
   const [payouts, setPayouts] = useState<any[]>([]);
   const [reviews, setReviews] = useState<any[]>([]);
   const [settings, setSettings] = useState<any>(null);
+  const [categories, setCategories] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Modal & Form State
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingItem, setEditingItem] = useState<any>(null);
+  const [uploadProgress, setUploadProgress] = useState<{ [key: string]: number }>({});
+  const [formData, setFormData] = useState({
+    title: '',
+    author: '',
+    author_id: '',
+    price: '',
+    sale_price: '',
+    stock_quantity: '0',
+    category_id: '',
+    image_url: '',
+    description: '',
+    type: 'ebook', // Default to ebook for authors
+    is_active: true,
+    ebook_url: '',
+    metadata: {} as any
+  });
 
   useEffect(() => {
     if (user) {
@@ -40,22 +66,152 @@ export default function AuthorDashboard() {
     if (!user) return;
     setIsLoading(true);
     try {
-      const [sales, books, siteSettings, payoutData, reviewsData] = await Promise.all([
+      const [sales, books, siteSettings, payoutData, reviewsData, cats] = await Promise.all([
         getAuthorSalesReport(user.id),
         getInventory(user.id),
         getSiteSettings(),
         getAuthorPayouts(user.id),
-        getAuthorReviews(user.id)
+        getAuthorReviews(user.id),
+        getCategories()
       ]);
       setSalesReport(sales);
       setMyBooks(books); 
       setSettings(siteSettings);
       setPayouts(payoutData);
       setReviews(reviewsData);
+      setCategories(cats || []);
     } catch (error) {
       toast.error('Failed to fetch dashboard data');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleAddNew = () => {
+    setEditingItem(null);
+    setFormData({
+      title: '',
+      author: user?.user_metadata?.full_name || '',
+      author_id: user?.id || '',
+      price: '',
+      sale_price: '',
+      stock_quantity: '0',
+      category_id: categories[0]?.id || '',
+      image_url: '',
+      description: '',
+      type: 'ebook',
+      is_active: true,
+      ebook_url: '',
+      metadata: {}
+    });
+    setIsModalOpen(true);
+  };
+
+  const handleEdit = (item: any) => {
+    setEditingItem(item);
+    const ebookUrl = item.ebook_metadata?.[0]?.file_path || item.ebook_url || '';
+    
+    setFormData({
+      title: item.title || '',
+      author: item.author || '',
+      author_id: item.author_id || '',
+      price: item.price || '',
+      sale_price: item.sale_price || '',
+      stock_quantity: item.stock_quantity || '0',
+      category_id: item.category_id || '',
+      image_url: item.image_url || '',
+      description: item.description || '',
+      type: item.type || 'ebook',
+      is_active: item.is_active ?? true,
+      ebook_url: ebookUrl,
+      metadata: item.metadata || {}
+    });
+    setIsModalOpen(true);
+  };
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const loadingToast = toast.loading('Uploading cover imagery...');
+    try {
+      const url = await uploadProductImage(file, {
+        onProgress: (progress) => {
+          const percent = Math.round((progress.loaded / progress.total) * 100);
+          setUploadProgress(prev => ({ ...prev, cover: percent }));
+        }
+      });
+      setFormData({ ...formData, image_url: url });
+      toast.success('Cover imagery synchronized', { id: loadingToast });
+      setTimeout(() => setUploadProgress(prev => ({ ...prev, cover: 0 })), 2000);
+    } catch (error) {
+      toast.error('Upload failed', { id: loadingToast });
+    }
+  };
+
+  const handleEbookUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    const allowedTypes = ['application/pdf', 'application/epub+zip'];
+    if (!allowedTypes.includes(file.type)) {
+      toast.error('Please upload a PDF or EPUB file');
+      return;
+    }
+
+    const loadingToast = toast.loading('Uploading secure digital asset...');
+    try {
+      const identifier = editingItem?.id || `temp_${Date.now()}`;
+      const path = await uploadEbookFile(file, identifier, {
+        onProgress: (progress) => {
+          const percent = Math.round((progress.loaded / progress.total) * 100);
+          setUploadProgress(prev => ({ ...prev, ebook: percent }));
+        }
+      });
+      setFormData({ ...formData, ebook_url: path });
+      toast.success('Digital asset synchronized', { id: loadingToast });
+      setTimeout(() => setUploadProgress(prev => ({ ...prev, ebook: 0 })), 2000);
+    } catch (error: any) {
+      toast.error(error.message || 'Upload failed', { id: loadingToast });
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user) return;
+
+    const loadingToast = toast.loading(editingItem ? 'Updating Manuscript...' : 'Submitting Manuscript...');
+    try {
+      const { ...rawFormData } = formData;
+
+      const productPayload = {
+        ...rawFormData,
+        price: parseFloat(formData.price) || 0,
+        sale_price: formData.sale_price ? parseFloat(formData.sale_price) : null,
+        stock_quantity: parseInt(formData.stock_quantity) || 0,
+        category_id: formData.category_id || null,
+        author_id: user.id, // Ensure it's the current user
+        author: user.user_metadata?.full_name || 'Unknown Author',
+        type: formData.type,
+        ebook_url: formData.ebook_url, 
+        ebook_metadata: formData.type === 'ebook' ? {
+          file_path: formData.ebook_url,
+          format: formData.ebook_url.toLowerCase().endsWith('.epub') ? 'epub' : 'pdf',
+        } : null
+      };
+
+      if (editingItem) {
+        await updateProduct(editingItem.id, productPayload);
+        toast.success('Manuscript updated', { id: loadingToast });
+      } else {
+        await createProduct(productPayload);
+        toast.success('Manuscript submitted for review', { id: loadingToast });
+      }
+      setIsModalOpen(false);
+      fetchData();
+    } catch (error) {
+      toast.error('Operation failed', { id: loadingToast });
     }
   };
 
@@ -102,7 +258,10 @@ export default function AuthorDashboard() {
           </h1>
           <p className="text-muted-foreground">Manage your publications and track royalties</p>
         </div>
-        <button className="bg-primary text-white px-6 py-3 rounded-2xl font-bold flex items-center gap-2 hover:opacity-90 transition-all shadow-lg shadow-primary/20">
+        <button 
+          onClick={handleAddNew}
+          className="bg-primary text-white px-6 py-3 rounded-2xl font-bold flex items-center gap-2 hover:opacity-90 transition-all shadow-lg shadow-primary/20"
+        >
           <Plus className="w-5 h-5" />
           Submit New Manuscript
         </button>
@@ -193,9 +352,17 @@ export default function AuthorDashboard() {
                         </div>
                       </div>
                     </div>
-                    <div className="text-right">
-                      <p className="font-bold">{bookSales.length} Sales</p>
-                      <p className="text-sm text-primary font-bold">{formatPrice(totalEarned)} Earned</p>
+                    <div className="flex items-center gap-4">
+                      <div className="text-right">
+                        <p className="font-bold">{bookSales.length} Sales</p>
+                        <p className="text-sm text-primary font-bold">{formatPrice(totalEarned)} Earned</p>
+                      </div>
+                      <button 
+                        onClick={() => handleEdit(book)}
+                        className="p-2 hover:bg-primary hover:text-white rounded-lg transition-all text-muted-foreground"
+                      >
+                        <Edit className="w-4 h-4" />
+                      </button>
                     </div>
                   </div>
                 );
@@ -328,6 +495,209 @@ export default function AuthorDashboard() {
         </div>
         <AgreementsSection userId={user?.id || ''} type="author" />
       </motion.div>
+
+      {/* Upload/Edit Modal */}
+      <AnimatePresence>
+        {isModalOpen && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsModalOpen(false)}
+              className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
+            />
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              className="relative bg-white w-full max-w-4xl rounded-[40px] shadow-2xl overflow-hidden max-h-[90vh] flex flex-col"
+            >
+              <div className="p-8 border-b border-slate-50 flex justify-between items-center bg-slate-50/50">
+                <div>
+                  <h2 className="text-2xl font-black uppercase tracking-tighter text-slate-900">
+                    {editingItem ? 'Update Manuscript' : 'Submit Manuscript'}
+                  </h2>
+                  <p className="text-sm font-bold text-slate-400 uppercase tracking-widest">ReadMart Author Protocol</p>
+                </div>
+                <button onClick={() => setIsModalOpen(false)} className="p-2 hover:bg-white rounded-full transition-all text-slate-400 hover:text-red-500">
+                  <XCircle className="w-8 h-8" />
+                </button>
+              </div>
+
+              <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-10 custom-scrollbar">
+                <div className="grid md:grid-cols-2 gap-10">
+                  <div className="space-y-6">
+                    <div>
+                      <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Manuscript Title</label>
+                      <input 
+                        required
+                        type="text" 
+                        value={formData.title}
+                        onChange={(e) => setFormData({...formData, title: e.target.value})}
+                        className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-2 focus:ring-primary/20 font-bold text-slate-900" 
+                        placeholder="e.g. The Great Adventure"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Listing Price (KES)</label>
+                        <input 
+                          required
+                          type="number" 
+                          value={formData.price}
+                          onChange={(e) => setFormData({...formData, price: e.target.value})}
+                          className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-2 focus:ring-primary/20 font-bold text-slate-900" 
+                          placeholder="950"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Impact Price (Optional)</label>
+                        <input 
+                          type="number" 
+                          value={formData.sale_price}
+                          onChange={(e) => setFormData({...formData, sale_price: e.target.value})}
+                          className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-2 focus:ring-primary/20 font-bold text-slate-900" 
+                          placeholder="750"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Genre/Category</label>
+                      <select 
+                        required
+                        value={formData.category_id}
+                        onChange={(e) => setFormData({...formData, category_id: e.target.value})}
+                        className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-2 focus:ring-primary/20 font-bold text-slate-900"
+                      >
+                        <option value="">Select Category</option>
+                        {categories.map((cat: any) => (
+                          <option key={cat.id} value={cat.id}>{cat.name}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Abstract/Description</label>
+                      <textarea 
+                        required
+                        rows={4}
+                        value={formData.description}
+                        onChange={(e) => setFormData({...formData, description: e.target.value})}
+                        className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-2 focus:ring-primary/20 font-bold text-slate-900 resize-none" 
+                        placeholder="Brief summary of your work..."
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-6">
+                    <div>
+                      <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Cover Imagery</label>
+                      <div className="relative group cursor-pointer">
+                        <input 
+                          type="file" 
+                          accept="image/*"
+                          onChange={handleImageUpload}
+                          className="absolute inset-0 opacity-0 z-10 cursor-pointer" 
+                        />
+                        <div className="w-full aspect-[3/4] bg-slate-50 rounded-[32px] border-4 border-dashed border-slate-100 flex flex-col items-center justify-center p-8 transition-all group-hover:border-primary/20 group-hover:bg-slate-100/50 overflow-hidden relative">
+                          {formData.image_url ? (
+                            <>
+                              <img src={formData.image_url} alt="Cover Preview" className="absolute inset-0 w-full h-full object-cover" />
+                              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center backdrop-blur-sm">
+                                <p className="text-white font-black uppercase tracking-tighter text-sm">Replace Cover</p>
+                              </div>
+                            </>
+                          ) : (
+                            <>
+                              <div className="w-16 h-16 bg-white rounded-2xl shadow-sm flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                                <ImageIcon className="w-8 h-8 text-primary" />
+                              </div>
+                              <p className="text-sm font-black text-slate-900 uppercase tracking-tighter mb-1">Upload Cover</p>
+                              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">JPG, PNG up to 5MB</p>
+                            </>
+                          )}
+                          
+                          {uploadProgress.cover > 0 && uploadProgress.cover < 100 && (
+                            <div className="absolute inset-0 bg-white/90 flex flex-col items-center justify-center p-8">
+                              <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden mb-4">
+                                <div 
+                                  className="h-full bg-primary transition-all duration-300" 
+                                  style={{ width: `${uploadProgress.cover}%` }}
+                                />
+                              </div>
+                              <p className="text-xs font-black text-primary uppercase tracking-tighter">Syncing Imagery {uploadProgress.cover}%</p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Digital Asset (PDF/EPUB)</label>
+                      <div className="relative group cursor-pointer">
+                        <input 
+                          type="file" 
+                          accept=".pdf,.epub"
+                          onChange={handleEbookUpload}
+                          className="absolute inset-0 opacity-0 z-10 cursor-pointer" 
+                        />
+                        <div className={`w-full p-6 rounded-2xl border-2 border-dashed transition-all flex items-center gap-4 ${
+                          formData.ebook_url 
+                            ? 'bg-green-50 border-green-200' 
+                            : 'bg-slate-50 border-slate-100 group-hover:border-primary/20 group-hover:bg-slate-100/50'
+                        }`}>
+                          <div className={`p-3 rounded-xl ${formData.ebook_url ? 'bg-green-500 text-white' : 'bg-white text-primary shadow-sm'}`}>
+                            {formData.ebook_url ? <FileCheck className="w-6 h-6" /> : <FileUp className="w-6 h-6" />}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className={`text-sm font-black uppercase tracking-tighter ${formData.ebook_url ? 'text-green-700' : 'text-slate-900'}`}>
+                              {formData.ebook_url ? 'Asset Synchronized' : 'Upload Manuscript'}
+                            </p>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest truncate">
+                              {formData.ebook_url ? formData.ebook_url.split('/').pop() : 'PDF or EPUB up to 100MB'}
+                            </p>
+                          </div>
+                        </div>
+
+                        {uploadProgress.ebook > 0 && uploadProgress.ebook < 100 && (
+                          <div className="mt-4">
+                            <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                              <div 
+                                className="h-full bg-primary transition-all duration-300" 
+                                style={{ width: `${uploadProgress.ebook}%` }}
+                              />
+                            </div>
+                            <p className="text-[10px] font-black text-primary uppercase tracking-tighter mt-2">Uploading Digital Asset: {uploadProgress.ebook}%</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-12 flex gap-4">
+                  <button 
+                    type="submit"
+                    className="flex-1 bg-primary text-white py-5 rounded-2xl font-black uppercase tracking-widest hover:opacity-90 transition-all shadow-xl shadow-primary/20"
+                  >
+                    {editingItem ? 'Update Manuscript' : 'Confirm Submission'}
+                  </button>
+                  <button 
+                    type="button"
+                    onClick={() => setIsModalOpen(false)}
+                    className="px-10 bg-slate-100 text-slate-600 py-5 rounded-2xl font-black uppercase tracking-widest hover:bg-slate-200 transition-all"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

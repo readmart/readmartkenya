@@ -5,6 +5,7 @@ import {
   calculateTrend, 
   verifyRole, 
   verifyAdmin, 
+  verifyAuthor,
   verifyPartner 
 } from '@/lib/utils/api-helpers';
 import { deleteProductImage, deleteEbookFile } from './storage';
@@ -1233,7 +1234,13 @@ function generateSlug(text: string): string {
 }
 
 export async function createProduct(product: any) {
-  await verifyAdmin();
+  // Try author verification first, fallback to admin
+  try {
+    await verifyAuthor();
+  } catch (e) {
+    await verifyAdmin();
+  }
+  
   const { ebook_metadata, ...productData } = product;
   
   // Ensure slug exists
@@ -1284,7 +1291,13 @@ export async function createProduct(product: any) {
 }
 
 export async function updateProduct(id: string, product: any) {
-  await verifyAdmin();
+  // Try author verification first, fallback to admin
+  try {
+    await verifyAuthor();
+  } catch (e) {
+    await verifyAdmin();
+  }
+  
   const { ebook_metadata, ...productData } = product;
 
   // Get old data for audit

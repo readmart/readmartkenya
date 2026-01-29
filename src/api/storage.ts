@@ -167,25 +167,33 @@ export async function uploadSiteAsset(file: File, options: UploadOptions = {}) {
 /**
  * Upload an image to the banners bucket
  */
-export async function uploadBannerImage(file: File, path?: string) {
+export async function uploadBannerImage(file: File, options: UploadOptions = {}) {
+  validateFile(file, { 
+    maxSizeMB: options.maxSizeMB || 5, 
+    allowedTypes: options.allowedTypes || ['image/jpeg', 'image/png', 'image/webp'] 
+  });
+
   const fileExt = file.name.split('.').pop();
   const fileName = `banner_${Date.now()}.${fileExt}`;
-  const filePath = path ? `${path}/${fileName}` : fileName;
+  const filePath = options.path ? `${options.path}/${fileName}` : fileName;
 
-  const { data, error } = await supabase.storage
-    .from('banners')
-    .upload(filePath, file, {
-      cacheControl: '3600',
-      upsert: true
-    });
+  return withRetry(async () => {
+    const { data, error } = await supabase.storage
+      .from('banners')
+      .upload(filePath, file, {
+        cacheControl: '3600',
+        upsert: true,
+        onUploadProgress: options.onProgress
+      });
 
-  if (error) throw error;
+    if (error) throw error;
 
-  const { data: { publicUrl } } = supabase.storage
-    .from('banners')
-    .getPublicUrl(data.path);
+    const { data: { publicUrl } } = supabase.storage
+      .from('banners')
+      .getPublicUrl(data.path);
 
-  return publicUrl;
+    return publicUrl;
+  }, { retries: 2 });
 }
 
 /**

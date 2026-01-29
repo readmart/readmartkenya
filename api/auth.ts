@@ -3,7 +3,7 @@ import { json, badRequest, serverError, unauthorized, logAction } from './_utils
 import { SignJWT, jwtVerify } from 'jose';
 
 const JWT_SECRET = new TextEncoder().encode(
-  process.env.VITE_JWT_SECRET || 'fallback_secret_for_dev_min_32_chars'
+  process.env.JWT_SECRET || process.env.VITE_JWT_SECRET || 'fallback_secret_for_dev_min_32_chars'
 );
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {

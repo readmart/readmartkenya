@@ -2253,6 +2253,7 @@ function SettingsView({ settings, onUpdate }: any) {
 function IdentityView({ settings, onUpdate }: any) {
   const [formData, setFormData] = useState(settings);
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<{ [key: string]: number }>({});
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, field: string) => {
     const file = e.target.files?.[0];
@@ -2261,9 +2262,16 @@ function IdentityView({ settings, onUpdate }: any) {
     setIsUploading(true);
     const loadingToast = toast.loading('Uploading asset...');
     try {
-      const url = await uploadSiteAsset(file, 'identity');
+      const url = await uploadSiteAsset(file, {
+        path: 'identity',
+        onProgress: (progress) => {
+          const percent = Math.round((progress.loaded / progress.total) * 100);
+          setUploadProgress(prev => ({ ...prev, [field]: percent }));
+        }
+      });
       setFormData({ ...formData, [field]: url });
       toast.success('Asset uploaded successfully', { id: loadingToast });
+      setTimeout(() => setUploadProgress(prev => ({ ...prev, [field]: 0 })), 2000);
     } catch (error) {
       toast.error('Upload failed', { id: loadingToast });
     } finally {
@@ -2334,13 +2342,19 @@ function IdentityView({ settings, onUpdate }: any) {
                     className="hidden" 
                     id="logo-upload"
                   />
-                  <label 
-                    htmlFor="logo-upload"
-                    className="flex items-center justify-center gap-2 w-full px-6 py-4 bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200 hover:border-primary/50 hover:bg-primary/5 cursor-pointer transition-all font-bold text-sm text-slate-500"
-                  >
-                    <ImageIcon className="w-5 h-5" />
-                    {isUploading ? 'Uploading...' : 'Change Logo Asset'}
-                  </label>
+                    <label 
+                      htmlFor="logo-upload"
+                      className="flex items-center justify-center gap-2 w-full px-6 py-4 bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200 hover:border-primary/50 hover:bg-primary/5 cursor-pointer transition-all font-bold text-sm text-slate-500 relative overflow-hidden"
+                    >
+                      {uploadProgress.site_logo > 0 && uploadProgress.site_logo < 100 && (
+                        <div 
+                          className="absolute inset-0 bg-primary/10 transition-all duration-300" 
+                          style={{ width: `${uploadProgress.site_logo}%` }}
+                        />
+                      )}
+                      <ImageIcon className="w-5 h-5" />
+                      {isUploading ? `Uploading ${uploadProgress.site_logo || 0}%` : 'Change Logo Asset'}
+                    </label>
                 </div>
               </div>
             </div>
@@ -2475,6 +2489,7 @@ function IdentityView({ settings, onUpdate }: any) {
 function BannersView({ settings, cmsContent, onUpdate }: any) {
   const [heroFormData, setHeroFormData] = useState(settings);
   const [isUploadingHero, setIsUploadingHero] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<{ [key: string]: number }>({});
   
   // Promotional Banners State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -2498,9 +2513,16 @@ function BannersView({ settings, cmsContent, onUpdate }: any) {
     setIsUploadingHero(true);
     const loadingToast = toast.loading('Uploading hero asset...');
     try {
-      const url = await uploadSiteAsset(file, 'hero');
+      const url = await uploadSiteAsset(file, {
+        path: 'hero',
+        onProgress: (progress) => {
+          const percent = Math.round((progress.loaded / progress.total) * 100);
+          setUploadProgress(prev => ({ ...prev, hero: percent }));
+        }
+      });
       setHeroFormData({ ...heroFormData, hero_image_url: url });
       toast.success('Hero imagery synchronized', { id: loadingToast });
+      setTimeout(() => setUploadProgress(prev => ({ ...prev, hero: 0 })), 2000);
     } catch (error) {
       toast.error('Upload failed', { id: loadingToast });
     } finally {
@@ -2527,9 +2549,16 @@ function BannersView({ settings, cmsContent, onUpdate }: any) {
     setIsUploadingBanner(true);
     const loadingToast = toast.loading('Uploading banner asset...');
     try {
-      const url = await uploadSiteAsset(file, 'banners');
+      const url = await uploadSiteAsset(file, {
+        path: 'banners',
+        onProgress: (progress) => {
+          const percent = Math.round((progress.loaded / progress.total) * 100);
+          setUploadProgress(prev => ({ ...prev, banner: percent }));
+        }
+      });
       setBannerFormData(prev => ({ ...prev, image_url: url }));
       toast.success('Banner asset synchronized', { id: loadingToast });
+      setTimeout(() => setUploadProgress(prev => ({ ...prev, banner: 0 })), 2000);
     } catch (error) {
       toast.error('Upload failed', { id: loadingToast });
     } finally {
@@ -3798,6 +3827,7 @@ function InquiriesView({ data, onUpdate }: any) {
 function ClubsView({ data, onUpdate }: any) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingClub, setEditingClub] = useState<any>(null);
+  const [uploadProgress, setUploadProgress] = useState<{ [key: string]: number }>({});
   const [formData, setFormData] = useState({
     title: '',
     content: '',
@@ -3817,9 +3847,15 @@ function ClubsView({ data, onUpdate }: any) {
 
     const loadingToast = toast.loading('Uploading community asset...');
     try {
-      const url = await uploadSiteAsset(file);
+      const url = await uploadSiteAsset(file, {
+        onProgress: (progress) => {
+          const percent = Math.round((progress.loaded / progress.total) * 100);
+          setUploadProgress(prev => ({ ...prev, club: percent }));
+        }
+      });
       setFormData(prev => ({ ...prev, image_url: url }));
       toast.success('Asset synchronized', { id: loadingToast });
+      setTimeout(() => setUploadProgress(prev => ({ ...prev, club: 0 })), 2000);
     } catch (error) {
       toast.error('Upload failed', { id: loadingToast });
     }
@@ -4014,6 +4050,14 @@ function ClubsView({ data, onUpdate }: any) {
                         <span className="font-bold text-xs text-slate-400 uppercase tracking-widest">Upload Community Asset</span>
                       </label>
                     )}
+                    {uploadProgress.club > 0 && uploadProgress.club < 100 && (
+                      <div className="absolute bottom-0 left-0 right-0 h-1 bg-slate-100">
+                        <div 
+                          className="h-full bg-primary transition-all duration-300"
+                          style={{ width: `${uploadProgress.club}%` }}
+                        />
+                      </div>
+                    )}
                     <input id="club-upload" type="file" accept="image/*" onChange={handleFileUpload} className="hidden" />
                   </div>
                 </div>
@@ -4115,6 +4159,7 @@ function EventsView({ data, onUpdate }: any) {
   const [isRSVPModalOpen, setIsRSVPModalOpen] = useState(false);
   const [selectedEventRSVPs, setSelectedEventRSVPs] = useState<any[]>([]);
   const [editingEvent, setEditingEvent] = useState<any>(null);
+  const [uploadProgress, setUploadProgress] = useState<{ [key: string]: number }>({});
   const [formData, setFormData] = useState({
     title: '',
     content: '',
@@ -4140,9 +4185,15 @@ function EventsView({ data, onUpdate }: any) {
 
     const loadingToast = toast.loading('Uploading event asset...');
     try {
-      const url = await uploadSiteAsset(file);
+      const url = await uploadSiteAsset(file, {
+        onProgress: (progress) => {
+          const percent = Math.round((progress.loaded / progress.total) * 100);
+          setUploadProgress(prev => ({ ...prev, event: percent }));
+        }
+      });
       setFormData(prev => ({ ...prev, image_url: url }));
       toast.success('Asset synchronized', { id: loadingToast });
+      setTimeout(() => setUploadProgress(prev => ({ ...prev, event: 0 })), 2000);
     } catch (error) {
       toast.error('Upload failed', { id: loadingToast });
     }
@@ -4347,6 +4398,14 @@ function EventsView({ data, onUpdate }: any) {
                         <ImageIcon className="w-12 h-12 text-slate-300 mb-2" />
                         <span className="font-bold text-xs text-slate-400 uppercase tracking-widest">Upload Event Asset</span>
                       </label>
+                    )}
+                    {uploadProgress.event > 0 && uploadProgress.event < 100 && (
+                      <div className="absolute bottom-0 left-0 right-0 h-1 bg-slate-100">
+                        <div 
+                          className="h-full bg-primary transition-all duration-300"
+                          style={{ width: `${uploadProgress.event}%` }}
+                        />
+                      </div>
                     )}
                     <input id="event-upload" type="file" accept="image/*" onChange={handleFileUpload} className="hidden" />
                   </div>
