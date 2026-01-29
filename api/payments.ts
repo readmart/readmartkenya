@@ -24,6 +24,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const url = req.url || '';
     const method = req.method;
 
+    const isProduction = process.env.VERCEL_ENV === 'production' || process.env.NODE_ENV === 'production';
+
     // --- WEBHOOK ENDPOINT ---
     if (url.includes('webhook')) {
       if (method !== 'POST') return json(res, 405, { error: 'Method not allowed' });
@@ -36,69 +38,64 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       
       if (!verifyK2Signature(payload, signature)) {
         console.error('Invalid K2 signature');
-        // In production, we should reject this. In sandbox/dev, we might be more lenient but still log it.
-        const isProduction = process.env.VERCEL_ENV === 'production' || process.env.NODE_ENV === 'production';
+        // In production, we MUST reject this.
         if (isProduction) return json(res, 401, { error: 'Invalid signature' });
       }
 
       const webhookData = extractK2WebhookData(payload);
-      const { transactionId, amount, phone, eventType, senderName, status } = webhookData;
+      const { transactionId, amount, phone, eventType, senderName, status, currency } = webhookData;
       const orderId = webhookData.orderId || queryOrderId;
 
-      // Handle card payments or other transaction types where status might be 'Received'
-      const isSuccess = webhookData.isSuccess;
+      // Determine if this is a transaction event or a reversal
+      const isTransactionEvent = [
+        K2_EVENT_TYPES.STK_PUSH_SUCCESS, 
+        K2_EVENT_TYPES.BUYGOODS_RECEIVED, 
+        K2_EVENT_TYPES.PAYBILL_RECEIVED,
+        K2_EVENT_TYPES.CARD_RECEIVED,
+        K2_EVENT_TYPES.B2B_RECEIVED,
+        K2_EVENT_TYPES.M_PESA_PAYMENT_RECEIVED,
+        'incoming_payment',
+        'buygoods_transaction_received',
+        'card_transaction_received',
+        'paybill_transaction_received',
+        'm-pesa_payment_received'
+      ].includes(eventType) || 
+      eventType?.includes('payment_received') || 
+      eventType?.includes('transaction_received');
+
+      const isReversalEvent = [
+        K2_EVENT_TYPES.CARD_VOIDED,
+        K2_EVENT_TYPES.CARD_REVERSED,
+        K2_EVENT_TYPES.BUYGOODS_REVERSED,
+        'card_transaction_voided',
+        'card_transaction_reversed',
+        'buygoods_transaction_reversed'
+      ].includes(eventType) || 
+      eventType?.includes('reversed') || 
+      eventType?.includes('voided');
+
+      console.log(`Processing ${eventType}: OrderId=${orderId}, Success=${webhookData.isSuccess}, Status=${status}, Transaction=${transactionId}`);
       
-      console.log(`Processing webhook: Event=${eventType}, OrderId=${orderId}, Success=${isSuccess}, Status=${status}, Transaction=${transactionId}`);
-      
-      if (orderId) {
-        // Handle STK Push results (incoming_payment) and other transaction events
-        const isTransactionEvent = [
-          K2_EVENT_TYPES.STK_PUSH_SUCCESS, 
-          K2_EVENT_TYPES.BUYGOODS_RECEIVED, 
-          K2_EVENT_TYPES.PAYBILL_RECEIVED,
-          K2_EVENT_TYPES.CARD_RECEIVED,
-          K2_EVENT_TYPES.B2B_RECEIVED,
-          K2_EVENT_TYPES.M_PESA_PAYMENT_RECEIVED,
-          'incoming_payment',
-          'buygoods_transaction_received',
-          'card_transaction_received',
-          'paybill_transaction_received',
-          'm-pesa_payment_received'
-        ].includes(eventType) || 
-        eventType?.includes('payment_received') || 
-        eventType?.includes('transaction_received') ||
-        (eventType === 'incoming_payment' && status === 'Success');
+      if (orderId && (isTransactionEvent || isReversalEvent)) {
+        // --- IDEMPOTENCY CHECK ---
+        const { data: existingOrder } = await supabase
+          .from('orders')
+          .select('payment_status, is_paid, payment_id')
+          .eq('id', orderId)
+          .maybeSingle();
 
-        const isReversalEvent = [
-          K2_EVENT_TYPES.CARD_VOIDED,
-          K2_EVENT_TYPES.CARD_REVERSED,
-          K2_EVENT_TYPES.BUYGOODS_REVERSED,
-          'card_transaction_voided',
-          'card_transaction_reversed',
-          'buygoods_transaction_reversed'
-        ].includes(eventType) || eventType?.includes('reversed') || eventType?.includes('voided');
+        if (existingOrder?.is_paid && !isReversalEvent) {
+          console.log(`Order ${orderId} is already marked as paid. Skipping redundant webhook.`);
+          return json(res, 200, { received: true, already_processed: true });
+        }
 
-        if (isTransactionEvent || isReversalEvent) {
-          // --- IDEMPOTENCY CHECK ---
-          // Check if this transaction or order has already been processed as paid
-          const { data: existingOrder } = await supabase
-            .from('orders')
-            .select('payment_status, is_paid, payment_id')
-            .eq('id', orderId)
-            .maybeSingle();
-
-          if (existingOrder?.is_paid && !isReversalEvent) {
-            console.log(`Order ${orderId} is already marked as paid. Skipping redundant webhook processing.`);
-            return json(res, 200, { received: true, already_processed: true });
-          }
-
-          const finalStatus = isReversalEvent ? 'reversed' : (isSuccess ? 'paid' : 'failed');
-          
-          // For K2, sometimes 'Received' or 'Success' or 'Completed' means success
-          const actuallyPaid = isSuccess && !isReversalEvent;
-          const isMembership = orderId.startsWith('MEMB-');
-          
-          if (isMembership) {
+        const isSuccess = webhookData.isSuccess;
+        const actuallyPaid = isSuccess && !isReversalEvent;
+        const finalStatus = isReversalEvent ? 'reversed' : (isSuccess ? 'paid' : 'failed');
+        
+        const isMembership = orderId.startsWith('MEMB-');
+        
+        if (isMembership) {
             console.log(`Processing membership payment for order ${orderId}, status: ${finalStatus}`);
             
             // --- IDEMPOTENCY CHECK FOR MEMBERSHIP ---
@@ -317,16 +314,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         let k2Result;
         
         if (paymentMethod === 'card') {
-          // For card payments, we might return a hosted link or just a success message 
-          // if we're using a different flow. Since the K2 doc provided doesn't show 
-          // card initiation API, we'll return a simulated success/redirect for now
-          // or a message that card is handled via the app.
+          // KopoKopo Hosted Checkout is a common way to handle card payments.
+          // The URL format is usually https://app.kopokopo.com/pay/[till_number]
+          // or a specific checkout URL provided by KopoKopo.
+          const tillNumber = process.env.KOPOKOPO_TILL_NUMBER;
+          const checkoutBaseUrl = isProduction 
+            ? 'https://app.kopokopo.com/pay' 
+            : 'https://sandbox.kopokopo.com/pay';
+          
+          const checkoutUrl = `${checkoutBaseUrl}/${tillNumber}`;
+          
           k2Result = {
             status: 'Pending',
             message: 'Please complete the card payment on the following page',
-            location: `https://checkout.kopokopo.com/pay/readmart?reference=${finalOrderId}`, // Simulated
+            location: `${checkoutUrl}?reference=${finalOrderId}`,
             payment_method: 'card'
           };
+          
+          console.log(`Card payment initiated for order ${finalOrderId}. Redirecting to ${k2Result.location}`);
         } else {
           // Default to M-Pesa STK Push
           k2Result = await initiateK2StkPush({
@@ -362,6 +367,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         return json(res, 200, { ...k2Result, db_id: dbRecordId });
       } catch (err: any) {
+        if (isProduction) {
+          // In production, we don't use demo mode
+          throw err;
+        }
+
         if (err.message.includes('credentials') || err.message.includes('configured')) {
           console.warn('Payment credentials missing, using demo response');
           
@@ -422,6 +432,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const result = await getK2TransactionStatus(id as string);
         return json(res, 200, result);
       } catch (err: any) {
+        if (isProduction) {
+          throw err;
+        }
         if (err.message.includes('credentials') || err.message.includes('configured')) {
           return json(res, 200, { status: 'pending', demo: true });
         }

@@ -40,4 +40,35 @@ ReadMart is optimized for Vercel, which is the most recommended deployment metho
 
 - **White Screen / Loading Failure**: Check the browser console. If it prompts "Missing environment variables", please confirm if the deployment platform's variable configuration has taken effect.
 - **Login Invalid**: Confirm if the `JWT_SECRET` is consistent across different environments.
-- **API 403 Error**: Check if Supabase's RLS policies allow operations for the current user role.
+## 6. KopoKopo Payment Integration (Production)
+
+To enable production payments, follow these steps in the KopoKopo Dashboard:
+
+1. **API Keys**: Go to [KopoKopo Applications](https://app.kopokopo.com/applications) and create a new application to get your `CLIENT_ID`, `CLIENT_SECRET`, and `API_KEY`.
+2. **Till Number**: Use the Online Payments Till Number provided in your dashboard.
+3. **Webhook Subscriptions**: You must manually subscribe to the following event types to receive payment notifications:
+    - `buygoods_transaction_received`
+    - `buygoods_transaction_reversed`
+    - `m-pesa_payment_received`
+    - `card_transaction_received`
+    - `card_transaction_voided`
+    - `card_transaction_reversed`
+    - `paybill_transaction_received` (if using Paybill)
+    
+   **Webhook URL**: `https://your-domain.com/api/kopokopo/webhook`
+   **Scope**: `till`
+   **Scope Reference**: Your Till Number
+
+4. **Environment Variables**: Ensure the following are set in Vercel:
+    - `KOPOKOPO_ENV`: `production`
+    - `KOPOKOPO_CLIENT_ID`: Your production Client ID
+    - `KOPOKOPO_CLIENT_SECRET`: Your production Client Secret
+    - `KOPOKOPO_API_KEY`: Your production API Key
+    - `KOPOKOPO_TILL_NUMBER`: Your production Till Number
+    - `KOPOKOPO_WEBHOOK_URL`: `https://your-domain.com/api/kopokopo/webhook`
+
+## 7. Troubleshooting KopoKopo Integration
+
+- **Signature Verification Failed**: Ensure `KOPOKOPO_API_KEY` is correct. The system uses this key to verify that webhooks originated from KopoKopo.
+- **Webhook Not Received**: Check the KopoKopo dashboard for webhook delivery status. Ensure your URL is accessible and returns a `200 OK` response.
+- **Order Not Marked Paid**: Verify that the `orderId` or `reference` in the webhook payload matches the order ID in the database. The system checks `metadata.order_id`, `metadata.reference`, and `resource.reference`.
