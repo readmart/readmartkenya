@@ -22,7 +22,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const { userId, email } = req.body;
       if (!userId || !email) return badRequest(res, 'Missing userId or email');
 
-      const role = email === process.env.VITE_FOUNDER_EMAIL ? 'founder' : 'customer';
+      const founderEmail = process.env.FOUNDER_EMAIL || process.env.VITE_FOUNDER_EMAIL || 'admin@readmart.com';
+      const role = email === founderEmail ? 'founder' : 'customer';
       
       const token = await new SignJWT({ userId, email, role })
         .setProtectedHeader({ alg: 'HS256' })
