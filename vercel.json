@@ -1,6 +1,8 @@
 { 
   "rewrites": [ 
     { "source": "/api/auth/(.*)", "destination": "/api/auth" }, 
+    { "source": "/api/payments/webhook", "destination": "/api/payments?webhook=true" }, 
+    { "source": "/api/kopokopo/webhook", "destination": "/api/payments?webhook=true" }, 
     { "source": "/api/payments/(.*)", "destination": "/api/payments" }, 
     { "source": "/api/kopokopo/(.*)", "destination": "/api/payments" }, 
     { "source": "/api/community/(.*)", "destination": "/api/community" },

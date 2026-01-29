@@ -16,9 +16,9 @@ This document describes the 12 serverless functions maintained in the ReadMart s
 - **Security**: Uses HS256 algorithm with `VITE_JWT_SECRET`.
 
 ### 2. Payments (`/api/payments`)
-- **Endpoints**: `/api/payments/init`, `/api/payments/webhook`, `/api/payments/status`
+- **Endpoints**: `/api/payments/init`, `/api/payments/webhook`, `/api/kopokopo/webhook`, `/api/payments/status`
 - **Description**: Integrates with Kopo Kopo payment gateway for STK Push and webhooks.
-- **Security**: Signature verification for all webhooks.
+- **Security**: Signature verification for all webhooks. Supports both `/api/payments/webhook` and `/api/kopokopo/webhook`.
 
 ### 3. Orders (`/api/orders`)
 - **Methods**: POST (Create), GET (Retrieve)

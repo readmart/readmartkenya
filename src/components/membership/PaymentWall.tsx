@@ -27,7 +27,18 @@ export const PaymentWall: React.FC<PaymentWallProps> = ({
 }) => {
   const { profile, isAdmin, isFounder } = useAuth();
   const { settings, isLoading: settingsLoading } = useSettings();
-  const { formatPrice } = useCurrency();
+  
+  // Safe use of currency context
+  let formatPrice = (amount: number) => `KES ${amount}`;
+  try {
+    const currencyContext = useCurrency();
+    if (currencyContext) {
+      formatPrice = currencyContext.formatPrice;
+    }
+  } catch (e) {
+    console.warn('PaymentWall: CurrencyContext not found, using default formatter');
+  }
+
   const { isMember: isClubMember, isLoading: clubLoading } = useClubMembership(clubId);
   const [club, setClub] = useState<any>(null);
 

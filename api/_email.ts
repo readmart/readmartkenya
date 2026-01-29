@@ -25,11 +25,13 @@ export interface SendEmailParams {
   html?: string;
   body?: string;
   from?: string;
+  bcc?: string | string[];
+  replyTo?: string;
 }
 
 export const sendEmail = async (params: SendEmailParams) => {
-  const { to, subject, html, body } = params;
-  const fromAddr = params.from || process.env.EMAIL_FROM || 'ReadMart <notifications@readmartke.com>';
+  const { to, subject, html, body, bcc, replyTo } = params;
+  const fromAddr = params.from || process.env.EMAIL_FROM || 'ReadMart <no-reply@readmartke.com>';
   const recipient = Array.isArray(to) ? to.join(', ') : to;
 
   // 1. Log initiation
@@ -39,7 +41,11 @@ export const sendEmail = async (params: SendEmailParams) => {
       recipient, 
       subject, 
       status: 'pending',
-      metadata: { from: fromAddr }
+      metadata: { 
+        from: fromAddr,
+        bcc: bcc ? (Array.isArray(bcc) ? bcc.join(', ') : bcc) : undefined,
+        replyTo
+      }
     }])
     .select()
     .single();
@@ -49,6 +55,8 @@ export const sendEmail = async (params: SendEmailParams) => {
     const { data, error } = await resend.emails.send({
       from: fromAddr,
       to: Array.isArray(to) ? to : [to],
+      bcc: bcc ? (Array.isArray(bcc) ? bcc : [bcc]) : undefined,
+      reply_to: replyTo,
       subject,
       html: html || `<pre>${body}</pre>`,
     });
@@ -327,6 +335,33 @@ export const renderOrderConfirmationEmail = (data: any) => {
       <p style="margin-top: 20px; font-size: 12px; color: #999;">
         &copy; ${new Date().getFullYear()} ReadMart KE. All rights reserved.
       </p>
+    </div>
+  `;
+};
+
+export const renderNewsletterConfirmationEmail = (data: { email: string; token: string }) => {
+  const confirmLink = `https://readmartke.com/api/newsletter?confirm=${data.token}`;
+  
+  return `
+    <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; color: #333;">
+      <div style="text-align: center; margin-bottom: 30px;">
+        <h1 style="color: #6366f1; margin-bottom: 10px;">Welcome to ReadMart!</h1>
+        <p style="font-size: 16px; color: #666;">You're almost there. Please confirm your subscription to our newsletter.</p>
+      </div>
+      
+      <div style="background: #f8fafc; padding: 30px; border-radius: 12px; border: 1px solid #e2e8f0; text-align: center;">
+        <p style="margin-bottom: 25px;">Click the button below to confirm your subscription and start receiving our latest updates, book releases, and exclusive offers.</p>
+        
+        <a href="${confirmLink}" style="display: inline-block; background: #6366f1; color: white; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px; box-shadow: 0 4px 6px -1px rgba(99, 102, 241, 0.4);">Confirm Subscription</a>
+        
+        <p style="margin-top: 25px; font-size: 13px; color: #94a3b8;">If the button doesn't work, copy and paste this link into your browser:</p>
+        <p style="font-size: 12px; word-break: break-all; color: #6366f1;">${confirmLink}</p>
+      </div>
+      
+      <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; font-size: 12px; color: #94a3b8; text-align: center;">
+        <p>If you didn't request this, you can safely ignore this email.</p>
+        <p>&copy; ${new Date().getFullYear()} ReadMart KE. All rights reserved.</p>
+      </div>
     </div>
   `;
 };

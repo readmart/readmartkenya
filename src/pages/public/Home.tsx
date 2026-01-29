@@ -9,6 +9,7 @@ import { Link } from 'react-router-dom';
 import BookCard from '@/components/shop/BookCard';
 import { getCMSContent } from '@/api/dashboards';
 import { supabase } from '@/lib/supabase/client';
+import { withRetry } from '@/lib/retry';
 
 const featuredCategories = [
   { name: 'Books', icon: <BookOpen className="w-6 h-6" />, count: '2,000+ Titles', color: 'from-blue-500/20 to-cyan-500/20' },
@@ -26,36 +27,50 @@ const mockBooks = [
 
 export default function Home() {
   const [heroData, setHeroData] = useState<any>(null);
+  const [banners, setBanners] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [authorOfDay, setAuthorOfDay] = useState<any>(null);
 
   useEffect(() => {
-    async function fetchHero() {
+    async function fetchPageData() {
       try {
         const cms = await getCMSContent();
-        const hero = cms.find((item: any) => item.type === 'hero' && item.is_active);
-        if (hero) {
-          setHeroData(hero);
-        }
+        setBanners(cms.filter((item: any) => item.type === 'banner' && item.is_active));
 
-        // Get site settings for Author of the Day with resilience - no joins to avoid 400 errors
-        let settings = null;
+        // Get site settings for Hero and Author of the Day
+        let settings: any = null;
         try {
-          const { data, error } = await supabase
-            .from('site_settings')
-            .select('*')
-            .maybeSingle();
+          const data = await withRetry(async () => {
+            const { data, error } = await supabase
+              .from('site_settings')
+              .select('*')
+              .maybeSingle();
+            
+            if (error) throw error;
+            return data;
+          }, { retries: 2, delay: 500 });
           
-          if (error) throw error;
           settings = data;
+          
+          if (settings) {
+            setHeroData({
+              title: settings.hero_headline,
+              content: settings.hero_subtext,
+              image_url: settings.hero_image_url
+            });
+          }
 
           if (settings?.author_of_the_day_id) {
             // Fetch profile separately
-            const { data: profileData } = await supabase
-              .from('profiles')
-              .select('id, full_name, avatar_url, bio')
-              .eq('id', settings.author_of_the_day_id)
-              .maybeSingle();
+            const profileData = await withRetry(async () => {
+              const { data, error } = await supabase
+                .from('profiles')
+                .select('id, full_name, avatar_url, bio')
+                .eq('id', (settings as any).author_of_the_day_id)
+                .maybeSingle();
+              if (error) throw error;
+              return data;
+            }, { retries: 2, delay: 500 });
             
             if (profileData) {
               settings.author_of_the_day = profileData;
@@ -68,10 +83,14 @@ export default function Home() {
         if (settings?.author_of_the_day_enabled) {
           // Fetch featured books
           if (settings.author_of_the_day_books?.length > 0) {
-            const { data: books } = await supabase
-              .from('products')
-              .select('id, title, image_url, price')
-              .in('id', settings.author_of_the_day_books);
+            const books = await withRetry(async () => {
+              const { data, error } = await supabase
+                .from('products')
+                .select('id, title, image_url, price')
+                .in('id', settings.author_of_the_day_books);
+              if (error) throw error;
+              return data;
+            }, { retries: 2, delay: 500 });
             settings.featured_books = books || [];
           }
           setAuthorOfDay(settings);
@@ -82,7 +101,7 @@ export default function Home() {
         setIsLoading(false);
       }
     }
-    fetchHero();
+    fetchPageData();
   }, []);
 
   const defaultHero = {
@@ -91,7 +110,11 @@ export default function Home() {
     image_url: "https://images.unsplash.com/photo-1556761175-b413da4baf72?q=80&w=1200"
   };
 
-  const displayHero = heroData || defaultHero;
+  const displayHero = {
+    title: heroData?.title || defaultHero.title,
+    content: heroData?.content || defaultHero.content,
+    image_url: heroData?.image_url || defaultHero.image_url
+  };
 
   return (
     <div className="space-y-24 pb-24">
@@ -101,8 +124,8 @@ export default function Home() {
           "@context": "https://schema.org",
           "@type": "Organization",
           "name": "ReadMart",
-          "url": "https://readmart.co.ke",
-          "logo": "https://readmart.co.ke/assets/logo.jpg",
+          "url": "https://readmartke.com",
+          "logo": "https://readmartke.com/assets/logo.jpg",
           "contactPoint": {
             "@type": "ContactPoint",
             "telephone": "+254-794-129-958",
@@ -248,15 +271,52 @@ export default function Home() {
                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-60" />
                 
                 {/* Decorative Elements */}
-                <div className="absolute bottom-6 left-6 right-6 glass p-4 rounded-2xl border-white/10">
-                  <p className="text-white font-bold text-sm">Empowering Creators, Inspiring Readers</p>
-                  <p className="text-white/70 text-xs">Curated Sanctuary for Bibliophiles</p>
+                <div className="absolute bottom-6 left-6 right-6 bg-black/40 backdrop-blur-xl p-4 rounded-2xl border border-white/10">
+                  <p className="text-white font-bold text-sm uppercase tracking-wider">Empowering Creators, Inspiring Readers</p>
+                  <p className="text-white/70 text-xs font-medium">Curated Sanctuary for Bibliophiles</p>
                 </div>
               </div>
             </motion.div>
           </div>
         </div>
       </motion.section>
+      {/* Promotional Banners */}
+      {banners.length > 0 && (
+        <section className="container mx-auto px-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {banners.map((banner, idx) => (
+              <motion.div
+                key={banner.id}
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ delay: idx * 0.1 }}
+                className="group relative overflow-hidden rounded-[2.5rem] aspect-[21/9] md:aspect-[16/9] shadow-xl"
+              >
+                <img 
+                  src={banner.image_url} 
+                  alt={banner.title} 
+                  className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+                <div className="absolute bottom-0 left-0 p-8 w-full">
+                  <h3 className="text-2xl font-black text-white uppercase tracking-tighter mb-2">{banner.title}</h3>
+                  <p className="text-white/70 text-sm font-bold line-clamp-2 mb-6">{banner.content}</p>
+                  {banner.link_url && (
+                    <Link 
+                      to={banner.link_url}
+                      className="inline-flex items-center gap-2 text-white font-black text-xs uppercase tracking-widest group/btn"
+                    >
+                      Learn More
+                      <ArrowRight className="w-4 h-4 group-hover/btn:translate-x-1 transition-transform" />
+                    </Link>
+                  )}
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* Trust Badges */}
       <section className="container mx-auto px-4">

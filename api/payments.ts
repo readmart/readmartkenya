@@ -79,6 +79,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         ].includes(eventType) || eventType?.includes('reversed') || eventType?.includes('voided');
 
         if (isTransactionEvent || isReversalEvent) {
+          // --- IDEMPOTENCY CHECK ---
+          // Check if this transaction or order has already been processed as paid
+          const { data: existingOrder } = await supabase
+            .from('orders')
+            .select('payment_status, is_paid, payment_id')
+            .eq('id', orderId)
+            .maybeSingle();
+
+          if (existingOrder?.is_paid && !isReversalEvent) {
+            console.log(`Order ${orderId} is already marked as paid. Skipping redundant webhook processing.`);
+            return json(res, 200, { received: true, already_processed: true });
+          }
+
           const finalStatus = isReversalEvent ? 'reversed' : (isSuccess ? 'paid' : 'failed');
           
           // For K2, sometimes 'Received' or 'Success' or 'Completed' means success
@@ -88,6 +101,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           if (isMembership) {
             console.log(`Processing membership payment for order ${orderId}, status: ${finalStatus}`);
             
+            // --- IDEMPOTENCY CHECK FOR MEMBERSHIP ---
+            const { data: existingMemb } = await supabase
+              .from('membership_payments')
+              .select('status')
+              .or(`payment_id.eq.${transactionId},metadata->>order_id.eq.${orderId}`)
+              .maybeSingle();
+
+            if (existingMemb?.status === 'completed' && actuallyPaid) {
+              console.log(`Membership payment ${orderId} already completed. Skipping.`);
+              return json(res, 200, { received: true, already_processed: true });
+            }
+
             // 1. Update membership_payments table
             const { data: membershipPayments, error: membError } = await supabase
               .from('membership_payments')
@@ -240,8 +265,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                     }));
 
                     const html = renderOrderConfirmationEmail({ order, items: processedItems || [] });
+                    const forwardingEmail = process.env.FORWARDING_EMAIL;
+                    
                     await sendEmail({
                       to: email,
+                      bcc: forwardingEmail, // Keep admin informed of new paid orders
                       subject: `Order Confirmed - #${order.id.slice(0, 8).toUpperCase()}`,
                       html
                     });

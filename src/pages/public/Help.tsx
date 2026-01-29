@@ -16,7 +16,8 @@ import {
   Send,
   Star,
   ChevronRight,
-  Loader2
+  Loader2,
+  MessageCircle
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { CONTACT_INFO } from '@/lib/constants';
@@ -337,24 +338,47 @@ export default function Help() {
                   </div>
                 </a>
                 
-                <a href={`tel:${settings.contact_phone || CONTACT_INFO.phone1}`} className="flex items-center gap-4 p-4 rounded-2xl bg-white/10 hover:bg-white/20 transition-all border border-white/10 group">
-                  <div className="p-3 bg-white/10 rounded-xl group-hover:scale-110 transition-transform">
-                    <Phone className="w-6 h-6" />
+                <div className="flex flex-col gap-3 p-4 rounded-2xl bg-white/10 border border-white/10">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-white/60 ml-1">Phone Support (Primary)</p>
+                  <div className="flex items-center justify-between">
+                    <a href={`tel:${settings.contact_phone || CONTACT_INFO.phone1}`} className="flex items-center gap-3 hover:text-white transition-all group">
+                      <div className="p-2 bg-white/10 rounded-lg group-hover:scale-110 transition-transform">
+                        <Phone className="w-4 h-4" />
+                      </div>
+                      <p className="font-bold text-sm">{settings.contact_phone || CONTACT_INFO.phone1}</p>
+                    </a>
+                    <a 
+                      href={`https://wa.me/${(settings.contact_phone || CONTACT_INFO.phone1).replace(/\D/g, '')}`} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="p-2 bg-green-500/20 text-green-400 hover:bg-green-500 hover:text-white rounded-lg transition-all"
+                      title="WhatsApp Primary"
+                    >
+                      <MessageCircle className="w-4 h-4" />
+                    </a>
                   </div>
-                  <div>
-                    <p className="text-[10px] font-black uppercase tracking-widest text-white/60">Phone Support (Primary)</p>
-                    <p className="font-bold text-sm">{settings.contact_phone || CONTACT_INFO.phone1}</p>
+                </div>
+                
+                <div className="flex flex-col gap-3 p-4 rounded-2xl bg-white/10 border border-white/10">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-white/60 ml-1">Phone Support (Secondary)</p>
+                  <div className="flex items-center justify-between">
+                    <a href={`tel:${settings.secondary_phone || CONTACT_INFO.phone2}`} className="flex items-center gap-3 hover:text-white transition-all group">
+                      <div className="p-2 bg-white/10 rounded-lg group-hover:scale-110 transition-transform">
+                        <Phone className="w-4 h-4" />
+                      </div>
+                      <p className="font-bold text-sm">{settings.secondary_phone || CONTACT_INFO.phone2}</p>
+                    </a>
+                    <a 
+                      href={`https://wa.me/${(settings.secondary_phone || CONTACT_INFO.phone2).replace(/\D/g, '')}`} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="p-2 bg-green-500/20 text-green-400 hover:bg-green-500 hover:text-white rounded-lg transition-all"
+                      title="WhatsApp Secondary"
+                    >
+                      <MessageCircle className="w-4 h-4" />
+                    </a>
                   </div>
-                </a>
-                <a href={`tel:${settings.secondary_phone || CONTACT_INFO.phone2}`} className="flex items-center gap-4 p-4 rounded-2xl bg-white/10 hover:bg-white/20 transition-all border border-white/10 group">
-                  <div className="p-3 bg-white/10 rounded-xl group-hover:scale-110 transition-transform">
-                    <Phone className="w-6 h-6" />
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-black uppercase tracking-widest text-white/60">Phone Support (Secondary)</p>
-                    <p className="font-bold text-sm">{settings.secondary_phone || CONTACT_INFO.phone2}</p>
-                  </div>
-                </a>
+                </div>
 
                 <div className="flex items-center gap-4 p-4 rounded-2xl bg-white/10 border border-white/10">
                   <div className="p-3 bg-white/20 rounded-xl">

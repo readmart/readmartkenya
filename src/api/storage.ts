@@ -201,3 +201,21 @@ export async function deleteProductImage(url: string) {
     console.error('Failed to delete image:', error);
   }
 }
+
+/**
+ * Delete an ebook file from the private ebooks bucket
+ * @param path Path in the ebooks bucket
+ */
+export async function deleteEbookFile(path: string) {
+  try {
+    if (!path) return;
+
+    const { error } = await supabase.storage
+      .from('ebooks')
+      .remove([path]);
+
+    if (error) throw error;
+  } catch (error) {
+    console.error('Failed to delete ebook file:', error);
+  }
+}

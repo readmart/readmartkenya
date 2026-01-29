@@ -3,7 +3,7 @@ import {
   BookOpen, Users, Star, Calendar, 
   Heart, Shield, TrendingUp, Mail, 
   ArrowRight, MessageSquare, Briefcase, 
-  PenTool, Send
+  PenTool, Send, Sparkles
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useState } from 'react';
@@ -11,10 +11,12 @@ import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
 import { subscribeToNewsletter } from '@/api/newsletter';
 import { Loader2 } from 'lucide-react';
+import StoryModal from '@/components/layout/StoryModal';
 
 export default function About() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubscribingNewsletter, setIsSubscribingNewsletter] = useState(false);
+  const [isStoryOpen, setIsStoryOpen] = useState(false);
   const [newsletterEmail, setNewsletterEmail] = useState('');
   const [formData, setFormData] = useState({
     name: '',
@@ -23,7 +25,7 @@ export default function About() {
   });
 
   const stats = [
-    { label: 'Years of Experience', value: '2+', icon: <Star className="w-6 h-6" /> },
+    { label: 'Years of Experience', value: '3+', icon: <Star className="w-6 h-6" /> },
     { label: 'Books in Collection', value: '5000+', icon: <BookOpen className="w-6 h-6" /> },
     { label: 'Happy Readers', value: '10k+', icon: <Users className="w-6 h-6" /> },
     { label: 'Community Events', value: '50+', icon: <Calendar className="w-6 h-6" /> },
@@ -96,27 +98,25 @@ export default function About() {
 
   return (
     <div className="min-h-screen pt-24 pb-20 overflow-hidden">
+      <StoryModal isOpen={isStoryOpen} onClose={() => setIsStoryOpen(false)} />
       {/* Hero Section */}
       <section className="container mx-auto px-4 mb-24">
-        <div className="max-w-4xl mx-auto text-center">
+        <div className="max-w-4xl mx-auto text-center space-y-8">
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 text-primary text-sm font-black uppercase tracking-widest mb-8"
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 border border-primary/20 text-primary text-xs font-black uppercase tracking-widest cursor-pointer hover:bg-primary hover:text-black transition-all"
+            onClick={() => setIsStoryOpen(true)}
           >
-            <Shield className="w-4 h-4" />
-            About ReadMart
+            <Sparkles className="w-4 h-4" />
+            Discover Our Story
           </motion.div>
           <motion.h1 
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-            className="text-5xl md:text-7xl font-black mb-8 leading-[0.9] tracking-tighter"
+            className="text-5xl md:text-7xl font-black tracking-tight"
           >
-            PASSIONATE ABOUT <br />
-            <span className="bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
-              CONNECTING READERS
-            </span>
+            More than just a <span className="text-primary">bookstore.</span>
           </motion.h1>
           <motion.p 
             initial={{ opacity: 0, y: 20 }}
@@ -124,9 +124,53 @@ export default function About() {
             transition={{ delay: 0.2 }}
             className="text-xl text-muted-foreground font-medium max-w-2xl mx-auto leading-relaxed"
           >
-            We're passionate about connecting readers with their next favorite book. 
-            Since 2022, we've been on a mission to make quality literature accessible to everyone.
+            Since 2022, READMARTKE has been building a world where stories are part of daily life — through innovation, community, personalized services and unforgettable literary experiences that foster a vibrant, inclusive reading culture.
           </motion.p>
+        </div>
+      </section>
+
+      {/* Mission & Vision Section */}
+      <section className="container mx-auto px-4 mb-32">
+        <div className="grid md:grid-cols-2 gap-12 max-w-6xl mx-auto">
+          <motion.div
+            initial={{ opacity: 0, x: -20 }}
+            whileInView={{ opacity: 1, x: 0 }}
+            viewport={{ once: true }}
+            onClick={() => setIsStoryOpen(true)}
+            className="p-10 glass rounded-[3rem] border-white/5 space-y-6 bg-primary/5 cursor-pointer group hover:border-primary/30 transition-all"
+          >
+            <div className="w-16 h-16 bg-primary/10 text-primary rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
+              <TrendingUp className="w-8 h-8" />
+            </div>
+            <h3 className="text-sm font-black uppercase tracking-[0.2em] text-primary/80">Our Mission</h3>
+            <p className="text-2xl font-bold text-white/90 leading-tight italic">
+              "To reimagine how books meet people — at home, in cafes, hospitals and beyond."
+            </p>
+            <div className="flex items-center gap-2 text-primary text-xs font-black uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity">
+              <span>Read our full story</span>
+              <ArrowRight className="w-4 h-4" />
+            </div>
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, x: 20 }}
+            whileInView={{ opacity: 1, x: 0 }}
+            viewport={{ once: true }}
+            onClick={() => setIsStoryOpen(true)}
+            className="p-10 glass rounded-[3rem] border-white/5 space-y-6 bg-secondary/5 cursor-pointer group hover:border-secondary/30 transition-all"
+          >
+            <div className="w-16 h-16 bg-secondary/10 text-secondary rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
+              <Shield className="w-8 h-8" />
+            </div>
+            <h3 className="text-sm font-black uppercase tracking-[0.2em] text-secondary/80">Our Vision</h3>
+            <p className="text-2xl font-bold text-white/90 leading-tight">
+              To lead a reading revolution where books live everywhere and belong to everyone.
+            </p>
+            <div className="flex items-center gap-2 text-secondary text-xs font-black uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity">
+              <span>Read our full story</span>
+              <ArrowRight className="w-4 h-4" />
+            </div>
+          </motion.div>
         </div>
       </section>
 

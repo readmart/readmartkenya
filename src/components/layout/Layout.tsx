@@ -49,13 +49,13 @@ export default function Layout({ children }: LayoutProps) {
 
   return (
     <div className="flex flex-col min-h-screen">
-      {!isLoading && settings?.announcement_text && (
+      {!isLoading && settings?.announcement_active && settings?.global_announcement && (
         <div className="bg-primary text-white py-3 px-4 relative overflow-hidden group">
           <div className="absolute inset-0 bg-gradient-to-r from-white/10 to-transparent opacity-50" />
           <div className="container mx-auto flex items-center justify-center gap-3 relative z-10">
             <Megaphone className="w-4 h-4 animate-bounce" />
             <p className="text-[10px] sm:text-xs font-black uppercase tracking-[0.2em] text-center">
-              {settings.announcement_text}
+              {settings.global_announcement}
             </p>
           </div>
         </div>

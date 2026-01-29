@@ -1,10 +1,11 @@
 import { Suspense, lazy } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'sonner';
 import ProtectedRoute from '@/components/auth/ProtectedRoute';
 import Layout from '@/components/layout/Layout';
 import ScrollToTop from '@/components/layout/ScrollToTop';
 import { lazyRetry } from '@/lib/utils';
+import { useHttpsEnforcement } from '@/hooks/useHttpsEnforcement';
 
 // Public Pages
 const Home = lazy(() => lazyRetry(() => import('@/pages/public/Home')));
@@ -31,6 +32,11 @@ const Wishlist = lazy(() => lazyRetry(() => import('@/pages/user/Wishlist')));
 const Cart = lazy(() => lazyRetry(() => import('@/pages/user/Cart')));
 const Checkout = lazy(() => lazyRetry(() => import('@/pages/user/Checkout')));
 
+// Book Club Hub Pages
+const BookClubHub = lazy(() => lazyRetry(() => import('@/pages/bookclub/BookClubHub')));
+const CreateClub = lazy(() => lazyRetry(() => import('@/pages/bookclub/CreateClub')));
+const ClubDetails = lazy(() => lazyRetry(() => import('@/pages/bookclub/ClubDetails')));
+
 // Dashboard Pages
 const FounderDashboard = lazy(() => lazyRetry(() => import('@/pages/dashboard/FounderDashboard')));
 const AuthorDashboard = lazy(() => lazyRetry(() => import('@/pages/dashboard/AuthorDashboard')));
@@ -52,8 +58,10 @@ const LoadingSpinner = () => (
 );
 
 function App() {
+  useHttpsEnforcement();
+  
   return (
-    <Router>
+    <>
       <ScrollToTop />
       <Layout>
         <Suspense fallback={<LoadingSpinner />}>
@@ -96,6 +104,23 @@ function App() {
                 </ProtectedRoute>
               } />
 
+              {/* Book Club Hub Routes */}
+              <Route path="/book-club-hub" element={
+                <ProtectedRoute>
+                  <BookClubHub />
+                </ProtectedRoute>
+              } />
+              <Route path="/book-club-hub/create" element={
+                <ProtectedRoute>
+                  <CreateClub />
+                </ProtectedRoute>
+              } />
+              <Route path="/book-club-hub/:id" element={
+                <ProtectedRoute>
+                  <ClubDetails />
+                </ProtectedRoute>
+              } />
+
               {/* Protected Dashboard Routes */}
               <Route path="/founder-dashboard" element={
                 <ProtectedRoute allowedRoles={['founder', 'admin']}>
@@ -128,7 +153,7 @@ function App() {
           </Suspense>
         </Layout>
       <Toaster position="top-center" richColors />
-    </Router>
+    </>
   );
 }
 

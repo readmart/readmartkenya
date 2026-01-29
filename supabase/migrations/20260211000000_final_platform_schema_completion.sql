@@ -23,10 +23,10 @@ ALTER TABLE public.notification_logs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.site_settings 
 ADD COLUMN IF NOT EXISTS headquarters_address text DEFAULT 'Nairobi, Kenya',
 ADD COLUMN IF NOT EXISTS global_support_whatsapp text DEFAULT 'https://wa.me/254794129958',
-ADD COLUMN IF NOT EXISTS instagram_url text DEFAULT 'https://instagram.com/readmart',
-ADD COLUMN IF NOT EXISTS facebook_url text DEFAULT 'https://facebook.com/readmart',
-ADD COLUMN IF NOT EXISTS x_url text DEFAULT 'https://x.com/readmart',
-ADD COLUMN IF NOT EXISTS linkedin_url text DEFAULT 'https://linkedin.com/company/readmart';
+ADD COLUMN IF NOT EXISTS instagram_url text DEFAULT 'https://www.instagram.com/readmartke?igsh=bWdtZDhvcGZsZWNx',
+ADD COLUMN IF NOT EXISTS facebook_url text DEFAULT 'https://www.facebook.com/share/1LB4jKLTTV/',
+ADD COLUMN IF NOT EXISTS x_url text DEFAULT 'https://x.com/readmartke',
+ADD COLUMN IF NOT EXISTS linkedin_url text DEFAULT 'https://linkedin.com/comm/mynetwork/discovery-see-all?usecase=PEOPLE_FOLLOWS&followMember=read-mart-6797423a1';
 
 -- 2. Enhance Agreement & Application Schema for PDF Workflow
 ALTER TABLE public.partnership_agreements 

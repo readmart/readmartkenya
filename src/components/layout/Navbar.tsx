@@ -9,9 +9,11 @@ import {
 import { useAuth } from '@/contexts/AuthContext';
 import { useCart } from '@/contexts/CartContext';
 import { useWishlist } from '@/contexts/WishlistContext';
+import { useSettings } from '@/hooks/useSettings';
 import SearchDialog from '../search/SearchDialog';
 
 export default function Navbar() {
+  const { settings } = useSettings();
   const { user, profile, logout } = useAuth();
   const { cartCount } = useCart();
   const { wishlistCount } = useWishlist();
@@ -59,14 +61,14 @@ export default function Navbar() {
   const exploreLinks = [
     { name: 'All Books', href: '/shop?category=All', icon: <ShoppingBag className="w-4 h-4" /> },
     { name: 'Art & Accessories', href: '/shop?category=Art & Accessories', icon: <Heart className="w-4 h-4" /> },
-    { name: 'Book Club', href: '/book-club', icon: <BookOpen className="w-4 h-4" /> },
+    { name: 'Book Club Hub', href: '/book-club-hub', icon: <BookOpen className="w-4 h-4" /> },
     { name: 'Events', href: '/events', icon: <Calendar className="w-4 h-4" /> },
   ];
 
   const navLinks = [
     { name: 'Home', href: '/' },
     { name: 'Shop', href: '/shop' },
-    { name: 'Book Club', href: '/book-club' },
+    { name: 'Club Hub', href: '/book-club-hub' },
     { name: 'Help', href: '/help' },
   ];
 
@@ -82,7 +84,7 @@ export default function Navbar() {
     <nav className="glass-nav flex items-center justify-between sticky top-0 z-[100]">
       <div className="flex items-center gap-8">
         <Link to="/" className="flex items-center gap-2">
-          <img src="/assets/logo.jpg" alt="ReadMart" className="h-10 w-auto rounded" />
+          <img src={settings.site_logo} alt={settings.site_name} className="h-10 w-auto rounded" />
         </Link>
 
         <div className="hidden lg:flex items-center gap-6 text-sm font-medium">

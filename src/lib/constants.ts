@@ -7,7 +7,7 @@ export const CONTACT_INFO = {
 };
 
 export const SYSTEM_EMAILS = {
-  notifications: 'notifications@readmartke.com',
+  noReply: 'no-reply@readmartke.com',
   support: 'support@readmartke.com',
   admin: 'admin@readmartke.com',
   info: 'info@readmartke.com',
@@ -18,7 +18,12 @@ export const SYSTEM_EMAILS = {
   shipping: 'shipping@readmartke.com',
   returns: 'returns@readmartke.com',
   security: 'security@readmartke.com',
+  art: 'art@readmartke.com',
+  events: 'events@readmartke.com',
+  bookclub: 'bookclub@readmartke.com',
 };
+
+export const FORWARDING_EMAIL = 'readmartke@gmail.com';
 
 export const SOCIAL_LINKS = [
   { 
@@ -29,9 +34,15 @@ export const SOCIAL_LINKS = [
   },
   { 
     label: "Instagram", 
-    href: "https://www.instagram.com/readmartke", 
+    href: "https://www.instagram.com/readmartke?igsh=bWdtZDhvcGZsZWNx", 
     color: "hover:bg-[#E1306C]",
     icon: "Instagram"
+  },
+  { 
+    label: "TikTok", 
+    href: "https://www.tiktok.com/@readmartke?_r=1&_t=ZS-92BvAtTmKLn", 
+    color: "hover:bg-[#000000]",
+    icon: "Music2"
   },
   { 
     label: "X (Twitter)", 
@@ -40,14 +51,8 @@ export const SOCIAL_LINKS = [
     icon: "X"
   },
   { 
-    label: "Threads", 
-    href: "https://www.threads.net/@readmartke", 
-    color: "hover:bg-[#000000]",
-    icon: "Threads"
-  },
-  { 
     label: "LinkedIn", 
-    href: "https://www.linkedin.com/company/readmartke", 
+    href: "https://linkedin.com/comm/mynetwork/discovery-see-all?usecase=PEOPLE_FOLLOWS&followMember=read-mart-6797423a1", 
     color: "hover:bg-[#0A66C2]",
     icon: "Linkedin"
   },

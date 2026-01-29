@@ -52,7 +52,18 @@ export default function BookClub() {
   const [isJoining, setIsJoining] = useState<string | null>(null);
   const [isRSVPing, setIsRSVPing] = useState<string | null>(null);
   const { user } = useAuth();
-  const { formatPrice } = useCurrency();
+  
+  // Safe use of currency context
+  let formatPrice = (amount: number) => `KES ${amount}`;
+  try {
+    const currencyContext = useCurrency();
+    if (currencyContext) {
+      formatPrice = currencyContext.formatPrice;
+    }
+  } catch (e) {
+    console.warn('BookClub: CurrencyContext not found, using default formatter');
+  }
+
   const navigate = useNavigate();
 
   useEffect(() => {

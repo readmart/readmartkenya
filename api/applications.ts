@@ -43,8 +43,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       // Notify admin
       const adminEmail = type === 'author' ? 'authors@readmartke.com' : 'partners@readmartke.com';
+      const forwardingEmail = process.env.FORWARDING_EMAIL;
+      
       await sendEmail({
         to: adminEmail,
+        bcc: (forwardingEmail && adminEmail !== forwardingEmail) ? forwardingEmail : undefined,
         subject: `New ${type.charAt(0).toUpperCase() + type.slice(1)} Application: ${full_name}`,
         html: renderApplicationNotificationEmail(type as 'author' | 'partner', application)
       });

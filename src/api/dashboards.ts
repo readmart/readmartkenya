@@ -1,84 +1,13 @@
 import { supabase } from '@/lib/supabase/client';
 import { withRetry } from '@/lib/retry';
-
-/**
- * Utility to log administrative actions
- */
-async function logAudit(action: string, entityType: string, entityId: string | null, newData: any = null, oldData: any = null) {
-  try {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.user?.id) return;
-
-    const { error } = await supabase.from('audit_logs').insert([{
-      user_id: session.user.id,
-      action,
-      entity_type: entityType,
-      entity_id: entityId,
-      new_data: newData,
-      old_data: oldData
-    }]);
-
-    if (error) {
-      if (error.code === 'PGRST204') {
-        console.warn('Audit logs table missing, skipping log');
-      } else {
-        console.warn('Audit logging failed:', error.message);
-      }
-    }
-  } catch (err) {
-    console.warn('Audit logging failed (exception):', err);
-  }
-}
-
-/**
- * Utility to calculate percentage trend between two periods
- */
-function calculateTrend(current: number, previous: number): string {
-  if (previous === 0) return current > 0 ? '+100%' : '0%';
-  const diff = ((current - previous) / previous) * 100;
-  return `${diff >= 0 ? '+' : ''}${diff.toFixed(1)}%`;
-}
-
-/**
- * Utility to verify roles
- */
-export async function verifyRole(allowedRoles: string[]) {
-  // Development bypass: Check localStorage for dev role first
-  if (typeof window !== 'undefined') {
-    const devRole = localStorage.getItem('rm_dev_role');
-    if (devRole && allowedRoles.includes(devRole)) {
-      return null; // Authorized via dev bypass (no real session needed)
-    }
-  }
-
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session) throw new Error('Not authenticated');
-
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('role')
-    .eq('id', session.user.id)
-    .single();
-
-  if (!profile || !allowedRoles.includes(profile.role)) {
-    throw new Error('Unauthorized access: Required privileges missing');
-  }
-  return session;
-}
-
-/**
- * Utility to verify administrative privileges
- */
-async function verifyAdmin() {
-  return verifyRole(['founder', 'admin']);
-}
-
-/**
- * Utility to verify partner privileges
- */
-async function verifyPartner() {
-  return verifyRole(['founder', 'admin', 'partner']);
-}
+import { 
+  logAudit, 
+  calculateTrend, 
+  verifyRole, 
+  verifyAdmin, 
+  verifyPartner 
+} from '@/lib/utils/api-helpers';
+import { deleteProductImage, deleteEbookFile } from './storage';
 
 // --- Founder Services ---
 
@@ -145,17 +74,31 @@ export async function getGlobalAnalytics() {
     const currentOrders = orders?.filter(o => new Date(o.created_at) >= thirtyDaysAgo) || [];
     const previousOrders = orders?.filter(o => new Date(o.created_at) < thirtyDaysAgo) || [];
 
-    // Revenue only from successful transactions
-    const SUCCESS_STATUSES = ['completed', 'paid', 'delivered'];
-    const completedOrders = currentOrders.filter(o => SUCCESS_STATUSES.includes(o.status.toLowerCase()));
-    const currentRevenue = completedOrders.reduce((acc, curr) => acc + Number(curr.total_amount || 0), 0);
+    // Revenue from active transactions (excluding cancelled/failed/refunded)
+    const EXCLUDED_STATUSES = ['cancelled', 'failed', 'refunded'];
+    const activeOrders = currentOrders.filter(o => !EXCLUDED_STATUSES.includes((o.status || 'pending').toLowerCase()));
+    const currentRevenue = activeOrders.reduce((acc, curr) => acc + Number(curr.total_amount || 0), 0);
     
     const previousRevenue = previousOrders
-      .filter(o => SUCCESS_STATUSES.includes(o.status.toLowerCase()))
+      .filter(o => !EXCLUDED_STATUSES.includes((o.status || 'pending').toLowerCase()))
       .reduce((acc, curr) => acc + Number(curr.total_amount || 0), 0);
 
     const revenueTrend = calculateTrend(currentRevenue, previousRevenue);
     const ordersTrend = calculateTrend(currentOrders.length, previousOrders.length);
+
+    // Group sales data by day for the trajectory chart
+    const salesByDay: Record<string, number> = {};
+    activeOrders.forEach(order => {
+      const day = new Date(order.created_at).toISOString().split('T')[0];
+      salesByDay[day] = (salesByDay[day] || 0) + Number(order.total_amount || 0);
+    });
+
+    const trajectoryData = Object.entries(salesByDay)
+      .map(([date, amount]) => ({ 
+        created_at: date, 
+        total_amount: amount 
+      }))
+      .sort((a, b) => a.created_at.localeCompare(b.created_at));
 
     // 4. Detailed Metrics: AOV, Order Status, Low Stock
     const aov = currentOrders.length > 0 ? currentRevenue / currentOrders.length : 0;
@@ -188,64 +131,51 @@ export async function getGlobalAnalytics() {
       console.warn('Club Members Fetch Error:', err);
     }
 
-    // 6. Revenue by Category - Optimized processing
+    // 6. Analytics Processing (Categories & Top Products)
     let categoryStats: any[] = [];
+    const unifiedProductSales: Record<string, { title: string, quantity: number, revenue: number }> = {};
+    const unifiedCategoryRevenue: Record<string, number> = {};
+
     try {
-      const { data: categoryRevenueData, error: catRevError } = await supabase
+      const { data: unifiedData } = await supabase
         .from('order_items')
-        .select('product_snapshot, quantity, orders!inner(created_at)')
+        .select('product_snapshot, quantity, price_at_purchase, orders!inner(created_at, status)')
         .gte('orders.created_at', thirtyDaysAgo.toISOString());
 
-      if (catRevError) throw catRevError;
+      unifiedData?.forEach(item => {
+        const orderStatus = (item.orders as any)?.status?.toLowerCase() || 'pending';
+        if (['cancelled', 'failed', 'refunded'].includes(orderStatus)) return;
 
-      const categoryRevenue: Record<string, number> = {};
-      categoryRevenueData?.forEach(item => {
         const snapshot = item.product_snapshot as any;
-        const category = snapshot?.category || 'Uncategorized';
-        const revenue = Number(item.quantity || 0) * Number(snapshot?.price || 0);
-        categoryRevenue[category] = (categoryRevenue[category] || 0) + revenue;
+        const pid = snapshot?.id || 'unknown';
+        const category = snapshot?.category?.name || snapshot?.category || snapshot?.category_name || 'Uncategorized';
+        const price = Number(item.price_at_purchase || snapshot?.price || 0);
+        const qty = Number(item.quantity || 0);
+        const revenue = qty * price;
+
+        // Update Categories
+        unifiedCategoryRevenue[category] = (unifiedCategoryRevenue[category] || 0) + revenue;
+
+        // Update Products
+        if (!unifiedProductSales[pid]) {
+          unifiedProductSales[pid] = {
+            title: snapshot?.title || 'Unknown Product',
+            quantity: 0,
+            revenue: 0
+          };
+        }
+        unifiedProductSales[pid].quantity += qty;
+        unifiedProductSales[pid].revenue += revenue;
       });
 
-      categoryStats = Object.entries(categoryRevenue)
+      categoryStats = Object.entries(unifiedCategoryRevenue)
         .map(([name, value]) => ({ name, value }))
         .sort((a, b) => b.value - a.value);
     } catch (err) {
-      console.warn('Category Revenue Fetch Error:', err);
+      console.warn('Unified Analytics Processing Error:', err);
     }
 
-    // 7. Fetch Top Products (most sold) - Enhanced accuracy
-    const productSales: Record<string, { title: string, quantity: number, revenue: number }> = {};
-    
-    // Use the same data fetched in step 6
-    const topProductsData = await (async () => {
-      try {
-        const { data } = await supabase
-          .from('order_items')
-          .select('product_snapshot, quantity')
-          .limit(100);
-        return data || [];
-      } catch {
-        return [];
-      }
-    })();
-
-    topProductsData.forEach(item => {
-      const snapshot = item.product_snapshot as any;
-      const pid = snapshot?.id;
-      if (!pid) return;
-      
-      if (!productSales[pid]) {
-        productSales[pid] = {
-          title: snapshot?.title || 'Unknown Product', 
-          quantity: 0, 
-          revenue: 0 
-        };
-      }
-      productSales[pid].quantity += Number(item.quantity || 0);
-      productSales[pid].revenue += Number(item.quantity || 0) * Number(snapshot?.price || 0);
-    });
-
-    const topProducts = Object.values(productSales)
+    const topProducts = Object.values(unifiedProductSales)
       .sort((a, b) => b.revenue - a.revenue)
       .slice(0, 5);
 
@@ -258,7 +188,7 @@ export async function getGlobalAnalytics() {
       ordersTrend,
       usersTrend,
       productsTrend,
-      salesData: currentOrders,
+      salesData: trajectoryData,
       topProducts,
       aov,
       orderStatusCount,
@@ -349,115 +279,169 @@ export async function getShippingZones() {
  * Hardened to handle missing tables (404/PGRST116)
  */
 async function getAllRecords(table: string, orderBy: string = 'created_at') {
-  try {
-    const { data, error, status } = await supabase
-      .from(table)
-      .select('*')
-      .order(orderBy, { ascending: false });
+  return withRetry(async () => {
+    try {
+      const { data, error, status } = await supabase
+        .from(table)
+        .select('*')
+        .order(orderBy, { ascending: false });
 
-    if (error) {
-      // If table doesn't exist (404), return empty array
-      if (status === 404 || error.code === 'PGRST116' || error.message?.includes('not found')) {
-        console.warn(`Table ${table} not found, returning empty list`);
-        return [];
+      if (error) {
+        // If table doesn't exist (404), return empty array
+        if (status === 404 || error.code === 'PGRST116' || error.message?.includes('not found')) {
+          console.warn(`Table ${table} not found, returning empty list`);
+          return [];
+        }
+        throw error;
       }
-      throw error;
+      return data || [];
+    } catch (err) {
+      console.error(`Fetch failed for table ${table}:`, err);
+      return [];
     }
-    return data || [];
-  } catch (err) {
-    console.error(`Fetch failed for table ${table}:`, err);
-    return [];
-  }
+  });
 }
 
 export async function getInventory(authorId?: string) {
-  try {
-    // If authorId is provided, we verify author role, otherwise admin/founder
-    if (authorId) {
-      await verifyRole(['author', 'admin', 'founder']);
-    } else {
-      await verifyAdmin();
-    }
+  return withRetry(async () => {
+    try {
+      // If authorId is provided, we verify author role, otherwise admin/founder
+      if (authorId) {
+        await verifyRole(['author', 'admin', 'founder']);
+      } else {
+        await verifyAdmin();
+      }
 
-    let query = supabase
-      .from('products')
-      .select('*, category:categories(name), ebook_metadata(*)')
-      .order('created_at', { ascending: false });
+      let query = supabase
+        .from('products')
+        .select('*, category:categories(name), ebook_metadata(*)')
+        .order('created_at', { ascending: false });
 
-    if (authorId) {
-      query = query.eq('author_id', authorId);
-    }
+      if (authorId) {
+        query = query.eq('author_id', authorId);
+      }
 
-    const { data, error } = await query;
+      const { data, error } = await query;
 
-    if (error) {
-      console.error('Error fetching inventory:', error);
+      if (error) {
+        console.error('Error fetching inventory:', error);
+        throw error;
+      }
+      return data || [];
+    } catch (err) {
+      console.error('Inventory fetch failed:', err);
       return [];
     }
-    return data || [];
-  } catch (err) {
-    console.error('Inventory fetch failed:', err);
-    return [];
-  }
+  });
 }
 
 export async function getOrders(partnerId?: string) {
-  try {
-    const session = await verifyPartner();
-    
-    let isAdmin = false;
-    if (session) {
-      const { data: profile } = await supabase.from('profiles').select('role').eq('id', session.user.id).single();
-      isAdmin = profile?.role === 'founder' || profile?.role === 'admin';
-    } else {
-      // Dev bypass mode: assume admin for demonstration if needed, 
-      // or check localStorage again. For safety, let's check dev role.
-      const devRole = typeof window !== 'undefined' ? localStorage.getItem('rm_dev_role') : null;
-      isAdmin = devRole === 'founder' || devRole === 'admin';
-    }
-    
-    let data;
-    if (partnerId) {
-      // Fetch shipping zones assigned to this partner
-      const { data: zones } = await supabase
-        .from('shipping_zones')
-        .select('id')
-        .eq('partner_id', partnerId);
+  return withRetry(async () => {
+    try {
+      const session = await verifyPartner();
       
-      const zoneIds = zones?.map(z => z.id) || [];
-      
-      if (zoneIds.length === 0) return [];
-
-      // Fetch orders for those zones
-      const { data: orders, error } = await supabase
-        .from('orders')
-        .select('*')
-        .in('shipping_zone_id', zoneIds)
-        .order('created_at', { ascending: false });
-      
-      if (error) throw error;
-      data = orders || [];
-    } else {
-      // ONLY admins/founders should be able to fetch all orders without a partnerId filter
-      if (!isAdmin) {
-        console.error('Unauthorized: Non-admin attempting to fetch all orders');
-        return [];
+      let isAdmin = false;
+      if (session) {
+        const { data: profile } = await supabase.from('profiles').select('role').eq('id', session.user.id).single();
+        isAdmin = profile?.role === 'founder' || profile?.role === 'admin';
+      } else {
+        // Dev bypass mode: assume admin for demonstration if needed, 
+        // or check localStorage again. For safety, let's check dev role.
+        const devRole = typeof window !== 'undefined' ? localStorage.getItem('rm_dev_role') : null;
+        isAdmin = devRole === 'founder' || devRole === 'admin';
       }
-      data = await getAllRecords('orders');
-    }
+      
+      let data;
+      if (partnerId) {
+        // Fetch shipping zones assigned to this partner
+        const { data: zones } = await supabase
+          .from('shipping_zones')
+          .select('id')
+          .eq('partner_id', partnerId);
+        
+        const zoneIds = zones?.map(z => z.id) || [];
+        
+        if (zoneIds.length === 0) return [];
 
-    if (!isAdmin && data) {
-      return data.map((order: any) => {
-        const { tax_amount, tax_rate, ...rest } = order;
-        return rest;
+        // Fetch orders for those zones with customer and item details
+        const { data: orders, error } = await supabase
+          .from('orders')
+          .select(`
+            *,
+            profiles(full_name, email),
+            order_items(
+              *,
+              product:products(title, image_url)
+            )
+          `)
+          .in('shipping_zone_id', zoneIds)
+          .order('created_at', { ascending: false });
+        
+        if (error) throw error;
+        data = orders || [];
+      } else {
+        // ONLY admins/founders should be able to fetch all orders without a partnerId filter
+        if (!isAdmin) {
+          console.error('Unauthorized: Non-admin attempting to fetch all orders');
+          return [];
+        }
+        
+        const { data: orders, error } = await supabase
+          .from('orders')
+          .select(`
+            *,
+            profiles(full_name, email),
+            order_items(
+              *,
+              product:products(title, image_url)
+            )
+          `)
+          .order('created_at', { ascending: false });
+
+        if (error) {
+          console.error('Error fetching all orders:', error);
+          throw error;
+        }
+        data = orders || [];
+      }
+
+      // Map the data to include flattened customer info and formatted address
+      const mappedData = data.map((order: any) => {
+        const shipping = order.shipping_address || {};
+        const formattedAddress = typeof shipping === 'object' 
+          ? `${shipping.address || ''}, ${shipping.city || ''} (${shipping.phone || ''})`
+          : shipping;
+
+        return {
+          ...order,
+          customer_name: order.profiles?.full_name || shipping.full_name || 'Anonymous',
+          customer_email: order.profiles?.email || shipping.email || 'N/A',
+          shipping_address: formattedAddress,
+          order_items: order.order_items?.map((item: any) => ({
+            ...item,
+            unit_price: Number(item.price_at_purchase)
+          })),
+          // Ensure price is numeric for the frontend
+          total_amount: Number(order.total_amount),
+          subtotal_amount: Number(order.subtotal_amount),
+          shipping_amount: Number(order.shipping_amount),
+          tax_amount: Number(order.tax_amount)
+        };
       });
-    }
 
-    return data;
-  } catch (err) {
-    console.error('Orders fetch failed:', err);
-    return [];
-  }
+      if (!isAdmin && mappedData) {
+        return mappedData.map((order: any) => {
+          const { tax_amount, tax_rate, ...rest } = order;
+          return rest;
+        });
+      }
+
+      return mappedData;
+    } catch (err) {
+      console.error('Orders fetch failed:', err);
+      return [];
+    }
+  });
 }
 
 export async function getAllUsers() {
@@ -669,11 +653,96 @@ export async function getBanners() {
 export async function getPromos() {
   try {
     await verifyAdmin();
-    return await getAllRecords('promos');
+    // Fetch from promos table with newly added fields
+    const { data, error } = await supabase
+      .from('promos')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return data || [];
   } catch (err) {
     console.error('Promos fetch failed:', err);
     return [];
   }
+}
+
+/**
+ * Enhanced Promotion Campaign Services
+ */
+
+export async function initializeCampaign(campaign: any) {
+  await verifyAdmin();
+  const { data: { session } } = await supabase.auth.getSession();
+  
+  const campaignData = {
+    ...campaign,
+    creator_id: session?.user?.id,
+    promo_signature: campaign.promo_signature || `SIG-${Math.random().toString(36).substring(2, 9).toUpperCase()}`,
+    status: 'draft'
+  };
+
+  return createRecord('promos', campaignData);
+}
+
+export async function updateCampaignStatus(promoId: string, status: string, notes?: string) {
+  const session = await verifyAdmin();
+  
+  const updates: any = { status };
+  if (status === 'active') {
+    updates.approved_at = new Date().toISOString();
+    updates.approver_id = session?.user?.id;
+  }
+
+  const result = await updateRecord('promos', promoId, updates);
+  
+  if (result) {
+    await supabase.from('promo_audit_logs').insert([{
+      promo_id: promoId,
+      actor_id: session?.user?.id,
+      action: status === 'active' ? 'approve' : 'update_status',
+      new_state: { status, notes }
+    }]);
+  }
+  
+  return result;
+}
+
+export async function getPromoMetrics(promoId: string) {
+  await verifyAdmin();
+  const { data, error } = await supabase
+    .from('promo_metrics')
+    .select('*')
+    .eq('promo_id', promoId)
+    .order('recorded_at', { ascending: false });
+
+  if (error) throw error;
+  return data || [];
+}
+
+export async function getPromoAuditLogs(promoId: string) {
+  await verifyAdmin();
+  const { data, error } = await supabase
+    .from('promo_audit_logs')
+    .select('*, actor:profiles(full_name)')
+    .eq('promo_id', promoId)
+    .order('created_at', { ascending: false });
+
+  if (error) throw error;
+  return data || [];
+}
+
+export async function calculateImpact(promoId: string) {
+  await verifyAdmin();
+  // This would involve complex logic to calculate actual vs predicted impact
+  // For now, we'll fetch current utilization and order data
+  const { data: promo } = await supabase.from('promos').select('*').eq('id', promoId).single();
+  
+  // Logic to simulate impact calculation
+  const impact = (promo?.utilization_count || 0) * Number(promo?.discount_value || 0);
+  
+  await updateRecord('promos', promoId, { impact_value: impact });
+  return impact;
 }
 
 export async function getAuditLogs() {
@@ -698,7 +767,7 @@ export async function getInquiries() {
 
 export async function getAuthorSalesReport(authorId: string) {
   try {
-    await verifyAdmin();
+    await verifyRole(['author', 'admin', 'founder']);
     // Use the author_id column on products table instead of metadata
     const { data, error } = await supabase
       .from('order_items')
@@ -840,6 +909,17 @@ export async function deleteProtocolAgreement(id: string) {
 
   if (error) throw error;
   return true;
+}
+
+export async function updateApplicationStatus(table: string, id: string, status: string, userId?: string, role?: string) {
+  await verifyAdmin();
+  const result = await updateRecord(table, id, { status });
+  
+  if (status === 'completed' && userId && role) {
+    await updateRecord('profiles', userId, { role });
+  }
+  
+  return result;
 }
 
 export async function getApprovedAuthors() {
@@ -1300,4 +1380,45 @@ export async function bulkUpdateProducts(ids: string[], updates: any) {
     if (error) throw error;
     return data;
   });
+}
+
+/**
+ * Specialized Delete for Products with storage cleanup
+ */
+export async function deleteProduct(id: string) {
+  await verifyAdmin();
+  
+  // 1. Get product data to find associated files
+  const { data: product, error: fetchError } = await supabase
+    .from('products')
+    .select('image_url, ebook_url, type')
+    .eq('id', id)
+    .single();
+
+  if (fetchError) {
+    console.warn('Could not fetch product for deletion cleanup:', fetchError);
+  }
+
+  // 2. Delete from database
+  const { error: deleteError } = await supabase
+    .from('products')
+    .delete()
+    .eq('id', id);
+
+  if (deleteError) throw deleteError;
+
+  // 3. Log audit
+  await logAudit('DELETE', 'products', id, null, product);
+
+  // 4. Cleanup storage (background)
+  if (product) {
+    if (product.image_url) {
+      deleteProductImage(product.image_url).catch(err => console.warn('Image cleanup failed:', err));
+    }
+    if (product.type === 'ebook' && product.ebook_url) {
+      deleteEbookFile(product.ebook_url).catch(err => console.warn('Ebook cleanup failed:', err));
+    }
+  }
+
+  return true;
 }

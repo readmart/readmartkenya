@@ -17,6 +17,12 @@ export const getK2AuthUrl = () => getK2BaseUrl();
  * Robust callback URL generator for ReadMart Payments webhooks
  */
 export const getK2CallbackUrl = (orderId?: string) => {
+  // Use explicit environment variable if provided (user requested https://readmartke.com/api/kopokopo/webhook)
+  if (process.env.KOPOKOPO_WEBHOOK_URL) {
+    const baseUrl = process.env.KOPOKOPO_WEBHOOK_URL;
+    return `${baseUrl}${orderId ? (baseUrl.includes('?') ? '&' : '?') + `orderId=${orderId}` : ''}`;
+  }
+
   const domain = process.env.VERCEL_URL || process.env.PUBLIC_DOMAIN || 'readmartke.com';
   const cleanDomain = domain.replace(/^https?:\/\//, '').replace(/\/$/, '');
   const baseUrl = `https://${cleanDomain}`;

@@ -4,7 +4,7 @@ import {
   Mail, Phone, Clock, Send, Loader2, 
   MessageSquare, Linkedin, Globe, Truck, 
   RotateCcw, Paperclip, ChevronRight, HelpCircle,
-  Briefcase, Zap, MapPin
+  Briefcase, Zap, MapPin, MessageCircle, Music2
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -26,10 +26,18 @@ export default function Contact() {
 
   const subjects = [
     'General Inquiry (info@readmartke.com)',
+    'Order Support (orders@readmartke.com)',
+    'Technical Support (support@readmartke.com)',
+    'Billing & Payments (billing@readmartke.com)',
+    'Shipping & Delivery (shipping@readmartke.com)',
+    'Returns & Exchanges (returns@readmartke.com)',
     'Partnership Inquiry (partners@readmartke.com)',
     'Author Program (authors@readmartke.com)',
-    'Order Support (orders@readmartke.com)',
-    'Technical Support (support@readmartke.com)'
+    'Book Club & Community (bookclub@readmartke.com)',
+    'Events & Workshops (events@readmartke.com)',
+    'Art & Creative (art@readmartke.com)',
+    'Security & Privacy (security@readmartke.com)',
+    'Administrative (admin@readmartke.com)'
   ];
 
   const handleReset = () => {
@@ -340,25 +348,47 @@ export default function Contact() {
               </div>
 
               <div className="space-y-6">
-                <div className="flex gap-4">
-                  <div className="w-12 h-12 bg-primary/10 text-primary rounded-xl flex items-center justify-center shrink-0">
-                    <Phone className="w-6 h-6" />
-                  </div>
-                  <div>
-                    <p className="text-xs font-black uppercase tracking-widest text-muted-foreground mb-1">Primary Support</p>
-                    <a href={`tel:${settings.contact_phone}`} className="text-lg font-black hover:text-primary transition-colors">{settings.contact_phone}</a>
-                  </div>
-                </div>
-
-                {settings.secondary_phone && (
+                <div className="flex items-center justify-between gap-4">
                   <div className="flex gap-4">
-                    <div className="w-12 h-12 bg-secondary/10 text-secondary rounded-xl flex items-center justify-center shrink-0">
+                    <div className="w-12 h-12 bg-primary/10 text-primary rounded-xl flex items-center justify-center shrink-0">
                       <Phone className="w-6 h-6" />
                     </div>
                     <div>
-                      <p className="text-xs font-black uppercase tracking-widest text-muted-foreground mb-1">Secondary Support</p>
-                      <a href={`tel:${settings.secondary_phone}`} className="text-lg font-black hover:text-secondary transition-colors">{settings.secondary_phone}</a>
+                      <p className="text-xs font-black uppercase tracking-widest text-muted-foreground mb-1">Primary Support</p>
+                      <a href={`tel:${settings.contact_phone || '+254 794 129 958'}`} className="text-lg font-black hover:text-primary transition-colors">{settings.contact_phone || '+254 794 129 958'}</a>
                     </div>
+                  </div>
+                  <a 
+                    href={`https://wa.me/${(settings.contact_phone || '+254 794 129 958').replace(/\D/g, '')}`} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="w-12 h-12 bg-green-500/10 text-green-500 rounded-xl flex items-center justify-center hover:bg-green-500 hover:text-white transition-all"
+                    title="WhatsApp Primary"
+                  >
+                    <MessageCircle className="w-6 h-6" />
+                  </a>
+                </div>
+
+                { (settings.secondary_phone || '+254 741 658 548') && (
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="flex gap-4">
+                      <div className="w-12 h-12 bg-secondary/10 text-secondary rounded-xl flex items-center justify-center shrink-0">
+                        <Phone className="w-6 h-6" />
+                      </div>
+                      <div>
+                        <p className="text-xs font-black uppercase tracking-widest text-muted-foreground mb-1">Secondary Support</p>
+                        <a href={`tel:${settings.secondary_phone || '+254 741 658 548'}`} className="text-lg font-black hover:text-secondary transition-colors">{settings.secondary_phone || '+254 741 658 548'}</a>
+                      </div>
+                    </div>
+                    <a 
+                      href={`https://wa.me/${(settings.secondary_phone || '+254 741 658 548').replace(/\D/g, '')}`} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="w-12 h-12 bg-green-500/10 text-green-500 rounded-xl flex items-center justify-center hover:bg-green-500 hover:text-white transition-all"
+                      title="WhatsApp Secondary"
+                    >
+                      <MessageCircle className="w-6 h-6" />
+                    </a>
                   </div>
                 )}
 
@@ -382,6 +412,28 @@ export default function Contact() {
                   </div>
                 </div>
               </div>
+            </div>
+
+            {/* TikTok Follow */}
+            <div className="glass-card p-8 bg-black/5 border-black/20 group">
+              <div className="flex items-center gap-4 mb-6">
+                <div className="w-12 h-12 bg-black text-white rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform">
+                  <Music2 className="w-6 h-6" />
+                </div>
+                <h3 className="text-xl font-bold">Follow ReadMart on TikTok</h3>
+              </div>
+              <p className="text-sm text-muted-foreground font-medium mb-6 leading-relaxed">
+                Experience our literary journey through short, engaging stories and updates.
+              </p>
+              <a 
+                href={settings.tiktok_url} 
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full py-4 bg-black text-white rounded-xl font-black flex items-center justify-center gap-2 hover:bg-zinc-900 transition-all shadow-lg shadow-black/25"
+              >
+                FOLLOW US
+                <Music2 className="w-4 h-4" />
+              </a>
             </div>
 
             {/* LinkedIn Follow */}

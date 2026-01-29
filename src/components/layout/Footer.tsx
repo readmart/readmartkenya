@@ -1,18 +1,14 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Facebook, Instagram, Linkedin, Phone, Mail } from 'lucide-react';
+import { Facebook, Instagram, Linkedin, Phone, Mail, Sparkles, ArrowRight, Music2 } from 'lucide-react';
 import { useSettings } from '@/hooks/useSettings';
 import { CONTACT_INFO, SOCIAL_LINKS } from '@/lib/constants';
+import StoryModal from './StoryModal';
 
 // Custom SVG Icons for X (Twitter) and Threads
 const XIcon = ({ className }: { className?: string }) => (
   <svg viewBox="0 0 24 24" fill="currentColor" className={className}>
     <path d="M18.901 1.153h3.68l-8.04 9.19L24 22.846h-7.406l-5.8-7.584-6.638 7.584H.474l8.6-9.83L0 1.154h7.594l5.243 6.932 6.064-6.932zm-1.292 19.494h2.039L6.486 3.24H4.298l13.311 17.407z" />
-  </svg>
-);
-
-const ThreadsIcon = ({ className }: { className?: string }) => (
-  <svg viewBox="0 0 24 24" fill="currentColor" className={className}>
-    <path d="M14.88 11.53c-.07-.07-.15-.14-.23-.21-.43-.35-.9-.64-1.41-.86-.51-.22-1.05-.33-1.6-.33-.55 0-1.09.11-1.6.33-.51.22-.98.51-1.41.86-.08.07-.16.14-.23.21-.45.43-.81.93-1.06 1.48-.25.55-.38 1.14-.38 1.74s.13 1.19.38 1.74c.25.55.61 1.05 1.06 1.48.07.07.15.14.23.21.43.35.9.64 1.41.86.51.22 1.05.33 1.6.33.55 0 1.09-.11 1.6-.33.51-.22.98-.51 1.41-.86.08-.07.16-.14.23-.21.45-.43.81-.93 1.06-1.48.25-.55.38-1.14.38-1.74s-.13-1.19-.38-1.74c-.25-.55-.61-1.05-1.06-1.48zm-3.24 4.54c-.39 0-.77-.08-1.12-.23-.35-.15-.67-.36-.95-.63-.27-.27-.48-.59-.63-.94-.15-.35-.23-.73-.23-1.12s.08-.77.23-1.12c.15-.35.36-.67.63-.95.27-.27.59-.48.94-.63.35-.15.73-.23 1.12-.23s.77.08 1.12.23c.35.15.67.36.95.63.27.27.48.59.63.95.15.35.23.73.23 1.12s-.08.77-.23 1.12c-.15.35-.36.67-.63.94-.27.27-.59.48-.95.63-.35.15-.73.23-1.12.23zM12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm7.1 12c0 .94-.19 1.86-.56 2.73-.37.87-.9 1.65-1.57 2.32-.67.67-1.45 1.2-2.32 1.57-.87.37-1.79.56-2.73.56s-1.86-.19-2.73-.56c-.87-.37-1.65-.9-2.32-1.57-.67-.67-1.2-1.45-1.57-2.32-.37-.87-.56-1.79-.56-2.73 0-.44.04-.88.12-1.31.25-.13.51-.23.79-.31.28-.08.57-.12.87-.12.85 0 1.67.24 2.37.7.7.46 1.25 1.09 1.58 1.84.14-.06.29-.11.44-.15.15-.04.31-.07.47-.07.41 0 .8.1 1.16.29.36.19.67.46.91.8.24-.34.55-.61.91-.8.36-.19.75-.29 1.16-.29.16 0 .32.03.47.07.15.04.3.09.44.15.33-.75.88-1.38 1.58-1.84.7-.46 1.52-.7 2.37-.7.3 0 .59.04.87.12.28.08.54.18.79.31.08.43.12.87.12 1.31z" />
   </svg>
 );
 
@@ -25,39 +21,123 @@ const WhatsAppIcon = ({ className }: { className?: string }) => (
 export default function Footer() {
   const { settings } = useSettings();
   const currentYear = new Date().getFullYear();
+  const [isStoryOpen, setIsStoryOpen] = useState(false);
 
   const socialIcons: Record<string, any> = {
     Facebook,
     Instagram,
     Linkedin,
     X: XIcon,
-    Threads: ThreadsIcon
+    TikTok: Music2
   };
 
   return (
     <footer className="glass border-t border-white/10 mt-20 pt-12 pb-8" aria-labelledby="footer-heading">
+      <StoryModal isOpen={isStoryOpen} onClose={() => setIsStoryOpen(false)} />
       <h2 id="footer-heading" className="sr-only">Footer</h2>
       <div className="container mx-auto px-4">
+        {/* About Section */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 mb-12 pb-12 border-b border-white/5">
+          <div className="space-y-6">
+            <div className="flex items-center gap-3">
+              <h3 className="text-sm font-black uppercase tracking-[0.2em] text-primary/80">About ReadMart</h3>
+              <button 
+                onClick={() => setIsStoryOpen(true)}
+                className="group flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-[10px] font-black uppercase tracking-widest text-primary hover:bg-primary hover:text-black transition-all"
+              >
+                <Sparkles className="w-3 h-3" />
+                Our Full Story
+                <ArrowRight className="w-3 h-3 group-hover:translate-x-1 transition-transform" />
+              </button>
+            </div>
+            <p className="text-lg font-bold text-white/90 leading-relaxed max-w-2xl">
+              Since 2022, READMARTKE has been building a world where stories are part of daily life — through innovation, community, personalized services and unforgettable literary experiences that foster a vibrant, inclusive reading culture.
+            </p>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <button 
+              onClick={() => setIsStoryOpen(true)}
+              className="group space-y-4 p-6 glass rounded-3xl border-white/5 hover:border-primary/30 transition-all text-left relative overflow-hidden"
+            >
+              <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
+                <Sparkles className="w-12 h-12 text-primary" />
+              </div>
+              <h4 className="text-[10px] font-black uppercase tracking-widest text-primary/60 group-hover:text-primary transition-colors">Our Mission</h4>
+              <p className="text-sm font-medium text-muted-foreground leading-relaxed italic group-hover:text-white/90 transition-colors">
+                "To reimagine how books meet people — at home, in cafes, hospitals and beyond."
+              </p>
+            </button>
+            <button 
+              onClick={() => setIsStoryOpen(true)}
+              className="group space-y-4 p-6 glass rounded-3xl border-white/5 hover:border-secondary/30 transition-all text-left relative overflow-hidden"
+            >
+              <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
+                <Sparkles className="w-12 h-12 text-secondary" />
+              </div>
+              <h4 className="text-[10px] font-black uppercase tracking-widest text-primary/60 group-hover:text-secondary transition-colors">Our Vision</h4>
+              <p className="text-sm font-medium text-muted-foreground leading-relaxed group-hover:text-white/90 transition-colors">
+                To lead a reading revolution where books live everywhere and belong to everyone.
+              </p>
+            </button>
+          </div>
+        </div>
+
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-8 mb-12">
           {/* Logo & Info */}
           <div className="space-y-4">
             <Link to="/" className="inline-block transition-transform hover:scale-105">
               <img src={settings.site_logo} alt={settings.site_name} className="h-10 w-auto rounded-lg shadow-md" />
             </Link>
-            <div className="flex flex-col gap-2">
-              <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-muted-foreground">
-                <a href={`tel:${settings.contact_phone || CONTACT_INFO.phone1}`} className="flex items-center gap-2 hover:text-primary transition-colors text-sm font-bold">
-                  <Phone className="w-4 h-4" />
-                  <span>Primary: {settings.contact_phone || CONTACT_INFO.phone1}</span>
-                </a>
-                <a href={`tel:${settings.secondary_phone || CONTACT_INFO.phone2}`} className="flex items-center gap-2 hover:text-primary transition-colors text-sm font-bold">
-                  <Phone className="w-4 h-4" />
-                  <span>Secondary: {settings.secondary_phone || CONTACT_INFO.phone2}</span>
-                </a>
-                <a href={`mailto:${settings.contact_email || CONTACT_INFO.email}`} className="flex items-center gap-2 hover:text-primary transition-colors text-sm font-bold">
-                  <Mail className="w-4 h-4" />
-                  <span>{settings.contact_email || CONTACT_INFO.email}</span>
-                </a>
+            <div className="flex flex-col gap-4">
+              <div className="flex flex-wrap items-center gap-x-8 gap-y-4 text-muted-foreground">
+                {/* Primary Number */}
+                <div className="flex flex-col gap-1">
+                  <span className="text-[10px] font-black uppercase tracking-widest opacity-60">Primary Support</span>
+                  <div className="flex items-center gap-4">
+                    <a href={`tel:${settings.contact_phone || CONTACT_INFO.phone1}`} className="flex items-center gap-2 hover:text-primary transition-colors text-sm font-bold" title="Call Primary">
+                      <Phone className="w-4 h-4" />
+                      <span>{settings.contact_phone || CONTACT_INFO.phone1}</span>
+                    </a>
+                    <a 
+                      href={`https://wa.me/${(settings.contact_phone || CONTACT_INFO.phone1).replace(/\D/g, '')}`} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="text-green-500 hover:text-green-600 transition-colors"
+                      title="WhatsApp Primary"
+                    >
+                      <WhatsAppIcon className="w-4 h-4" />
+                    </a>
+                  </div>
+                </div>
+
+                {/* Secondary Number */}
+                <div className="flex flex-col gap-1">
+                  <span className="text-[10px] font-black uppercase tracking-widest opacity-60">Secondary Support</span>
+                  <div className="flex items-center gap-4">
+                    <a href={`tel:${settings.secondary_phone || CONTACT_INFO.phone2}`} className="flex items-center gap-2 hover:text-primary transition-colors text-sm font-bold" title="Call Secondary">
+                      <Phone className="w-4 h-4" />
+                      <span>{settings.secondary_phone || CONTACT_INFO.phone2}</span>
+                    </a>
+                    <a 
+                      href={`https://wa.me/${(settings.secondary_phone || CONTACT_INFO.phone2).replace(/\D/g, '')}`} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="text-green-500 hover:text-green-600 transition-colors"
+                      title="WhatsApp Secondary"
+                    >
+                      <WhatsAppIcon className="w-4 h-4" />
+                    </a>
+                  </div>
+                </div>
+
+                {/* Email */}
+                <div className="flex flex-col gap-1">
+                  <span className="text-[10px] font-black uppercase tracking-widest opacity-60">Email Address</span>
+                  <a href={`mailto:${settings.contact_email || CONTACT_INFO.email}`} className="flex items-center gap-2 hover:text-primary transition-colors text-sm font-bold">
+                    <Mail className="w-4 h-4" />
+                    <span>{settings.contact_email || CONTACT_INFO.email}</span>
+                  </a>
+                </div>
               </div>
             </div>
           </div>
@@ -67,8 +147,8 @@ export default function Footer() {
             {[
               { icon: 'Facebook', href: settings.facebook_url || SOCIAL_LINKS.find(l => l.label === 'Facebook')?.href, label: 'Facebook', color: 'hover:bg-[#1877F2]' },
               { icon: 'Instagram', href: settings.instagram_url || SOCIAL_LINKS.find(l => l.label === 'Instagram')?.href, label: 'Instagram', color: 'hover:bg-[#E1306C]' },
+              { icon: 'TikTok', href: settings.tiktok_url || SOCIAL_LINKS.find(l => l.label === 'TikTok')?.href, label: 'TikTok', color: 'hover:bg-[#000000]' },
               { icon: 'X', href: settings.twitter_url || settings.x_url || SOCIAL_LINKS.find(l => l.label === 'X (Twitter)')?.href, label: 'X (Twitter)', color: 'hover:bg-[#000000]' },
-              { icon: 'Threads', href: settings.threads_url || SOCIAL_LINKS.find(l => l.label === 'Threads')?.href, label: 'Threads', color: 'hover:bg-[#000000]' },
               { icon: 'Linkedin', href: settings.linkedin_url || SOCIAL_LINKS.find(l => l.label === 'LinkedIn')?.href, label: 'LinkedIn', color: 'hover:bg-[#0A66C2]' },
             ].filter(link => link.href).map((link) => {
               const Icon = socialIcons[link.icon];

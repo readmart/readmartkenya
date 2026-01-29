@@ -30,9 +30,13 @@ export const CurrencyProvider: React.FC<{ children: ReactNode }> = ({ children }
     EUR: 0.92,
   };
 
-  const formatPrice = (amount: number) => {
+  const formatPrice = (amount: any) => {
+    // Handle null, undefined, or non-numeric values
+    const numericAmount = typeof amount === 'number' ? amount : parseFloat(amount);
+    if (isNaN(numericAmount)) return `${currency} 0`;
+
     // If input is USD, convert to selected currency
-    const convertedAmount = amount * rates[currency];
+    const convertedAmount = numericAmount * rates[currency];
     
     return new Intl.NumberFormat('en-KE', {
       style: 'currency',

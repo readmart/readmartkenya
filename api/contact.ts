@@ -40,8 +40,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     await logAction(req, null, 'submit_contact_form', 'contact_messages', { messageId: contactMsg.id });
 
-    // 2. Send email notification to support
-    const supportEmail = process.env.SUPPORT_EMAIL || 'support@readmartke.com';
+    // 2. Determine target department email from subject
+    const emailMatch = subject.match(/\((.*?)\)/);
+    const departmentEmail = emailMatch ? emailMatch[1].trim() : (process.env.SUPPORT_EMAIL || 'info@readmartke.com');
+    const forwardingEmail = process.env.FORWARDING_EMAIL;
+
     const emailHtml = renderContactNotificationEmail({
       full_name: name,
       email,
@@ -49,10 +52,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       message
     });
 
+    // 3. Send email notification to department (and BCC forwarding email if set)
     const emailResult = await sendEmail({
-      to: supportEmail,
-      subject: `New Inquiry: ${subject}`,
-      html: emailHtml
+      to: departmentEmail,
+      subject: `[ReadMart ${subject.split(' (')[0]}] New Inquiry from ${name}`,
+      html: emailHtml,
+      // If departmentEmail is not the forwarding email, add forwarding email to keep admin in the loop
+      bcc: (forwardingEmail && departmentEmail !== forwardingEmail) ? forwardingEmail : undefined
     });
 
     if (!emailResult.success) {

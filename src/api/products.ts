@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase/client';
+import { verifyRole, logAudit } from '@/lib/utils/api-helpers';
 
 /**
  * Fetch products with optional filters
@@ -78,3 +79,11 @@ export async function getProductBySlug(slug: string) {
   if (error) throw error;
   return data;
 }
+
+// Re-exporting specialized functions from dashboards.ts to maintain consistency
+// and avoid duplication of complex logic (like ebook metadata handling)
+export { 
+  createProduct, 
+  updateProduct, 
+  deleteProduct 
+} from './dashboards';
