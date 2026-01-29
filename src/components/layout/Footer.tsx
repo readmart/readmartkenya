@@ -18,6 +18,12 @@ const WhatsAppIcon = ({ className }: { className?: string }) => (
   </svg>
 );
 
+const ThreadsIcon = ({ className }: { className?: string }) => (
+  <svg viewBox="0 0 24 24" fill="currentColor" className={className}>
+    <path d="M12 24c-6.627 0-12-5.373-12-12s5.373-12 12-12 12 5.373 12 12-5.373 12-12 12zm0-2c5.523 0 10-4.477 10-10s-4.477-10-10-10-10 4.477-10 10 4.477 10 10 10zm1.141-13.633c.484.073.91.246 1.277.52.368.273.652.62.853 1.04.202.42.303.896.303 1.428v.481c0 .546-.104 1.04-.312 1.482-.208.442-.511.808-.909 1.1-.397.291-.875.437-1.433.437h-.146v.382c0 .351-.137.644-.41.879-.273.235-.611.352-1.014.352-.416 0-.754-.123-1.014-.37-.26-.247-.39-.565-.39-.955v-.308h-.117c-.572 0-1.059-.153-1.46-.46-.401-.307-.714-.731-.939-1.27-.225-.54-.338-1.186-.338-1.939v-.397c0-.773.12-1.439.361-1.996.241-.557.587-.991 1.04-1.303.453-.312.983-.468 1.59-.468h.146v-.382c0-.364.137-.663.41-.897.273-.234.614-.351 1.024-.351.416 0 .754.123 1.014.37.26.247.39.565.39.955v.308h.117zm-1.141 1.633h-.146c-.325 0-.591.071-.798.214-.207.143-.362.338-.465.585-.103.247-.154.526-.154.838v.397c0 .325.05.617.15.877.1.26.251.465.453.614.202.149.46.224.773.224h.146v-3.749zm1.141 3.749v-.382c0-.286-.048-.543-.145-.771-.097-.228-.242-.408-.435-.54-.193-.132-.435-.198-.727-.198h-.146v3.749h.146c.312 0 .573-.075.784-.225.211-.15.372-.354.484-.614.112-.26.168-.533.168-.82v-.399z" />
+  </svg>
+);
+
 export default function Footer() {
   const { settings } = useSettings();
   const currentYear = new Date().getFullYear();
@@ -27,6 +33,7 @@ export default function Footer() {
     Facebook,
     Instagram,
     Linkedin,
+    Threads: ThreadsIcon,
     X: XIcon,
     TikTok: Music2
   };
@@ -147,6 +154,7 @@ export default function Footer() {
             {[
               { icon: 'Facebook', href: settings.facebook_url || SOCIAL_LINKS.find(l => l.label === 'Facebook')?.href, label: 'Facebook', color: 'hover:bg-[#1877F2]' },
               { icon: 'Instagram', href: settings.instagram_url || SOCIAL_LINKS.find(l => l.label === 'Instagram')?.href, label: 'Instagram', color: 'hover:bg-[#E1306C]' },
+              { icon: 'Threads', href: settings.threads_url || SOCIAL_LINKS.find(l => l.label === 'Threads')?.href, label: 'Threads', color: 'hover:bg-[#000000]' },
               { icon: 'TikTok', href: settings.tiktok_url || SOCIAL_LINKS.find(l => l.label === 'TikTok')?.href, label: 'TikTok', color: 'hover:bg-[#000000]' },
               { icon: 'X', href: settings.twitter_url || settings.x_url || SOCIAL_LINKS.find(l => l.label === 'X (Twitter)')?.href, label: 'X (Twitter)', color: 'hover:bg-[#000000]' },
               { icon: 'Linkedin', href: settings.linkedin_url || SOCIAL_LINKS.find(l => l.label === 'LinkedIn')?.href, label: 'LinkedIn', color: 'hover:bg-[#0A66C2]' },

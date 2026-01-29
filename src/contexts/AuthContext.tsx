@@ -144,8 +144,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const resetPassword = async (email: string) => {
+    // Determine the redirect URL based on environment
+    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    const redirectTo = isLocalhost 
+      ? 'http://localhost:5173/reset-password'
+      : `${window.location.origin}/reset-password`;
+
+    console.log('[Auth] Reset password request for:', email, 'Redirecting to:', redirectTo);
+    
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/reset-password`,
+      redirectTo,
     });
     return { error };
   };
