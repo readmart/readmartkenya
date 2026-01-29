@@ -1,5 +1,4 @@
 import { supabase } from '@/lib/supabase/client';
-import { verifyRole, logAudit } from '@/lib/utils/api-helpers';
 
 /**
  * Fetch products with optional filters
