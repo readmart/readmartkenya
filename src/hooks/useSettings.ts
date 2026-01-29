@@ -47,6 +47,7 @@ const defaultSettings: SiteSettings = {
   x_url: 'https://x.com/readmartke',
   linkedin_url: 'https://linkedin.com/comm/mynetwork/discovery-see-all?usecase=PEOPLE_FOLLOWS&followMember=read-mart-6797423a1',
   tiktok_url: 'https://www.tiktok.com/@readmartke?_r=1&_t=ZS-92BvAtTmKLn',
+  threads_url: 'https://www.threads.net/@readmartke',
   global_announcement: '',
   announcement_active: false,
   membership_wall_active: false,

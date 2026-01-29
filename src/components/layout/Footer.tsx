@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Facebook, Instagram, Linkedin, Phone, Mail, Sparkles, ArrowRight, Music2 } from 'lucide-react';
+import { Facebook, Instagram, Linkedin, Phone, Mail, Sparkles, ArrowRight, Music2, AtSign } from 'lucide-react';
 import { useSettings } from '@/hooks/useSettings';
 import { CONTACT_INFO, SOCIAL_LINKS } from '@/lib/constants';
 import StoryModal from './StoryModal';
@@ -165,15 +165,6 @@ export default function Footer() {
                 </a>
               );
             })}
-            <a
-              href={settings.whatsapp_link || SOCIAL_LINKS.find(l => l.label === 'WhatsApp')?.href}
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label="WhatsApp"
-              className="p-2.5 glass rounded-xl transition-all duration-300 group hover:bg-[#25D366] hover:text-white hover:-translate-y-1"
-            >
-              <WhatsAppIcon className="w-4 h-4 transition-transform group-hover:scale-110" />
-            </a>
           </div>
         </div>
 

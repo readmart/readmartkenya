@@ -57,6 +57,12 @@ export const SOCIAL_LINKS = [
     icon: "Linkedin"
   },
   { 
+    label: "Threads", 
+    href: "https://www.threads.net/@readmartke", 
+    color: "hover:bg-[#000000]",
+    icon: "AtSign"
+  },
+  { 
     label: "WhatsApp", 
     href: "https://wa.me/254794129958", 
     color: "hover:bg-[#25D366]",
