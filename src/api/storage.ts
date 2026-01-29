@@ -150,7 +150,7 @@ export async function uploadSiteAsset(file: File, options: UploadOptions = {}) {
   return withRetry(async () => {
     const { data, error } = await supabase.storage
       .from('site_assets')
-      .upload(fileName, file, {
+      .upload(filePath, file, {
         cacheControl: '3600',
         upsert: true,
         // @ts-ignore

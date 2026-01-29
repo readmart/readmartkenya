@@ -27,6 +27,7 @@ export interface SiteSettings {
   membership_price?: number;
   membership_duration_days?: number;
   membership_title?: string;
+  membership_description?: string;
   author_of_the_day_id?: string | null;
   author_of_the_day_enabled?: boolean;
   author_of_the_day_books?: string[];
