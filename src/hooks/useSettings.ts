@@ -20,13 +20,17 @@ export interface SiteSettings {
   x_url?: string;
   linkedin_url?: string;
   tiktok_url?: string;
+  threads_url?: string;
   global_announcement?: string;
   announcement_active?: boolean;
   membership_wall_active?: boolean;
   membership_price?: number;
   membership_duration_days?: number;
   membership_title?: string;
-  membership_description?: string;
+  author_of_the_day_id?: string | null;
+  author_of_the_day_enabled?: boolean;
+  author_of_the_day_books?: string[];
+  author_of_the_day_image?: string | null;
 }
 
 const defaultSettings: SiteSettings = {

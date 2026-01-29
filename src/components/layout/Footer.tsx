@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Facebook, Instagram, Linkedin, Phone, Mail, Sparkles, ArrowRight, Music2, AtSign } from 'lucide-react';
+import { Facebook, Instagram, Linkedin, Phone, Mail, Sparkles, ArrowRight, Music2 } from 'lucide-react';
 import { useSettings } from '@/hooks/useSettings';
 import { CONTACT_INFO, SOCIAL_LINKS } from '@/lib/constants';
 import StoryModal from './StoryModal';

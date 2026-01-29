@@ -1,10 +1,10 @@
 import { motion, AnimatePresence } from 'framer-motion';
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { 
   BookOpen, DollarSign, TrendingUp,
   Award, MessageSquare, Plus, Loader2, Shield,
   FileCheck, Star, XCircle, Image as ImageIcon, FileUp,
-  Edit, Trash2, Search
+  Edit
 } from 'lucide-react';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer

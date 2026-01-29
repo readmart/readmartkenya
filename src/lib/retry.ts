@@ -23,16 +23,17 @@ export async function withRetry<T>(
   for (let attempt = 1; attempt <= retries + 1; attempt++) {
     try {
       return await fn();
-    } catch (error) {
+    } catch (error: any) {
       lastError = error;
+      const errorMessage = error instanceof Error ? error.message : String(error);
       
       if (attempt <= retries) {
-        console.warn(`[Retry] Attempt ${attempt} failed: ${error.message || error}. Retrying in ${currentDelay}ms...`);
+        console.warn(`[Retry] Attempt ${attempt} failed: ${errorMessage}. Retrying in ${currentDelay}ms...`);
         if (onRetry) onRetry(error, attempt);
         await new Promise(resolve => setTimeout(resolve, currentDelay));
         currentDelay *= factor;
       } else {
-        console.error(`[Retry] All ${retries + 1} attempts failed. Last error: ${error.message || error}`);
+        console.error(`[Retry] All ${retries + 1} attempts failed. Last error: ${errorMessage}`);
       }
     }
   }

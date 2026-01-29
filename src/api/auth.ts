@@ -1,4 +1,4 @@
-import { supabase } from '../lib/supabase/client';
+// Auth session management utilities
 
 export async function createSession(userId: string, email: string) {
   try {

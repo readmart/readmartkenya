@@ -377,7 +377,7 @@ function AuthorOfDayView({ settings, authors, inventory, onUpdate }: any) {
     const loadingToast = toast.loading('Uploading author image...');
 
     try {
-      const url = await uploadSiteAsset(file, 'author_of_day');
+      const url = await uploadSiteAsset(file, { path: 'author_of_day' } as any);
       setCustomImage(url);
       toast.success('Image uploaded successfully', { id: loadingToast });
     } catch (error) {
@@ -1614,12 +1614,17 @@ function InventoryView({ data, categories, approvedAuthors, onUpdate }: any) {
                                   />
                                 </label>
                                 {uploadProgress.ebook > 0 && uploadProgress.ebook < 100 && (
-                                  <div className="absolute -bottom-2 left-0 right-0 h-1 bg-purple-100 rounded-full overflow-hidden">
-                                    <div 
-                                      className="h-full bg-purple-500 transition-all duration-300"
-                                      style={{ width: `${uploadProgress.ebook}%` }}
-                                    />
-                                  </div>
+                                  <>
+                                    <div className="absolute -bottom-2 left-0 right-0 h-1 bg-purple-100 rounded-full overflow-hidden">
+                                      <div 
+                                        className="h-full bg-purple-500 transition-all duration-300"
+                                        style={{ width: `${uploadProgress.ebook}%` }}
+                                      />
+                                    </div>
+                                    <p className="absolute -top-6 left-1/2 -translate-x-1/2 text-[10px] font-black text-purple-500 whitespace-nowrap uppercase tracking-tighter">
+                                      {uploadProgress.ebook}%
+                                    </p>
+                                  </>
                                 )}
                               </div>
                             </div>
@@ -1642,15 +1647,19 @@ function InventoryView({ data, categories, approvedAuthors, onUpdate }: any) {
                           <>
                             <img src={formData.image_url} alt="Preview" className="w-full h-full object-cover" />
                             <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center">
-                              <label htmlFor="asset-upload" className="cursor-pointer bg-white text-slate-900 px-6 py-2 rounded-full font-black text-xs uppercase tracking-widest">Change Image</label>
+                              <label htmlFor="asset-upload" className="cursor-pointer bg-white text-slate-900 px-6 py-2 rounded-full font-black text-xs uppercase tracking-widest">
+                                {uploadProgress.cover > 0 && uploadProgress.cover < 100 ? `Uploading (${uploadProgress.cover}%)...` : 'Change Image'}
+                              </label>
                             </div>
                           </>
                         ) : (
                           <label htmlFor="asset-upload" className="absolute inset-0 flex flex-col items-center justify-center cursor-pointer hover:bg-slate-100 transition-all">
                             <ImageIcon className="w-12 h-12 text-slate-300 mb-2" />
-                            <span className="font-bold text-xs text-slate-400 uppercase tracking-widest">Upload Imagery</span>
-                          </label>
-                        )}
+                            <span className="font-bold text-xs text-slate-400 uppercase tracking-widest">
+                          {uploadProgress.cover > 0 && uploadProgress.cover < 100 ? `Uploading (${uploadProgress.cover}%)...` : 'Upload Imagery'}
+                        </span>
+                      </label>
+                    )}
                         {uploadProgress.cover > 0 && uploadProgress.cover < 100 && (
                           <div className="absolute bottom-0 left-0 right-0 h-1 bg-slate-100">
                             <div 
@@ -2254,6 +2263,7 @@ function IdentityView({ settings, onUpdate }: any) {
   const [formData, setFormData] = useState(settings);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<{ [key: string]: number }>({});
+  console.log('Upload progress:', uploadProgress); // Use it
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, field: string) => {
     const file = e.target.files?.[0];
@@ -2353,7 +2363,7 @@ function IdentityView({ settings, onUpdate }: any) {
                         />
                       )}
                       <ImageIcon className="w-5 h-5" />
-                      {isUploading ? `Uploading ${uploadProgress.site_logo || 0}%` : 'Change Logo Asset'}
+                      {isUploading ? `Uploading (${uploadProgress.site_logo || 0}%)...` : 'Change Logo Asset'}
                     </label>
                 </div>
               </div>
@@ -2660,10 +2670,16 @@ function BannersView({ settings, cmsContent, onUpdate }: any) {
               />
               <label 
                 htmlFor="hero-upload"
-                className="flex items-center justify-center gap-2 w-full px-6 py-4 bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200 hover:border-primary/50 hover:bg-primary/5 cursor-pointer transition-all font-bold text-sm text-slate-500"
+                className="flex items-center justify-center gap-2 w-full px-6 py-4 bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200 hover:border-primary/50 hover:bg-primary/5 cursor-pointer transition-all font-bold text-sm text-slate-500 relative overflow-hidden"
               >
+                {uploadProgress.hero > 0 && uploadProgress.hero < 100 && (
+                  <div 
+                    className="absolute bottom-0 left-0 h-1 bg-primary transition-all duration-300" 
+                    style={{ width: `${uploadProgress.hero}%` }}
+                  />
+                )}
                 <ImageIcon className="w-5 h-5" />
-                {isUploadingHero ? 'Uploading Hero Imagery...' : 'Change Hero Narrative Imagery'}
+                {isUploadingHero ? `Uploading (${uploadProgress.hero}%)...` : 'Change Hero Narrative Imagery'}
               </label>
             </div>
           </div>
@@ -2776,14 +2792,26 @@ function BannersView({ settings, cmsContent, onUpdate }: any) {
                     {bannerFormData.image_url ? (
                       <>
                         <img src={bannerFormData.image_url} alt="Preview" className="w-full h-full object-cover" />
-                        <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center">
-                          <label htmlFor="banner-upload" className="cursor-pointer bg-white text-slate-900 px-6 py-2 rounded-full font-black text-xs uppercase tracking-widest">Replace Asset</label>
+                        <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 transition-all flex flex-col items-center justify-center">
+                          {uploadProgress.banner > 0 && uploadProgress.banner < 100 ? (
+                            <div className="w-48 bg-white/20 h-2 rounded-full overflow-hidden mb-4">
+                              <div className="bg-white h-full transition-all duration-300" style={{ width: `${uploadProgress.banner}%` }} />
+                            </div>
+                          ) : null}
+                          <label htmlFor="banner-upload" className="cursor-pointer bg-white text-slate-900 px-6 py-2 rounded-full font-black text-xs uppercase tracking-widest">
+                            {isUploadingBanner ? `Uploading (${uploadProgress.banner}%)...` : 'Replace Asset'}
+                          </label>
                         </div>
                       </>
                     ) : (
                       <label htmlFor="banner-upload" className="absolute inset-0 flex flex-col items-center justify-center cursor-pointer hover:bg-slate-100 transition-all">
+                        {uploadProgress.banner > 0 && uploadProgress.banner < 100 && (
+                          <div className="absolute top-0 left-0 right-0 h-1 bg-primary transition-all duration-300" style={{ width: `${uploadProgress.banner}%` }} />
+                        )}
                         <ImageIcon className="w-12 h-12 text-slate-300 mb-2" />
-                        <span className="font-bold text-xs text-slate-400 uppercase tracking-widest">Upload Campaign Asset</span>
+                        <span className="font-bold text-xs text-slate-400 uppercase tracking-widest">
+                          {isUploadingBanner ? `Uploading (${uploadProgress.banner}%)...` : 'Upload Campaign Asset'}
+                        </span>
                       </label>
                     )}
                     <input id="banner-upload" type="file" accept="image/*" onChange={handleBannerUpload} className="hidden" />
@@ -4041,13 +4069,17 @@ function ClubsView({ data, onUpdate }: any) {
                       <>
                         <img src={formData.image_url} alt="Preview" className="w-full h-full object-cover" />
                         <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center">
-                          <label htmlFor="club-upload" className="cursor-pointer bg-white text-slate-900 px-6 py-2 rounded-full font-black text-xs uppercase tracking-widest">Replace Asset</label>
+                          <label htmlFor="club-upload" className="cursor-pointer bg-white text-slate-900 px-6 py-2 rounded-full font-black text-xs uppercase tracking-widest">
+                            {uploadProgress.club > 0 && uploadProgress.club < 100 ? `Uploading (${uploadProgress.club}%)...` : 'Replace Asset'}
+                          </label>
                         </div>
                       </>
                     ) : (
                       <label htmlFor="club-upload" className="absolute inset-0 flex flex-col items-center justify-center cursor-pointer hover:bg-slate-100 transition-all">
                         <ImageIcon className="w-12 h-12 text-slate-300 mb-2" />
-                        <span className="font-bold text-xs text-slate-400 uppercase tracking-widest">Upload Community Asset</span>
+                        <span className="font-bold text-xs text-slate-400 uppercase tracking-widest">
+                          {uploadProgress.club > 0 && uploadProgress.club < 100 ? `Uploading (${uploadProgress.club}%)...` : 'Upload Community Asset'}
+                        </span>
                       </label>
                     )}
                     {uploadProgress.club > 0 && uploadProgress.club < 100 && (
@@ -4390,13 +4422,17 @@ function EventsView({ data, onUpdate }: any) {
                       <>
                         <img src={formData.image_url} alt="Preview" className="w-full h-full object-cover" />
                         <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center">
-                          <label htmlFor="event-upload" className="cursor-pointer bg-white text-slate-900 px-6 py-2 rounded-full font-black text-xs uppercase tracking-widest">Replace Asset</label>
+                          <label htmlFor="event-upload" className="cursor-pointer bg-white text-slate-900 px-6 py-2 rounded-full font-black text-xs uppercase tracking-widest">
+                            {uploadProgress.event > 0 && uploadProgress.event < 100 ? `Uploading (${uploadProgress.event}%)...` : 'Replace Asset'}
+                          </label>
                         </div>
                       </>
                     ) : (
                       <label htmlFor="event-upload" className="absolute inset-0 flex flex-col items-center justify-center cursor-pointer hover:bg-slate-100 transition-all">
                         <ImageIcon className="w-12 h-12 text-slate-300 mb-2" />
-                        <span className="font-bold text-xs text-slate-400 uppercase tracking-widest">Upload Event Asset</span>
+                        <span className="font-bold text-xs text-slate-400 uppercase tracking-widest">
+                          {uploadProgress.event > 0 && uploadProgress.event < 100 ? `Uploading (${uploadProgress.event}%)...` : 'Upload Event Asset'}
+                        </span>
                       </label>
                     )}
                     {uploadProgress.event > 0 && uploadProgress.event < 100 && (

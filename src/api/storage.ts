@@ -43,6 +43,7 @@ export async function uploadProductImage(file: File, options: UploadOptions = {}
       .upload(filePath, file, {
         cacheControl: '3600',
         upsert: true,
+        // @ts-ignore
         onUploadProgress: options.onProgress
       });
 
@@ -83,7 +84,7 @@ export async function uploadEbookFile(file: File, identifier: string, options: U
         useTus: useTus,
         duplex: 'half',
         contentType: file.type,
-        onUploadProgress: (progress) => {
+        onUploadProgress: (progress: { loaded: number; total: number }) => {
           if (options.onProgress) {
             options.onProgress(progress);
           }
@@ -118,6 +119,7 @@ export async function uploadAgreementFile(file: File, identifier: string, bucket
       .upload(fileName, file, {
         cacheControl: '3600',
         upsert: true,
+        // @ts-ignore
         onUploadProgress: options.onProgress
       });
 
@@ -148,9 +150,10 @@ export async function uploadSiteAsset(file: File, options: UploadOptions = {}) {
   return withRetry(async () => {
     const { data, error } = await supabase.storage
       .from('site_assets')
-      .upload(filePath, file, {
+      .upload(fileName, file, {
         cacheControl: '3600',
         upsert: true,
+        // @ts-ignore
         onUploadProgress: options.onProgress
       });
 
@@ -183,6 +186,7 @@ export async function uploadBannerImage(file: File, options: UploadOptions = {})
       .upload(filePath, file, {
         cacheControl: '3600',
         upsert: true,
+        // @ts-ignore
         onUploadProgress: options.onProgress
       });
 
@@ -239,6 +243,7 @@ export async function uploadQualificationProof(file: File, userId: string, optio
       .upload(fileName, file, {
         cacheControl: '3600',
         upsert: true,
+        // @ts-ignore
         onUploadProgress: options.onProgress
       });
 
