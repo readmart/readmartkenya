@@ -27,9 +27,12 @@ export async function withRetry<T>(
       lastError = error;
       
       if (attempt <= retries) {
+        console.warn(`[Retry] Attempt ${attempt} failed: ${error.message || error}. Retrying in ${currentDelay}ms...`);
         if (onRetry) onRetry(error, attempt);
         await new Promise(resolve => setTimeout(resolve, currentDelay));
         currentDelay *= factor;
+      } else {
+        console.error(`[Retry] All ${retries + 1} attempts failed. Last error: ${error.message || error}`);
       }
     }
   }

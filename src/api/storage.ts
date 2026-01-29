@@ -1,113 +1,167 @@
 import { supabase } from '@/lib/supabase/client';
+import { withRetry } from '@/lib/retry';
+
+/**
+ * Common upload options
+ */
+export interface UploadOptions {
+  path?: string;
+  onProgress?: (progress: { loaded: number; total: number }) => void;
+  maxSizeMB?: number;
+  allowedTypes?: string[];
+  useTus?: boolean;
+}
+
+/**
+ * Validate file before upload
+ */
+function validateFile(file: File, options: UploadOptions) {
+  if (options.maxSizeMB && file.size > options.maxSizeMB * 1024 * 1024) {
+    throw new Error(`File size exceeds the maximum limit of ${options.maxSizeMB}MB`);
+  }
+  if (options.allowedTypes && !options.allowedTypes.includes(file.type)) {
+    throw new Error(`Invalid file type. Allowed types: ${options.allowedTypes.join(', ')}`);
+  }
+}
 
 /**
  * Upload an image to the products bucket
- * @param file File to upload
- * @param path Optional path within the bucket
  */
-export async function uploadProductImage(file: File, path?: string) {
+export async function uploadProductImage(file: File, options: UploadOptions = {}) {
+  validateFile(file, { 
+    maxSizeMB: options.maxSizeMB || 5, 
+    allowedTypes: options.allowedTypes || ['image/jpeg', 'image/png', 'image/webp'] 
+  });
+
   const fileExt = file.name.split('.').pop();
   const fileName = `${Math.random().toString(36).substring(2)}_${Date.now()}.${fileExt}`;
-  const filePath = path ? `${path}/${fileName}` : fileName;
+  const filePath = options.path ? `${options.path}/${fileName}` : fileName;
 
-  const { data, error } = await supabase.storage
-    .from('products')
-    .upload(filePath, file, {
-      cacheControl: '3600',
-      upsert: true
-    });
+  return withRetry(async () => {
+    const { data, error } = await supabase.storage
+      .from('products')
+      .upload(filePath, file, {
+        cacheControl: '3600',
+        upsert: true,
+        onUploadProgress: options.onProgress
+      });
 
-  if (error) throw error;
+    if (error) throw error;
 
-  // Get public URL
-  const { data: { publicUrl } } = supabase.storage
-    .from('products')
-    .getPublicUrl(data.path);
+    const { data: { publicUrl } } = supabase.storage
+      .from('products')
+      .getPublicUrl(data.path);
 
-  return publicUrl;
+    return publicUrl;
+  }, { retries: 2 });
 }
 
 /**
  * Upload an ebook file to the private ebooks bucket
- * @param file File to upload (PDF only)
- * @param identifier Unique identifier (e.g., productId or temp name)
  */
-export async function uploadEbookFile(file: File, identifier: string) {
-  if (file.type !== 'application/pdf') {
-    throw new Error('Only PDF files are allowed for e-books');
-  }
+export async function uploadEbookFile(file: File, identifier: string, options: UploadOptions = {}) {
+  validateFile(file, { 
+    maxSizeMB: options.maxSizeMB || 100, // 100MB default for ebooks
+    allowedTypes: ['application/pdf', 'application/epub+zip'] 
+  });
 
-  const fileName = `${identifier}_${Date.now()}.pdf`;
+  const fileExt = file.name.split('.').pop() || 'pdf';
+  const fileName = `${identifier}_${Date.now()}.${fileExt}`;
   
-  const { data, error } = await supabase.storage
-    .from('ebooks')
-    .upload(fileName, file, {
-      cacheControl: '3600',
-      upsert: true
-    });
+  // Use TUS for files larger than 6MB for better reliability and chunking
+  const useTus = options.useTus || file.size > 6 * 1024 * 1024;
+  
+  console.log(`[Storage] Starting ${useTus ? 'TUS ' : ''}upload for ${file.name} (${(file.size / 1024 / 1024).toFixed(2)}MB) to ebooks bucket`);
 
-  if (error) {
-    if (error.message.includes('bucket not found')) {
-      throw new Error('E-books storage bucket not initialized. Please contact support.');
+  return withRetry(async () => {
+    const { data, error } = await supabase.storage
+      .from('ebooks')
+      .upload(fileName, file, {
+        cacheControl: '3600',
+        upsert: true,
+        // @ts-ignore - Some versions of the client might not have this in types but it's supported
+        useTus: useTus,
+        duplex: 'half',
+        contentType: file.type,
+        onUploadProgress: (progress) => {
+          if (options.onProgress) {
+            options.onProgress(progress);
+          }
+        }
+      });
+
+    if (error) {
+      if (error.message.includes('bucket not found')) {
+        throw new Error('E-books storage bucket not initialized. Please contact support.');
+      }
+      throw error;
     }
-    throw error;
-  }
 
-  return data.path;
+    return data.path;
+  }, { retries: 2 });
 }
 
 /**
- * Upload a partnership agreement (template or signed)
- * @param file File to upload (PDF only)
- * @param identifier Unique identifier
- * @param bucket Bucket to upload to (defaults to agreements)
+ * Upload a partnership agreement
  */
-export async function uploadAgreementFile(file: File, identifier: string, bucket: 'agreements' | 'signed_agreements' = 'agreements') {
-  if (file.type !== 'application/pdf') {
-    throw new Error('Only PDF files are allowed for agreements');
-  }
+export async function uploadAgreementFile(file: File, identifier: string, bucket: 'agreements' | 'signed_agreements' = 'agreements', options: UploadOptions = {}) {
+  validateFile(file, { 
+    maxSizeMB: options.maxSizeMB || 10, 
+    allowedTypes: ['application/pdf'] 
+  });
 
   const fileName = `${bucket === 'signed_agreements' ? 'signed_' : 'template_'}${identifier}_${Date.now()}.pdf`;
   
-  const { data, error } = await supabase.storage
-    .from(bucket)
-    .upload(fileName, file, {
-      cacheControl: '3600',
-      upsert: true
-    });
+  return withRetry(async () => {
+    const { data, error } = await supabase.storage
+      .from(bucket)
+      .upload(fileName, file, {
+        cacheControl: '3600',
+        upsert: true,
+        onUploadProgress: options.onProgress
+      });
 
-  if (error) {
-    if (error.message.includes('bucket not found')) {
-      throw new Error(`${bucket} storage bucket not initialized.`);
+    if (error) {
+      if (error.message.includes('bucket not found')) {
+        throw new Error(`${bucket} storage bucket not initialized.`);
+      }
+      throw error;
     }
-    throw error;
-  }
 
-  return data.path;
+    return data.path;
+  }, { retries: 2 });
 }
 
 /**
- * Upload an image to the site_assets bucket (logo, etc.)
+ * Upload an image to the site_assets bucket
  */
-export async function uploadSiteAsset(file: File, path?: string) {
+export async function uploadSiteAsset(file: File, options: UploadOptions = {}) {
+  validateFile(file, { 
+    maxSizeMB: options.maxSizeMB || 2, 
+    allowedTypes: ['image/jpeg', 'image/png', 'image/svg+xml', 'image/x-icon', 'image/webp'] 
+  });
+
   const fileExt = file.name.split('.').pop();
   const fileName = `site_${Date.now()}.${fileExt}`;
-  const filePath = path ? `${path}/${fileName}` : fileName;
+  const filePath = options.path ? `${options.path}/${fileName}` : fileName;
 
-  const { data, error } = await supabase.storage
-    .from('site_assets')
-    .upload(filePath, file, {
-      cacheControl: '3600',
-      upsert: true
-    });
+  return withRetry(async () => {
+    const { data, error } = await supabase.storage
+      .from('site_assets')
+      .upload(filePath, file, {
+        cacheControl: '3600',
+        upsert: true,
+        onUploadProgress: options.onProgress
+      });
 
-  if (error) throw error;
+    if (error) throw error;
 
-  const { data: { publicUrl } } = supabase.storage
-    .from('site_assets')
-    .getPublicUrl(data.path);
+    const { data: { publicUrl } } = supabase.storage
+      .from('site_assets')
+      .getPublicUrl(data.path);
 
-  return publicUrl;
+    return publicUrl;
+  }, { retries: 2 });
 }
 
 /**
@@ -160,27 +214,35 @@ export async function uploadSignedAgreement(file: File, userId: string) {
 }
 
 /**
- * Upload qualification proof for author/partner applications
+ * Upload qualification proof
  */
-export async function uploadQualificationProof(file: File, userId: string) {
+export async function uploadQualificationProof(file: File, userId: string, options: UploadOptions = {}) {
+  validateFile(file, { 
+    maxSizeMB: options.maxSizeMB || 10,
+    allowedTypes: ['application/pdf', 'image/jpeg', 'image/png']
+  });
+
   const fileExt = file.name.split('.').pop();
   const fileName = `proof_${userId}_${Date.now()}.${fileExt}`;
   
-  const { data, error } = await supabase.storage
-    .from('partnership_documents')
-    .upload(fileName, file, {
-      cacheControl: '3600',
-      upsert: true
-    });
+  return withRetry(async () => {
+    const { data, error } = await supabase.storage
+      .from('partnership_documents')
+      .upload(fileName, file, {
+        cacheControl: '3600',
+        upsert: true,
+        onUploadProgress: options.onProgress
+      });
 
-  if (error) {
-    if (error.message.includes('bucket not found')) {
-      throw new Error('Storage bucket for documents not found. Please contact support.');
+    if (error) {
+      if (error.message.includes('bucket not found')) {
+        throw new Error('Storage bucket for documents not found. Please contact support.');
+      }
+      throw error;
     }
-    throw error;
-  }
 
-  return data.path;
+    return data.path;
+  }, { retries: 2 });
 }
 
 /**

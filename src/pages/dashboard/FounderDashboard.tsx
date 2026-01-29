@@ -1162,6 +1162,7 @@ function InventoryView({ data, categories, approvedAuthors, onUpdate }: any) {
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<any>(null);
+  const [uploadProgress, setUploadProgress] = useState<{ [key: string]: number }>({});
   const [formData, setFormData] = useState({
     title: '',
     author: '',
@@ -1243,9 +1244,15 @@ function InventoryView({ data, categories, approvedAuthors, onUpdate }: any) {
 
     const loadingToast = toast.loading('Uploading asset imagery...');
     try {
-      const url = await uploadProductImage(file);
+      const url = await uploadProductImage(file, {
+        onProgress: (progress) => {
+          const percent = Math.round((progress.loaded / progress.total) * 100);
+          setUploadProgress(prev => ({ ...prev, cover: percent }));
+        }
+      });
       setFormData({ ...formData, image_url: url });
       toast.success('Imagery synchronized', { id: loadingToast });
+      setTimeout(() => setUploadProgress(prev => ({ ...prev, cover: 0 })), 2000);
     } catch (error) {
       toast.error('Upload failed', { id: loadingToast });
     }
@@ -1255,18 +1262,18 @@ function InventoryView({ data, categories, approvedAuthors, onUpdate }: any) {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.type !== 'application/pdf') {
-      toast.error('Please upload a PDF file for the e-book');
-      return;
-    }
-
     const loadingToast = toast.loading('Uploading secure digital asset...');
     try {
-      // Use a temporary identifier if we're creating a new product
       const identifier = editingItem?.id || `temp_${Date.now()}`;
-      const path = await uploadEbookFile(file, identifier);
+      const path = await uploadEbookFile(file, identifier, {
+        onProgress: (progress) => {
+          const percent = Math.round((progress.loaded / progress.total) * 100);
+          setUploadProgress(prev => ({ ...prev, ebook: percent }));
+        }
+      });
       setFormData({ ...formData, ebook_url: path });
       toast.success('Digital asset synchronized', { id: loadingToast });
+      setTimeout(() => setUploadProgress(prev => ({ ...prev, ebook: 0 })), 2000);
     } catch (error: any) {
       toast.error(error.message || 'Upload failed', { id: loadingToast });
     }
@@ -1276,8 +1283,11 @@ function InventoryView({ data, categories, approvedAuthors, onUpdate }: any) {
     e.preventDefault();
     const loadingToast = toast.loading(editingItem ? 'Updating Asset...' : 'Registering Asset...');
     try {
+      // Destructure to remove fields that don't belong in the products table
+      const { is_ebook, ebook_url, ...rawFormData } = formData;
+
       const productPayload = {
-        ...formData,
+        ...rawFormData,
         price: parseFloat(formData.price) || 0,
         sale_price: formData.sale_price ? parseFloat(formData.sale_price) : null,
         stock_quantity: parseInt(formData.stock_quantity) || 0,
@@ -1285,7 +1295,10 @@ function InventoryView({ data, categories, approvedAuthors, onUpdate }: any) {
         author_id: formData.author_id || null,
         weight: parseFloat(formData.weight) || 0.5,
         volume: parseFloat(formData.volume) || 0.001,
-        is_ebook: formData.type === 'ebook',
+        type: formData.type, // Ensure type is explicitly set
+        // ebook_url is kept if the schema supports it directly, 
+        // but it's also passed via ebook_metadata for the secondary table
+        ebook_url: formData.ebook_url, 
         ebook_metadata: formData.type === 'ebook' ? {
           file_path: formData.ebook_url,
           format: 'pdf',
@@ -1590,15 +1603,25 @@ function InventoryView({ data, categories, approvedAuthors, onUpdate }: any) {
                                 onChange={(e) => setFormData({...formData, ebook_url: e.target.value})}
                                 className="flex-1 px-6 py-4 bg-white rounded-2xl border-none outline-none focus:ring-2 focus:ring-purple-200 font-bold text-purple-900" 
                               />
-                              <label className="cursor-pointer bg-purple-500 text-white p-4 rounded-2xl hover:bg-purple-600 transition-all shadow-lg shadow-purple-200">
-                                <FileUp className="w-6 h-6" />
-                                <input 
-                                  type="file" 
-                                  accept=".pdf" 
-                                  onChange={handleEbookUpload} 
-                                  className="hidden" 
-                                />
-                              </label>
+                              <div className="relative">
+                                <label className="cursor-pointer bg-purple-500 text-white p-4 rounded-2xl hover:bg-purple-600 transition-all shadow-lg shadow-purple-200 flex items-center justify-center">
+                                  <FileUp className="w-6 h-6" />
+                                  <input 
+                                    type="file" 
+                                    accept=".pdf" 
+                                    onChange={handleEbookUpload} 
+                                    className="hidden" 
+                                  />
+                                </label>
+                                {uploadProgress.ebook > 0 && uploadProgress.ebook < 100 && (
+                                  <div className="absolute -bottom-2 left-0 right-0 h-1 bg-purple-100 rounded-full overflow-hidden">
+                                    <div 
+                                      className="h-full bg-purple-500 transition-all duration-300"
+                                      style={{ width: `${uploadProgress.ebook}%` }}
+                                    />
+                                  </div>
+                                )}
+                              </div>
                             </div>
                             {formData.ebook_url && (
                               <p className="mt-2 text-[10px] font-bold text-purple-400 truncate">
@@ -1627,6 +1650,14 @@ function InventoryView({ data, categories, approvedAuthors, onUpdate }: any) {
                             <ImageIcon className="w-12 h-12 text-slate-300 mb-2" />
                             <span className="font-bold text-xs text-slate-400 uppercase tracking-widest">Upload Imagery</span>
                           </label>
+                        )}
+                        {uploadProgress.cover > 0 && uploadProgress.cover < 100 && (
+                          <div className="absolute bottom-0 left-0 right-0 h-1 bg-slate-100">
+                            <div 
+                              className="h-full bg-primary transition-all duration-300"
+                              style={{ width: `${uploadProgress.cover}%` }}
+                            />
+                          </div>
                         )}
                         <input id="asset-upload" type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
                       </div>
