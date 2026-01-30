@@ -4044,7 +4044,7 @@ function ClubsView({ data, onUpdate }: any) {
       content: club.content || '',
       image_url: club.image_url || '',
       is_active: club.is_active ?? true,
-      membership_price: club.membership_price || 0,
+      membership_price: club.metadata?.membership_price || club.membership_price || 0,
       metadata: {
         category: club.metadata?.category || 'General',
         member_limit: club.metadata?.member_limit || 100,
@@ -4075,9 +4075,14 @@ function ClubsView({ data, onUpdate }: any) {
     e.preventDefault();
     const loadingToast = toast.loading(editingClub ? 'Updating Club...' : 'Initializing Club...');
     try {
+      const { membership_price, ...rest } = formData;
       const payload = {
-        ...formData,
-        type: 'book_club'
+        ...rest,
+        type: 'book_club',
+        metadata: {
+          ...rest.metadata,
+          membership_price
+        }
       };
 
       if (editingClub) {
