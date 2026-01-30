@@ -462,7 +462,7 @@ function AuthorOfDayView({ settings, authors, inventory, onUpdate }: any) {
                 onChange={handleAuthorChange}
                 className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-primary/20 font-bold transition-all text-sm"
               >
-                <option value="">-- 选择作者 --</option>
+                <option value="">Select an Author</option>
                 {authors.map((author: any) => (
                   <option key={author.id} value={author.id}>{author.full_name} ({author.email})</option>
                 ))}
@@ -2505,6 +2505,7 @@ function IdentityView({ settings, onUpdate }: any) {
                 value={formData.whatsapp_link}
                 onChange={(e) => setFormData({...formData, whatsapp_link: e.target.value})}
                 className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-2 focus:ring-primary/20 font-bold transition-all" 
+                placeholder="https://wa.me/254794129958"
               />
             </div>
             <div>
@@ -3865,13 +3866,7 @@ function AreasView({ data, onUpdate, formatPrice }: any) {
 
 function InquiriesView({ data, onUpdate }: any) {
   const [searchTerm, setSearchTerm] = useState('');
-  const [isMounted, setIsMounted] = useState(false);
   const [statusFilter, setStatusFilter] = useState('all');
-
-  useEffect(() => {
-    setIsMounted(true);
-    return () => setIsMounted(false);
-  }, []);
   const [deptFilter, setDeptFilter] = useState('all');
 
   const departments = useMemo(() => {

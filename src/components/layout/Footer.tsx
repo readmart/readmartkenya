@@ -106,7 +106,7 @@ export default function Footer() {
                       <span>{settings.contact_phone || CONTACT_INFO.phone1}</span>
                     </a>
                     <a 
-                      href={`https://wa.me/${(settings.contact_phone || CONTACT_INFO.phone1).replace(/\D/g, '')}`} 
+                      href={settings.whatsapp_link || `https://wa.me/${(settings.contact_phone || CONTACT_INFO.phone1).replace(/\D/g, '')}`} 
                       target="_blank" 
                       rel="noopener noreferrer"
                       className="text-green-500 hover:text-green-600 transition-colors"

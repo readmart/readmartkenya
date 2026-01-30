@@ -66,6 +66,43 @@ export async function uploadProductImage(file: File, options: UploadOptions = {}
 }
 
 /**
+ * Upload a profile image for an author or user
+ */
+export async function uploadProfileImage(file: File, options: UploadOptions = {}) {
+  validateFile(file, { 
+    maxSizeMB: options.maxSizeMB || 2, 
+    allowedTypes: options.allowedTypes || ['image/jpeg', 'image/png', 'image/webp'] 
+  });
+
+  const fileExt = file.name.includes('.') ? file.name.split('.').pop() : 'jpg';
+  const fileName = `profile_${Math.random().toString(36).substring(2)}_${Date.now()}.${fileExt}`;
+  const filePath = options.path ? `${options.path}/${fileName}` : fileName;
+
+  return withRetry(async () => {
+    console.log(`[Storage] Uploading profile image: ${filePath} (${file.size} bytes)`);
+    const { data, error } = await supabase.storage
+      .from('site_assets')
+      .upload(filePath, file, {
+        cacheControl: '3600',
+        upsert: true,
+        // @ts-ignore
+        onUploadProgress: options.onProgress
+      });
+
+    if (error) {
+      console.error('[Storage] Profile upload error:', error);
+      throw error;
+    }
+
+    const { data: { publicUrl } } = supabase.storage
+      .from('site_assets')
+      .getPublicUrl(data.path);
+
+    return publicUrl;
+  }, { retries: 2 });
+}
+
+/**
  * Upload an ebook file to the private ebooks bucket
  */
 export async function uploadEbookFile(file: File, identifier: string, options: UploadOptions = {}) {

@@ -369,7 +369,7 @@ export default function Contact() {
                     </div>
                   </div>
                   <a 
-                    href={`https://wa.me/${(settings.contact_phone || '+254 794 129 958').replace(/\D/g, '')}`} 
+                    href={settings.whatsapp_link || `https://wa.me/${(settings.contact_phone || '+254 794 129 958').replace(/\D/g, '')}`} 
                     target="_blank" 
                     rel="noopener noreferrer"
                     className="w-12 h-12 bg-green-500/10 text-green-500 rounded-xl flex items-center justify-center hover:bg-green-500 hover:text-white transition-all"

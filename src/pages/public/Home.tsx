@@ -18,24 +18,31 @@ const featuredCategories = [
   { name: 'Community', icon: <Users className="w-6 h-6" />, count: '15+ Clubs', color: 'from-green-500/20 to-emerald-500/20' },
 ];
 
-const mockBooks = [
-  { id: '1', title: 'The Midnight Library', author: 'Matt Haig', price: 24.99, rating: 4.8, category: 'Books', image: 'https://images.unsplash.com/photo-1544947950-fa07a98d237f?q=80&w=800', weight: 0.5, volume: 0.001 },
-  { id: '2', title: 'Abstract Geometric Art', author: 'Elena Rossi', price: 120.00, rating: 4.9, category: 'Art', image: 'https://images.unsplash.com/photo-1541963463532-d68292c34b19?q=80&w=800', weight: 1.2, volume: 0.005 },
-  { id: '3', title: 'Premium Leather Bookmark', author: 'Handcrafted', price: 15.99, rating: 4.7, category: 'Accessories', image: 'https://images.unsplash.com/photo-1544947950-fa07a98d237f?q=80&w=800', weight: 0.1, volume: 0.0001 },
-  { id: '4', title: 'The Psychology of Money', author: 'Morgan Housel', price: 21.00, rating: 4.8, category: 'Books', image: 'https://images.unsplash.com/photo-1592492159418-39f319320569?q=80&w=800', weight: 0.4, volume: 0.0008 },
-];
 
 export default function Home() {
   const [heroData, setHeroData] = useState<any>(null);
   const [banners, setBanners] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [authorOfDay, setAuthorOfDay] = useState<any>(null);
+  const [featuredBooks, setFeaturedBooks] = useState<any[]>([]);
 
   useEffect(() => {
     async function fetchPageData() {
       try {
         const cms = await getCMSContent();
         setBanners(cms.filter((item: any) => item.type === 'banner' && item.is_active));
+
+        // Fetch latest books
+        const { data: latestBooks } = await supabase
+          .from('products')
+          .select('*')
+          .eq('is_active', true)
+          .order('created_at', { ascending: false })
+          .limit(4);
+        
+        if (latestBooks) {
+          setFeaturedBooks(latestBooks);
+        }
 
         // Get site settings for Hero and Author of the Day
         let settings: any = null;
@@ -351,9 +358,14 @@ export default function Home() {
         </div>
         
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
-          {mockBooks.map((book) => (
+          {featuredBooks.map((book) => (
             <BookCard key={book.id} {...book} />
           ))}
+          {featuredBooks.length === 0 && !isLoading && (
+            <div className="col-span-full py-12 text-center text-muted-foreground font-medium">
+              New arrivals coming soon...
+            </div>
+          )}
         </div>
       </section>
 

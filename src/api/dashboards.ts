@@ -78,11 +78,18 @@ export async function getGlobalAnalytics() {
     // Revenue from active transactions (excluding cancelled/failed/refunded)
     const EXCLUDED_STATUSES = ['cancelled', 'failed', 'refunded'];
     const activeOrders = currentOrders.filter(o => !EXCLUDED_STATUSES.includes((o.status || 'pending').toLowerCase()));
-    const currentRevenue = activeOrders.reduce((acc, curr) => acc + Number(curr.total_amount || 0), 0);
+    
+    const currentRevenue = activeOrders.reduce((acc, curr) => {
+      const val = Number(curr.total_amount);
+      return acc + (isNaN(val) ? 0 : val);
+    }, 0);
     
     const previousRevenue = previousOrders
       .filter(o => !EXCLUDED_STATUSES.includes((o.status || 'pending').toLowerCase()))
-      .reduce((acc, curr) => acc + Number(curr.total_amount || 0), 0);
+      .reduce((acc, curr) => {
+        const val = Number(curr.total_amount);
+        return acc + (isNaN(val) ? 0 : val);
+      }, 0);
 
     const revenueTrend = calculateTrend(currentRevenue, previousRevenue);
     const ordersTrend = calculateTrend(currentOrders.length, previousOrders.length);
@@ -91,7 +98,8 @@ export async function getGlobalAnalytics() {
     const salesByDay: Record<string, number> = {};
     activeOrders.forEach(order => {
       const day = new Date(order.created_at).toISOString().split('T')[0];
-      salesByDay[day] = (salesByDay[day] || 0) + Number(order.total_amount || 0);
+      const val = Number(order.total_amount);
+      salesByDay[day] = (salesByDay[day] || 0) + (isNaN(val) ? 0 : val);
     });
 
     const trajectoryData = Object.entries(salesByDay)
@@ -138,10 +146,20 @@ export async function getGlobalAnalytics() {
     const unifiedCategoryRevenue: Record<string, number> = {};
 
     try {
-      const { data: unifiedData } = await supabase
+      const { data: unifiedData, error: unifiedError } = await supabase
         .from('order_items')
-        .select('product_snapshot, quantity, price_at_purchase, orders!inner(created_at, status)')
-        .gte('orders.created_at', thirtyDaysAgo.toISOString());
+        .select(`
+          product_snapshot, 
+          quantity, 
+          price_at_purchase, 
+          orders!inner(created_at, status)
+        `)
+        .filter('orders.created_at', 'gte', thirtyDaysAgo.toISOString());
+
+      if (unifiedError) {
+        console.error('Unified Analytics Query Error:', unifiedError);
+        throw unifiedError;
+      }
 
       unifiedData?.forEach(item => {
         const orderStatus = (item.orders as any)?.status?.toLowerCase() || 'pending';
@@ -152,7 +170,7 @@ export async function getGlobalAnalytics() {
         const category = snapshot?.category?.name || snapshot?.category || snapshot?.category_name || 'Uncategorized';
         const price = Number(item.price_at_purchase || snapshot?.price || 0);
         const qty = Number(item.quantity || 0);
-        const revenue = qty * price;
+        const revenue = isNaN(price) || isNaN(qty) ? 0 : qty * price;
 
         // Update Categories
         unifiedCategoryRevenue[category] = (unifiedCategoryRevenue[category] || 0) + revenue;
@@ -1005,32 +1023,49 @@ export async function getSiteSettings() {
     if (siteError) throw siteError;
     if (!siteData) return {};
 
+    // Sanitize dummy numbers
+    const sanitizedData = { ...siteData };
+    const dummyPattern = /700 000 000|700000000/;
+    
+    if (sanitizedData.contact_phone && dummyPattern.test(sanitizedData.contact_phone)) {
+      sanitizedData.contact_phone = '+254 794 129 958';
+    }
+    if (sanitizedData.secondary_phone && dummyPattern.test(sanitizedData.secondary_phone)) {
+      sanitizedData.secondary_phone = '+254 741 658 548';
+    }
+    if (sanitizedData.whatsapp_link && dummyPattern.test(sanitizedData.whatsapp_link)) {
+      sanitizedData.whatsapp_link = 'https://wa.me/254794129958';
+    }
+    if (sanitizedData.global_support_whatsapp && dummyPattern.test(sanitizedData.global_support_whatsapp)) {
+      sanitizedData.global_support_whatsapp = 'https://wa.me/254794129958';
+    }
+
     // Fetch Author of the Day profile separately if enabled
-    if (siteData.author_of_the_day_id) {
+    if (sanitizedData.author_of_the_day_id) {
       const { data: profileData } = await supabase
         .from('profiles')
         .select('id, full_name, avatar_url, bio')
-        .eq('id', siteData.author_of_the_day_id)
+        .eq('id', sanitizedData.author_of_the_day_id)
         .maybeSingle();
       
       if (profileData) {
-        siteData.author_of_the_day = profileData;
+        sanitizedData.author_of_the_day = profileData;
       }
     }
 
     // Fetch featured books if present
-    if (siteData.author_of_the_day_books && siteData.author_of_the_day_books.length > 0) {
+    if (sanitizedData.author_of_the_day_books && sanitizedData.author_of_the_day_books.length > 0) {
       const { data: bookData } = await supabase
         .from('products')
         .select('id, title, image_url, price, author_id')
-        .in('id', siteData.author_of_the_day_books);
+        .in('id', sanitizedData.author_of_the_day_books);
       
       if (bookData) {
-        siteData.featured_books = bookData;
+        sanitizedData.featured_books = bookData;
       }
     }
 
-    return siteData;
+    return sanitizedData;
   } catch (err) {
     console.error('Site Settings fetch failed:', err);
     return {};

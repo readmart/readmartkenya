@@ -124,6 +124,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
 
       // Admin fetch logic
+      const authHeader = req.headers.authorization;
+      const token = authHeader?.split(' ')[1];
+      if (!token) return unauthorized(res);
+
+      const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+      if (authError || !user) return unauthorized(res);
+
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .single();
+
+      if (!profile || !['admin', 'founder'].includes(profile.role)) {
+        return unauthorized(res, 'Forbidden');
+      }
+
       const { data, error } = await supabase
         .from('newsletter_subscriptions')
         .select('*')

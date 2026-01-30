@@ -10,6 +10,8 @@ WHERE
 -- Also ensure any other settings with the dummy number are updated
 UPDATE public.site_settings 
 SET 
-    contact_phone = '+254 794 129 958'
+    contact_phone = '+254 794 129 958',
+    secondary_phone = '+254 741 658 548'
 WHERE 
-    contact_phone = '+254 700 000 000';
+    contact_phone = '+254 700 000 000'
+    OR secondary_phone = '+254 700 000 000';

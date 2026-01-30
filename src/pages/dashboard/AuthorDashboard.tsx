@@ -21,13 +21,13 @@ import {
   createProduct,
   updateProduct
 } from '@/api/dashboards';
-import { uploadProductImage, uploadEbookFile } from '@/api/storage';
+import { uploadProductImage, uploadEbookFile, uploadProfileImage } from '@/api/storage';
 import { toast } from 'sonner';
 import AgreementsSection from '@/components/dashboard/AgreementsSection';
 
 export default function AuthorDashboard() {
   const { formatPrice } = useCurrency();
-  const { user } = useAuth();
+  const { user, profile, updateProfile } = useAuth();
   const [salesReport, setSalesReport] = useState<any[]>([]);
   const [myBooks, setMyBooks] = useState<any[]>([]);
   const [payouts, setPayouts] = useState<any[]>([]);
@@ -36,10 +36,33 @@ export default function AuthorDashboard() {
   const [categories, setCategories] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isMounted, setIsMounted] = useState(false);
+  const [isUploadingProfile, setIsUploadingProfile] = useState(false);
 
   useEffect(() => {
     setIsMounted(true);
   }, []);
+
+  const handleProfileImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+
+    setIsUploadingProfile(true);
+    const loadingToast = toast.loading('Uploading profile picture...');
+    try {
+      const url = await uploadProfileImage(file, {
+        path: `authors/${user.id}`
+      });
+      
+      const { error } = await updateProfile({ avatar_url: url });
+      if (error) throw error;
+      
+      toast.success('Profile picture updated!', { id: loadingToast });
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to upload profile picture', { id: loadingToast });
+    } finally {
+      setIsUploadingProfile(false);
+    }
+  };
 
   // Modal & Form State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -257,11 +280,33 @@ export default function AuthorDashboard() {
   return (
     <div className="container mx-auto px-4 py-8 max-w-7xl">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-12 gap-6">
-        <div>
-          <h1 className="text-4xl font-bold mb-2 bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
-            Author Hub
-          </h1>
-          <p className="text-muted-foreground">Manage your publications and track royalties</p>
+        <div className="flex items-center gap-6">
+          <div className="relative group">
+            <div className="w-20 h-20 rounded-2xl overflow-hidden border-2 border-primary/20 bg-primary/5">
+              {profile?.avatar_url ? (
+                <img src={profile.avatar_url} alt={profile.full_name || 'Author'} className="w-full h-full object-cover" />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center text-primary font-bold text-2xl">
+                  {profile?.full_name?.charAt(0) || 'A'}
+                </div>
+              )}
+              {isUploadingProfile && (
+                <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                  <Loader2 className="w-6 h-6 text-white animate-spin" />
+                </div>
+              )}
+            </div>
+            <label className="absolute -bottom-2 -right-2 p-1.5 bg-primary text-white rounded-lg cursor-pointer hover:scale-110 transition-transform shadow-lg">
+              <ImageIcon className="w-4 h-4" />
+              <input type="file" className="hidden" accept="image/*" onChange={handleProfileImageUpload} disabled={isUploadingProfile} />
+            </label>
+          </div>
+          <div>
+            <h1 className="text-4xl font-bold mb-2 bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
+              Author Hub
+            </h1>
+            <p className="text-muted-foreground">Manage your publications and track royalties</p>
+          </div>
         </div>
         <button 
           onClick={handleAddNew}
