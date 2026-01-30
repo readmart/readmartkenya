@@ -82,7 +82,11 @@ export default function FounderDashboard() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'partnership_applications' }, () => fetchAllData())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'partnership_agreements' }, () => fetchAllData())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'newsletter_subscriptions' }, () => fetchAllData())
-      .subscribe();
+      .subscribe((status) => {
+        if (status !== 'SUBSCRIBED') {
+          console.warn('Founder Dashboard Realtime subscription status:', status);
+        }
+      });
 
     return () => {
       setIsMounted(false);
@@ -436,8 +440,10 @@ function AuthorOfDayView({ settings, authors, inventory, onUpdate }: any) {
                 <h3 className="text-lg font-bold">Enable Feature</h3>
                 <p className="text-sm text-slate-500">Show this section on the homepage</p>
               </div>
-              <label className="relative inline-flex items-center cursor-pointer">
+              <label htmlFor="enableFeature" className="relative inline-flex items-center cursor-pointer">
                 <input 
+                  id="enableFeature"
+                  name="enableFeature"
                   type="checkbox" 
                   checked={isEnabled}
                   onChange={(e) => setIsEnabled(e.target.checked)}
@@ -448,8 +454,10 @@ function AuthorOfDayView({ settings, authors, inventory, onUpdate }: any) {
             </div>
 
             <div className="space-y-4">
-              <label className="block text-sm font-bold text-slate-700">Select Author</label>
+              <label htmlFor="authorSelect" className="block text-sm font-bold text-slate-700">Select Author</label>
               <select 
+                id="authorSelect"
+                name="authorSelect"
                 value={selectedAuthorId}
                 onChange={handleAuthorChange}
                 className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-primary/20 font-bold transition-all text-sm"
@@ -462,19 +470,19 @@ function AuthorOfDayView({ settings, authors, inventory, onUpdate }: any) {
             </div>
 
             <div className="space-y-4">
-              <label className="block text-sm font-bold text-slate-700">Custom Feature Image (Optional)</label>
+              <label htmlFor="featureImageUpload" className="block text-sm font-bold text-slate-700">Custom Feature Image (Optional)</label>
               <div className="flex items-center gap-4">
                 {customImage && (
                   <div className="w-20 h-20 rounded-xl overflow-hidden border border-slate-200">
                     <img src={customImage} alt="Feature" className="w-full h-full object-cover" />
                   </div>
                 )}
-                <label className="flex-1 cursor-pointer group">
+                <label htmlFor="featureImageUpload" className="flex-1 cursor-pointer group">
                   <div className="flex items-center justify-center gap-2 w-full h-20 border-2 border-dashed border-slate-200 rounded-xl text-slate-400 group-hover:border-primary/50 group-hover:text-primary transition-all">
                     {isUploading ? <Loader2 className="w-5 h-5 animate-spin" /> : <ImageIcon className="w-5 h-5" />}
                     <span className="text-sm font-bold">{isUploading ? 'Uploading...' : 'Upload Image'}</span>
                   </div>
-                  <input type="file" className="hidden" accept="image/*" onChange={handleImageUpload} disabled={isUploading} />
+                  <input id="featureImageUpload" name="featureImageUpload" type="file" className="hidden" accept="image/*" onChange={handleImageUpload} disabled={isUploading} />
                 </label>
               </div>
               <p className="text-xs text-slate-400">Recommended size: 1200x800px. If not provided, the author's profile picture will be used.</p>
@@ -1083,9 +1091,9 @@ function AnalyticsView({ data, formatPrice, isMounted }: any) {
               </div>
             </div>
           </div>
-          <div className="h-[400px] w-full min-h-[400px]">
+          <div className="h-[400px] w-full relative">
             {isMounted && (
-              <ResponsiveContainer width="100%" height="100%" minHeight={400} debounce={100}>
+              <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={data.salesData}>
                   <defs>
                     <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
@@ -1119,9 +1127,9 @@ function AnalyticsView({ data, formatPrice, isMounted }: any) {
 
         <div className="bg-white p-10 rounded-[40px] border border-slate-100 shadow-sm">
           <h3 className="text-xl font-black tracking-tighter uppercase mb-10">Category Saturation</h3>
-          <div className="h-[400px] w-full min-h-[400px]">
+          <div className="h-[400px] w-full relative">
             {isMounted && (
-              <ResponsiveContainer width="100%" height="100%" minHeight={400} debounce={100}>
+              <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
                     data={data.categoryStats}
@@ -1243,18 +1251,23 @@ function InventoryView({ data, categories, approvedAuthors, onUpdate }: any) {
     if (!file) return;
 
     const loadingToast = toast.loading('Uploading asset imagery...');
+    console.log('[InventoryView] Starting image upload for:', file.name);
+
     try {
       const url = await uploadProductImage(file, {
         onProgress: (progress) => {
           const percent = Math.round((progress.loaded / progress.total) * 100);
+          console.log(`[InventoryView] Upload progress: ${percent}%`);
           setUploadProgress(prev => ({ ...prev, cover: percent }));
         }
       });
-      setFormData({ ...formData, image_url: url });
+      console.log('[InventoryView] Upload successful, URL:', url);
+      setFormData(prev => ({ ...prev, image_url: url }));
       toast.success('Imagery synchronized', { id: loadingToast });
       setTimeout(() => setUploadProgress(prev => ({ ...prev, cover: 0 })), 2000);
-    } catch (error) {
-      toast.error('Upload failed', { id: loadingToast });
+    } catch (error: any) {
+      console.error('[InventoryView] Upload failed:', error);
+      toast.error(`Upload failed: ${error.message || 'Unknown error'}`, { id: loadingToast });
     }
   };
 
@@ -1263,41 +1276,47 @@ function InventoryView({ data, categories, approvedAuthors, onUpdate }: any) {
     if (!file) return;
 
     const loadingToast = toast.loading('Uploading secure digital asset...');
+    console.log('[InventoryView] Starting ebook upload for:', file.name);
+
     try {
       const identifier = editingItem?.id || `temp_${Date.now()}`;
       const path = await uploadEbookFile(file, identifier, {
         onProgress: (progress) => {
           const percent = Math.round((progress.loaded / progress.total) * 100);
+          console.log(`[InventoryView] Ebook progress: ${percent}%`);
           setUploadProgress(prev => ({ ...prev, ebook: percent }));
         }
       });
-      setFormData({ ...formData, ebook_url: path });
+      console.log('[InventoryView] Ebook upload successful, path:', path);
+      setFormData(prev => ({ ...prev, ebook_url: path }));
       toast.success('Digital asset synchronized', { id: loadingToast });
       setTimeout(() => setUploadProgress(prev => ({ ...prev, ebook: 0 })), 2000);
     } catch (error: any) {
-      toast.error(error.message || 'Upload failed', { id: loadingToast });
+      console.error('[InventoryView] Ebook upload failed:', error);
+      toast.error(`Upload failed: ${error.message || 'Unknown error'}`, { id: loadingToast });
     }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const loadingToast = toast.loading(editingItem ? 'Updating Asset...' : 'Registering Asset...');
+    console.log('[InventoryView] Submitting form data:', formData);
+
     try {
       // Destructure to remove fields that don't belong in the products table
       const { is_ebook, ebook_url, ...rawFormData } = formData;
 
       const productPayload = {
         ...rawFormData,
-        price: parseFloat(formData.price) || 0,
-        sale_price: formData.sale_price ? parseFloat(formData.sale_price) : null,
-        stock_quantity: parseInt(formData.stock_quantity) || 0,
+        price: parseFloat(formData.price.toString()) || 0,
+        sale_price: formData.sale_price ? parseFloat(formData.sale_price.toString()) : null,
+        stock_quantity: parseInt(formData.stock_quantity.toString()) || 0,
         category_id: formData.category_id || null,
         author_id: formData.author_id || null,
-        weight: parseFloat(formData.weight) || 0.5,
-        volume: parseFloat(formData.volume) || 0.001,
-        type: formData.type, // Ensure type is explicitly set
-        // ebook_url is kept if the schema supports it directly, 
-        // but it's also passed via ebook_metadata for the secondary table
+        weight: parseFloat(formData.weight.toString()) || 0.5,
+        volume: parseFloat(formData.volume.toString()) || 0.001,
+        type: formData.type,
+        is_ebook: formData.type === 'ebook',
         ebook_url: formData.ebook_url, 
         ebook_metadata: formData.type === 'ebook' ? {
           file_path: formData.ebook_url,
@@ -1305,17 +1324,21 @@ function InventoryView({ data, categories, approvedAuthors, onUpdate }: any) {
         } : null
       };
 
+      console.log('[InventoryView] Sending payload to API:', productPayload);
+
       if (editingItem) {
         await updateProduct(editingItem.id, productPayload);
         toast.success('Asset updated', { id: loadingToast });
       } else {
-        await createProduct(productPayload);
+        const result = await createProduct(productPayload);
+        console.log('[InventoryView] Registration successful:', result);
         toast.success('Asset registered', { id: loadingToast });
       }
       setIsModalOpen(false);
       onUpdate();
-    } catch (error) {
-      toast.error('Operation failed', { id: loadingToast });
+    } catch (error: any) {
+      console.error('[InventoryView] Operation failed:', error);
+      toast.error(`Operation failed: ${error.message || 'Unknown error'}`, { id: loadingToast });
     }
   };
 
@@ -1475,8 +1498,10 @@ function InventoryView({ data, categories, approvedAuthors, onUpdate }: any) {
                 <div className="grid md:grid-cols-2 gap-10">
                   <div className="space-y-6">
                     <div>
-                      <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Asset Title</label>
+                      <label htmlFor="assetTitle" className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Asset Title</label>
                       <input 
+                        id="assetTitle"
+                        name="assetTitle"
                         required
                         type="text" 
                         value={formData.title}
@@ -1485,9 +1510,11 @@ function InventoryView({ data, categories, approvedAuthors, onUpdate }: any) {
                       />
                     </div>
                     <div>
-                      <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Primary Author/Creator</label>
+                      <label htmlFor="author_id" className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Primary Author/Creator</label>
                       {approvedAuthors?.length > 0 ? (
                         <select 
+                          id="author_id"
+                          name="author_id"
                           required
                           value={formData.author_id}
                           onChange={(e) => {
@@ -1507,6 +1534,8 @@ function InventoryView({ data, categories, approvedAuthors, onUpdate }: any) {
                         </select>
                       ) : (
                         <input 
+                          id="author"
+                          name="author"
                           required
                           type="text" 
                           value={formData.author}
@@ -1517,8 +1546,10 @@ function InventoryView({ data, categories, approvedAuthors, onUpdate }: any) {
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Standard Price (KES)</label>
+                        <label htmlFor="price" className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Standard Price (KES)</label>
                         <input 
+                          id="price"
+                          name="price"
                           required
                           type="number" 
                           value={formData.price}
@@ -1527,8 +1558,10 @@ function InventoryView({ data, categories, approvedAuthors, onUpdate }: any) {
                         />
                       </div>
                       <div>
-                        <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Impact Price (Optional)</label>
+                        <label htmlFor="sale_price" className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Impact Price (Optional)</label>
                         <input 
+                          id="sale_price"
+                          name="sale_price"
                           type="number" 
                           value={formData.sale_price}
                           onChange={(e) => setFormData({...formData, sale_price: e.target.value})}
@@ -1538,8 +1571,10 @@ function InventoryView({ data, categories, approvedAuthors, onUpdate }: any) {
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Resource Quantity</label>
+                        <label htmlFor="stock_quantity" className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Resource Quantity</label>
                         <input 
+                          id="stock_quantity"
+                          name="stock_quantity"
                           required
                           type="number" 
                           value={formData.stock_quantity}
@@ -1548,8 +1583,10 @@ function InventoryView({ data, categories, approvedAuthors, onUpdate }: any) {
                         />
                       </div>
                       <div>
-                        <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Asset Type</label>
+                        <label htmlFor="assetType" className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Asset Type</label>
                         <select 
+                          id="assetType"
+                          name="assetType"
                           value={formData.type}
                           onChange={(e) => setFormData({...formData, type: e.target.value, is_ebook: e.target.value === 'ebook'})}
                           className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-2 focus:ring-primary/20 font-bold"
@@ -1563,8 +1600,10 @@ function InventoryView({ data, categories, approvedAuthors, onUpdate }: any) {
                     {formData.type === 'physical' && (
                       <div className="grid grid-cols-2 gap-4">
                         <div>
-                          <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Weight (KG)</label>
+                          <label htmlFor="weight" className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Weight (KG)</label>
                           <input 
+                            id="weight"
+                            name="weight"
                             type="number" 
                             step="0.001"
                             value={formData.weight}
@@ -1573,8 +1612,10 @@ function InventoryView({ data, categories, approvedAuthors, onUpdate }: any) {
                           />
                         </div>
                         <div>
-                          <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Volume (m³)</label>
+                          <label htmlFor="volume" className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Volume (m³)</label>
                           <input 
+                            id="volume"
+                            name="volume"
                             type="number" 
                             step="0.000001"
                             value={formData.volume}
@@ -1594,9 +1635,11 @@ function InventoryView({ data, categories, approvedAuthors, onUpdate }: any) {
                         <h4 className="text-[10px] font-black uppercase tracking-widest text-purple-400">Digital Distribution Protocol</h4>
                         <div className="space-y-4">
                           <div>
-                            <label className="block text-[10px] font-black uppercase tracking-widest text-purple-300 mb-2">E-Book Secure Path / URL</label>
+                            <label htmlFor="ebook_url" className="block text-[10px] font-black uppercase tracking-widest text-purple-300 mb-2">E-Book Secure Path / URL</label>
                             <div className="flex gap-2">
                               <input 
+                                id="ebook_url"
+                                name="ebook_url"
                                 type="text" 
                                 placeholder="Path in ebooks bucket..."
                                 value={formData.ebook_url}
@@ -1604,9 +1647,11 @@ function InventoryView({ data, categories, approvedAuthors, onUpdate }: any) {
                                 className="flex-1 px-6 py-4 bg-white rounded-2xl border-none outline-none focus:ring-2 focus:ring-purple-200 font-bold text-purple-900" 
                               />
                               <div className="relative">
-                                <label className="cursor-pointer bg-purple-500 text-white p-4 rounded-2xl hover:bg-purple-600 transition-all shadow-lg shadow-purple-200 flex items-center justify-center">
+                                <label htmlFor="ebook-upload" className="cursor-pointer bg-purple-500 text-white p-4 rounded-2xl hover:bg-purple-600 transition-all shadow-lg shadow-purple-200 flex items-center justify-center">
                                   <FileUp className="w-6 h-6" />
                                   <input 
+                                    id="ebook-upload"
+                                    name="ebook-upload"
                                     type="file" 
                                     accept=".pdf" 
                                     onChange={handleEbookUpload} 
@@ -1641,7 +1686,7 @@ function InventoryView({ data, categories, approvedAuthors, onUpdate }: any) {
 
                   <div className="space-y-6">
                     <div>
-                      <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Asset Imagery</label>
+                      <label htmlFor="asset-upload-input" className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Asset Imagery</label>
                       <div className="aspect-[3/4] bg-slate-50 rounded-3xl border-2 border-dashed border-slate-200 overflow-hidden relative group">
                         {formData.image_url ? (
                           <>
@@ -1668,12 +1713,14 @@ function InventoryView({ data, categories, approvedAuthors, onUpdate }: any) {
                             />
                           </div>
                         )}
-                        <input id="asset-upload" type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
+                        <input id="asset-upload" name="asset-upload" type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
                       </div>
                     </div>
                     <div>
-                      <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Classification</label>
+                      <label htmlFor="category_id" className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Classification</label>
                       <select 
+                        id="category_id"
+                        name="category_id"
                         required
                         value={formData.category_id}
                         onChange={(e) => setFormData({...formData, category_id: e.target.value})}
@@ -2108,8 +2155,10 @@ function SettingsView({ settings, onUpdate }: any) {
             </h3>
             <div className="space-y-6">
               <div>
-                <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Base Tax Rate (%)</label>
+                <label htmlFor="tax_rate" className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Base Tax Rate (%)</label>
                 <input 
+                  id="tax_rate"
+                  name="tax_rate"
                   type="number" 
                   value={formData.tax_rate}
                   onChange={(e) => setFormData({...formData, tax_rate: e.target.value})}
@@ -2117,8 +2166,10 @@ function SettingsView({ settings, onUpdate }: any) {
                 />
               </div>
               <div>
-                <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Default Currency</label>
+                <label htmlFor="default_currency" className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Default Currency</label>
                 <select 
+                  id="default_currency"
+                  name="default_currency"
                   value={formData.default_currency}
                   onChange={(e) => setFormData({...formData, default_currency: e.target.value})}
                   className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-2 focus:ring-primary/20 font-bold transition-all"
@@ -2137,12 +2188,13 @@ function SettingsView({ settings, onUpdate }: any) {
             </h3>
             <div className="space-y-6">
               <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl">
-                <div>
+                <div id="announcement-status-label">
                   <p className="font-bold text-slate-900">Broadcasting Status</p>
                   <p className="text-xs text-slate-500 font-medium">Display a global notification to all users</p>
                 </div>
                 <button 
                   type="button"
+                  aria-labelledby="announcement-status-label"
                   onClick={() => setFormData({...formData, announcement_active: !formData.announcement_active})}
                   className={`w-14 h-8 rounded-full transition-all relative ${formData.announcement_active ? 'bg-primary' : 'bg-slate-200'}`}
                 >
@@ -2150,8 +2202,10 @@ function SettingsView({ settings, onUpdate }: any) {
                 </button>
               </div>
               <div>
-                <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Announcement Payload</label>
+                <label htmlFor="global_announcement" className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Announcement Payload</label>
                 <textarea 
+                  id="global_announcement"
+                  name="global_announcement"
                   value={formData.global_announcement}
                   onChange={(e) => setFormData({...formData, global_announcement: e.target.value})}
                   className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-2 focus:ring-primary/20 font-bold transition-all h-32 resize-none"
@@ -2170,12 +2224,13 @@ function SettingsView({ settings, onUpdate }: any) {
             </h3>
             <div className="space-y-6">
               <div className="flex items-center justify-between p-6 bg-red-50 rounded-[32px] border border-red-100">
-                <div>
+                <div id="maintenance-mode-label">
                   <p className="font-black text-red-600 uppercase tracking-tighter">Maintenance Mode</p>
                   <p className="text-xs text-red-500 font-bold">Suspend all customer operations immediately</p>
                 </div>
                 <button 
                   type="button"
+                  aria-labelledby="maintenance-mode-label"
                   onClick={() => setFormData({...formData, maintenance_mode: !formData.maintenance_mode})}
                   className={`w-14 h-8 rounded-full transition-all relative ${formData.maintenance_mode ? 'bg-red-600' : 'bg-slate-200'}`}
                 >
@@ -2185,12 +2240,13 @@ function SettingsView({ settings, onUpdate }: any) {
               <div className="p-6 bg-slate-50 rounded-[32px] border border-slate-100">
                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-4">Membership Payment Wall</p>
                 <div className="flex items-center justify-between">
-                  <div>
+                  <div id="membership-wall-label">
                     <p className="font-bold text-slate-900">Gate exclusive content</p>
                     <p className="text-xs text-slate-500 font-medium">Enable/Disable membership paywall</p>
                   </div>
                   <button 
                     type="button"
+                    aria-labelledby="membership-wall-label"
                     onClick={() => setFormData({...formData, membership_wall_active: !formData.membership_wall_active})}
                     className={`w-14 h-8 rounded-full transition-all relative ${formData.membership_wall_active ? 'bg-primary' : 'bg-slate-200'}`}
                   >
@@ -2209,8 +2265,10 @@ function SettingsView({ settings, onUpdate }: any) {
             <div className="space-y-6">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Membership Price (KES)</label>
+                  <label htmlFor="membership_price" className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Membership Price (KES)</label>
                   <input 
+                    id="membership_price"
+                    name="membership_price"
                     type="number" 
                     value={formData.membership_price}
                     onChange={(e) => setFormData({...formData, membership_price: e.target.value})}
@@ -2218,8 +2276,10 @@ function SettingsView({ settings, onUpdate }: any) {
                   />
                 </div>
                 <div>
-                  <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Duration (Days)</label>
+                  <label htmlFor="membership_duration_days" className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Duration (Days)</label>
                   <input 
+                    id="membership_duration_days"
+                    name="membership_duration_days"
                     type="number" 
                     value={formData.membership_duration_days}
                     onChange={(e) => setFormData({...formData, membership_duration_days: e.target.value})}
@@ -2228,8 +2288,10 @@ function SettingsView({ settings, onUpdate }: any) {
                 </div>
               </div>
               <div>
-                <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Wall Title</label>
+                <label htmlFor="membership_title" className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Wall Title</label>
                 <input 
+                  id="membership_title"
+                  name="membership_title"
                   type="text" 
                   value={formData.membership_title}
                   onChange={(e) => setFormData({...formData, membership_title: e.target.value})}
@@ -2237,8 +2299,10 @@ function SettingsView({ settings, onUpdate }: any) {
                 />
               </div>
               <div>
-                <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Wall Description</label>
+                <label htmlFor="membership_description" className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Wall Description</label>
                 <textarea 
+                  id="membership_description"
+                  name="membership_description"
                   value={formData.membership_description}
                   onChange={(e) => setFormData({...formData, membership_description: e.target.value})}
                   className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-2 focus:ring-primary/20 font-bold transition-all h-24 resize-none" 
@@ -2337,7 +2401,7 @@ function IdentityView({ settings, onUpdate }: any) {
           </h3>
           <div className="space-y-6">
             <div>
-              <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Site Logo</label>
+              <label htmlFor="logo-upload" className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Site Logo</label>
               <div className="flex items-center gap-4">
                 {formData.site_logo && (
                   <div className="w-16 h-16 rounded-xl bg-slate-50 border border-slate-100 overflow-hidden">
@@ -2369,8 +2433,10 @@ function IdentityView({ settings, onUpdate }: any) {
               </div>
             </div>
             <div>
-              <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Platform Name</label>
+              <label htmlFor="site_name" className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Platform Name</label>
               <input 
+                id="site_name"
+                name="site_name"
                 type="text" 
                 value={formData.site_name}
                 onChange={(e) => setFormData({...formData, site_name: e.target.value})}
@@ -2378,8 +2444,10 @@ function IdentityView({ settings, onUpdate }: any) {
               />
             </div>
             <div>
-              <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Support Email</label>
+              <label htmlFor="contact_email" className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Support Email</label>
               <input 
+                id="contact_email"
+                name="contact_email"
                 type="email" 
                 value={formData.contact_email}
                 onChange={(e) => setFormData({...formData, contact_email: e.target.value})}
@@ -2388,8 +2456,10 @@ function IdentityView({ settings, onUpdate }: any) {
               />
             </div>
             <div>
-              <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Support Phone (Primary)</label>
+              <label htmlFor="contact_phone" className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Support Phone (Primary)</label>
               <input 
+                id="contact_phone"
+                name="contact_phone"
                 type="text" 
                 value={formData.contact_phone}
                 onChange={(e) => setFormData({...formData, contact_phone: e.target.value})}
@@ -2398,8 +2468,10 @@ function IdentityView({ settings, onUpdate }: any) {
               />
             </div>
             <div>
-              <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Support Phone (Secondary)</label>
+              <label htmlFor="secondary_phone" className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Support Phone (Secondary)</label>
               <input 
+                id="secondary_phone"
+                name="secondary_phone"
                 type="text" 
                 value={formData.secondary_phone}
                 onChange={(e) => setFormData({...formData, secondary_phone: e.target.value})}
@@ -2408,8 +2480,10 @@ function IdentityView({ settings, onUpdate }: any) {
               />
             </div>
             <div>
-              <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Global Support WhatsApp</label>
+              <label htmlFor="whatsapp_link" className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Global Support WhatsApp</label>
               <input 
+                id="whatsapp_link"
+                name="whatsapp_link"
                 type="text" 
                 value={formData.whatsapp_link}
                 onChange={(e) => setFormData({...formData, whatsapp_link: e.target.value})}
@@ -2417,8 +2491,10 @@ function IdentityView({ settings, onUpdate }: any) {
               />
             </div>
             <div>
-              <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Headquarters Address</label>
+              <label htmlFor="address" className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Headquarters Address</label>
               <textarea 
+                id="address"
+                name="address"
                 value={formData.address}
                 onChange={(e) => setFormData({...formData, address: e.target.value})}
                 className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-2 focus:ring-primary/20 font-bold transition-all h-24 resize-none" 
@@ -2434,8 +2510,10 @@ function IdentityView({ settings, onUpdate }: any) {
           </h3>
           <div className="space-y-6">
             <div>
-              <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Instagram Intelligence</label>
+              <label htmlFor="instagram_url" className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Instagram Intelligence</label>
               <input 
+                id="instagram_url"
+                name="instagram_url"
                 type="text" 
                 value={formData.instagram_url}
                 onChange={(e) => setFormData({...formData, instagram_url: e.target.value})}
@@ -2444,8 +2522,10 @@ function IdentityView({ settings, onUpdate }: any) {
               />
             </div>
             <div>
-              <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Facebook Node</label>
+              <label htmlFor="facebook_url" className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Facebook Node</label>
               <input 
+                id="facebook_url"
+                name="facebook_url"
                 type="text" 
                 value={formData.facebook_url}
                 onChange={(e) => setFormData({...formData, facebook_url: e.target.value})}
@@ -2454,8 +2534,10 @@ function IdentityView({ settings, onUpdate }: any) {
               />
             </div>
             <div>
-              <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">X (Twitter) Signal</label>
+              <label htmlFor="x_url" className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">X (Twitter) Signal</label>
               <input 
+                id="x_url"
+                name="x_url"
                 type="text" 
                 value={formData.x_url}
                 onChange={(e) => setFormData({...formData, x_url: e.target.value})}
@@ -2464,8 +2546,10 @@ function IdentityView({ settings, onUpdate }: any) {
               />
             </div>
             <div>
-              <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">LinkedIn Network</label>
+              <label htmlFor="linkedin_url" className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">LinkedIn Network</label>
               <input 
+                id="linkedin_url"
+                name="linkedin_url"
                 type="text" 
                 value={formData.linkedin_url}
                 onChange={(e) => setFormData({...formData, linkedin_url: e.target.value})}
@@ -2474,8 +2558,10 @@ function IdentityView({ settings, onUpdate }: any) {
               />
             </div>
             <div>
-              <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">TikTok Rhythm</label>
+              <label htmlFor="tiktok_url" className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">TikTok Rhythm</label>
               <input 
+                id="tiktok_url"
+                name="tiktok_url"
                 type="text" 
                 value={formData.tiktok_url}
                 onChange={(e) => setFormData({...formData, tiktok_url: e.target.value})}
@@ -2643,8 +2729,10 @@ function BannersView({ settings, cmsContent, onUpdate }: any) {
         <form onSubmit={handleHeroSubmit} className="bg-white p-10 rounded-[40px] border border-slate-100 shadow-sm space-y-8">
           <div className="space-y-6">
             <div>
-              <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Headline</label>
+              <label htmlFor="hero_headline" className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Headline</label>
               <input 
+                id="hero_headline"
+                name="hero_headline"
                 type="text" 
                 value={heroFormData.hero_headline}
                 onChange={(e) => setHeroFormData({...heroFormData, hero_headline: e.target.value})}
@@ -2652,8 +2740,10 @@ function BannersView({ settings, cmsContent, onUpdate }: any) {
               />
             </div>
             <div>
-              <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Sub-Narrative</label>
+              <label htmlFor="hero_subtext" className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Sub-Narrative</label>
               <textarea 
+                id="hero_subtext"
+                name="hero_subtext"
                 value={heroFormData.hero_subtext}
                 onChange={(e) => setHeroFormData({...heroFormData, hero_subtext: e.target.value})}
                 className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-2 focus:ring-primary/20 font-bold transition-all h-32 resize-none" 
@@ -2819,8 +2909,10 @@ function BannersView({ settings, cmsContent, onUpdate }: any) {
                 </div>
 
                 <div>
-                  <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Banner Title</label>
+                  <label htmlFor="banner_title" className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Banner Title</label>
                   <input 
+                    id="banner_title"
+                    name="banner_title"
                     required
                     type="text" 
                     value={bannerFormData.title}
@@ -2831,8 +2923,10 @@ function BannersView({ settings, cmsContent, onUpdate }: any) {
                 </div>
 
                 <div>
-                  <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Banner Content</label>
+                  <label htmlFor="banner_content" className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Banner Content</label>
                   <textarea 
+                    id="banner_content"
+                    name="banner_content"
                     required
                     value={bannerFormData.content}
                     onChange={(e) => setBannerFormData({...bannerFormData, content: e.target.value})}
@@ -2842,8 +2936,10 @@ function BannersView({ settings, cmsContent, onUpdate }: any) {
                 </div>
 
                 <div>
-                  <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Link URL (Optional)</label>
+                  <label htmlFor="banner_link_url" className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Link URL (Optional)</label>
                   <input 
+                    id="banner_link_url"
+                    name="banner_link_url"
                     type="text" 
                     value={bannerFormData.link_url}
                     onChange={(e) => setBannerFormData({...bannerFormData, link_url: e.target.value})}
@@ -3107,8 +3203,10 @@ function ShippingView({ data, onUpdate, formatPrice }: any) {
               <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-10 space-y-8 custom-scrollbar">
                 <div className="grid grid-cols-2 gap-6">
                   <div className="col-span-2">
-                    <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Region/Town Name</label>
+                    <label htmlFor="region_name" className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Region/Town Name</label>
                     <input 
+                      id="region_name"
+                      name="region_name"
                       required
                       type="text" 
                       value={formData.name}
@@ -3119,8 +3217,10 @@ function ShippingView({ data, onUpdate, formatPrice }: any) {
                   </div>
 
                   <div>
-                    <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Country Code</label>
+                    <label htmlFor="country_code" className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Country Code</label>
                     <input 
+                      id="country_code"
+                      name="country_code"
                       required
                       type="text" 
                       value={formData.country_code}
@@ -3132,8 +3232,10 @@ function ShippingView({ data, onUpdate, formatPrice }: any) {
                   </div>
 
                   <div>
-                    <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Region/Province</label>
+                    <label htmlFor="shipping_region" className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Region/Province</label>
                     <input 
+                      id="shipping_region"
+                      name="shipping_region"
                       type="text" 
                       value={formData.region}
                       onChange={(e) => setFormData({...formData, region: e.target.value})}
@@ -3143,8 +3245,10 @@ function ShippingView({ data, onUpdate, formatPrice }: any) {
                   </div>
 
                   <div className="col-span-2">
-                    <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Postal Codes (Comma separated)</label>
+                    <label htmlFor="postal_codes" className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Postal Codes (Comma separated)</label>
                     <input 
+                      id="postal_codes"
+                      name="postal_codes"
                       type="text" 
                       value={formData.postal_codes}
                       onChange={(e) => setFormData({...formData, postal_codes: e.target.value})}
@@ -3154,8 +3258,10 @@ function ShippingView({ data, onUpdate, formatPrice }: any) {
                   </div>
 
                   <div>
-                    <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Shipping Method</label>
+                    <label htmlFor="shipping_method" className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Shipping Method</label>
                     <select 
+                      id="shipping_method"
+                      name="shipping_method"
                       value={formData.shipping_method}
                       onChange={(e) => setFormData({...formData, shipping_method: e.target.value})}
                       className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-2 focus:ring-primary/20 font-bold"
@@ -3168,8 +3274,10 @@ function ShippingView({ data, onUpdate, formatPrice }: any) {
                   </div>
 
                   <div>
-                    <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Delivery Fee (KES)</label>
+                    <label htmlFor="delivery_fee" className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Delivery Fee (KES)</label>
                     <input 
+                      id="delivery_fee"
+                      name="delivery_fee"
                       required
                       type="number" 
                       value={formData.price}
@@ -3180,8 +3288,10 @@ function ShippingView({ data, onUpdate, formatPrice }: any) {
                   </div>
 
                   <div>
-                    <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Estimated Days</label>
+                    <label htmlFor="estimated_days" className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Estimated Days</label>
                     <input 
+                      id="estimated_days"
+                      name="estimated_days"
                       required
                       type="number" 
                       value={formData.estimated_days}
@@ -3192,9 +3302,10 @@ function ShippingView({ data, onUpdate, formatPrice }: any) {
                   </div>
 
                   <div>
-                    <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Regional Status</label>
+                    <label id="regional-status-label" className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Regional Status</label>
                     <button
                       type="button"
+                      aria-labelledby="regional-status-label"
                       onClick={() => setFormData({ ...formData, is_active: !formData.is_active })}
                       className={`w-full flex items-center justify-between px-6 py-4 rounded-2xl font-bold transition-all ${
                         formData.is_active 
@@ -3440,8 +3551,11 @@ function AreasView({ data, onUpdate, formatPrice }: any) {
       <div className="bg-white rounded-[40px] border border-slate-100 shadow-sm overflow-hidden">
         <div className="p-8 border-b border-slate-50 flex flex-col md:flex-row gap-6">
           <div className="relative flex-1">
+            <label htmlFor="areasSearch" className="sr-only">Search by town name or postal code</label>
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
             <input 
+              id="areasSearch"
+              name="areasSearch"
               type="text" 
               placeholder="Search by town name or postal code..." 
               value={searchTerm}
@@ -3449,14 +3563,19 @@ function AreasView({ data, onUpdate, formatPrice }: any) {
               className="w-full pl-12 pr-6 py-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-2 focus:ring-primary/20 font-bold transition-all"
             />
           </div>
-          <select 
-            value={countyFilter}
-            onChange={(e) => setCountyFilter(e.target.value)}
-            className="px-6 py-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-2 focus:ring-primary/20 font-bold transition-all min-w-[200px]"
-          >
-            <option value="all">All Counties</option>
-            {counties.map(c => <option key={c} value={c}>{c}</option>)}
-          </select>
+          <div className="flex flex-col gap-2">
+            <label htmlFor="countyFilter" className="sr-only">Filter by County</label>
+            <select 
+              id="countyFilter"
+              name="countyFilter"
+              value={countyFilter}
+              onChange={(e) => setCountyFilter(e.target.value)}
+              className="px-6 py-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-2 focus:ring-primary/20 font-bold transition-all min-w-[200px]"
+            >
+              <option value="all">All Counties</option>
+              {counties.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
         </div>
 
         <div className="overflow-x-auto">
@@ -3557,8 +3676,10 @@ function AreasView({ data, onUpdate, formatPrice }: any) {
               <form onSubmit={handleSubmit} className="p-10 max-h-[70vh] overflow-y-auto custom-scrollbar">
                 <div className="grid grid-cols-2 gap-6">
                   <div className="col-span-2">
-                    <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Town/Area Name</label>
+                    <label htmlFor="area_name" className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Town/Area Name</label>
                     <input 
+                      id="area_name"
+                      name="area_name"
                       required
                       type="text" 
                       value={formData.name}
@@ -3569,8 +3690,10 @@ function AreasView({ data, onUpdate, formatPrice }: any) {
                   </div>
 
                   <div>
-                    <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">County</label>
+                    <label htmlFor="area_county" className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">County</label>
                     <input 
+                      id="area_county"
+                      name="area_county"
                       type="text" 
                       value={formData.county}
                       onChange={(e) => setFormData({...formData, county: e.target.value})}
@@ -3580,8 +3703,10 @@ function AreasView({ data, onUpdate, formatPrice }: any) {
                   </div>
 
                   <div>
-                    <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Postal Codes</label>
+                    <label htmlFor="area_postal_codes" className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Postal Codes</label>
                     <input 
+                      id="area_postal_codes"
+                      name="area_postal_codes"
                       type="text" 
                       value={formData.postal_codes}
                       onChange={(e) => setFormData({...formData, postal_codes: e.target.value})}
@@ -3591,8 +3716,10 @@ function AreasView({ data, onUpdate, formatPrice }: any) {
                   </div>
 
                   <div>
-                    <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Base Delivery Fee (KES)</label>
+                    <label htmlFor="area_price" className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Base Delivery Fee (KES)</label>
                     <input 
+                      id="area_price"
+                      name="area_price"
                       required
                       type="number" 
                       min="0"
@@ -3604,8 +3731,10 @@ function AreasView({ data, onUpdate, formatPrice }: any) {
                   </div>
 
                   <div>
-                    <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Weight Surcharge (per KG)</label>
+                    <label htmlFor="area_weight_surcharge" className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Weight Surcharge (per KG)</label>
                     <input 
+                      id="area_weight_surcharge"
+                      name="area_weight_surcharge"
                       type="number" 
                       min="0"
                       value={formData.weight_surcharge}
@@ -3616,8 +3745,10 @@ function AreasView({ data, onUpdate, formatPrice }: any) {
                   </div>
 
                   <div>
-                    <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Volume Surcharge (per m³)</label>
+                    <label htmlFor="area_volume_surcharge" className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Volume Surcharge (per m³)</label>
                     <input 
+                      id="area_volume_surcharge"
+                      name="area_volume_surcharge"
                       type="number" 
                       min="0"
                       value={formData.volume_surcharge}
@@ -3628,8 +3759,10 @@ function AreasView({ data, onUpdate, formatPrice }: any) {
                   </div>
 
                   <div>
-                    <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Valid From</label>
+                    <label htmlFor="area_valid_from" className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Valid From</label>
                     <input 
+                      id="area_valid_from"
+                      name="area_valid_from"
                       type="date" 
                       value={formData.valid_from}
                       onChange={(e) => setFormData({...formData, valid_from: e.target.value})}
@@ -3638,8 +3771,10 @@ function AreasView({ data, onUpdate, formatPrice }: any) {
                   </div>
 
                   <div>
-                    <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Valid Until (Optional)</label>
+                    <label htmlFor="area_valid_until" className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Valid Until (Optional)</label>
                     <input 
+                      id="area_valid_until"
+                      name="area_valid_until"
                       type="date" 
                       value={formData.valid_until}
                       onChange={(e) => setFormData({...formData, valid_until: e.target.value})}
@@ -3734,8 +3869,11 @@ function InquiriesView({ data, onUpdate }: any) {
         
         <div className="flex flex-wrap gap-4 w-full md:w-auto">
           <div className="relative flex-1 md:w-64">
+            <label htmlFor="inquiriesSearch" className="sr-only">Search inquiries</label>
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
             <input 
+              id="inquiriesSearch"
+              name="inquiriesSearch"
               type="text" 
               placeholder="Search inquiries..." 
               value={searchTerm}
@@ -3743,26 +3881,36 @@ function InquiriesView({ data, onUpdate }: any) {
               className="w-full pl-10 pr-4 py-3 bg-white border border-slate-100 rounded-xl outline-none focus:ring-2 focus:ring-primary/20 font-bold transition-all text-sm"
             />
           </div>
-          <select 
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="px-4 py-3 bg-white border border-slate-100 rounded-xl outline-none focus:ring-2 focus:ring-primary/20 font-bold transition-all text-sm"
-          >
-            <option value="all">All Status</option>
-            <option value="New">New</option>
-            <option value="In Progress">In Progress</option>
-            <option value="Resolved">Resolved</option>
-          </select>
-          <select 
-            value={deptFilter}
-            onChange={(e) => setDeptFilter(e.target.value)}
-            className="px-4 py-3 bg-white border border-slate-100 rounded-xl outline-none focus:ring-2 focus:ring-primary/20 font-bold transition-all text-sm"
-          >
-            <option value="all">All Departments</option>
-            {departments.map(dept => (
-              <option key={dept} value={dept}>{dept}</option>
-            ))}
-          </select>
+          <div className="flex gap-2">
+            <label htmlFor="statusFilter" className="sr-only">Filter by Status</label>
+            <select 
+              id="statusFilter"
+              name="statusFilter"
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="px-4 py-3 bg-white border border-slate-100 rounded-xl outline-none focus:ring-2 focus:ring-primary/20 font-bold transition-all text-sm"
+            >
+              <option value="all">All Status</option>
+              <option value="New">New</option>
+              <option value="In Progress">In Progress</option>
+              <option value="Resolved">Resolved</option>
+            </select>
+          </div>
+          <div className="flex gap-2">
+            <label htmlFor="deptFilter" className="sr-only">Filter by Department</label>
+            <select 
+              id="deptFilter"
+              name="deptFilter"
+              value={deptFilter}
+              onChange={(e) => setDeptFilter(e.target.value)}
+              className="px-4 py-3 bg-white border border-slate-100 rounded-xl outline-none focus:ring-2 focus:ring-primary/20 font-bold transition-all text-sm"
+            >
+              <option value="all">All Departments</option>
+              {departments.map(dept => (
+                <option key={dept} value={dept}>{dept}</option>
+              ))}
+            </select>
+          </div>
         </div>
       </div>
 
@@ -4677,7 +4825,9 @@ function AgreementsView({ partnerships, authors, protocols, onUpdate }: any) {
       
       // 1. Find the latest active protocol for this type to link it
       const type = table === 'author_applications' ? 'author' : 'partner';
-      const protocol = protocols.find((p: any) => p.type === type && p.is_active);
+      // Mapping UI 'partner' to database 'service_provider' for templates
+      const protocolType = type === 'partner' ? 'service_provider' : 'author';
+      const protocol = protocols.find((p: any) => p.type === protocolType && p.is_active);
 
       // 2. Sync with the applications API
       const response = await fetch('/api/applications', {
@@ -4707,7 +4857,10 @@ function AgreementsView({ partnerships, authors, protocols, onUpdate }: any) {
           key_terms: protocol?.metadata?.key_terms || []
         }, { onConflict: 'partner_id, type' });
 
-      if (agreementError) console.error('Agreement record sync failed:', agreementError);
+      if (agreementError) {
+        console.error('Agreement record sync failed:', agreementError);
+        toast.error(`Database sync failed: ${agreementError.message}`, { id: loadingToast });
+      }
 
       toast.success('Agreement issued and notification sent', { id: loadingToast });
       onUpdate();
@@ -4725,10 +4878,11 @@ function AgreementsView({ partnerships, authors, protocols, onUpdate }: any) {
         });
         
         const type = table === 'author_applications' ? 'author' : 'partner';
-        const protocol = protocols.find((p: any) => p.type === type && p.is_active);
+        const protocolType = type === 'partner' ? 'service_provider' : 'author';
+        const protocol = protocols.find((p: any) => p.type === protocolType && p.is_active);
 
         // Try to sync agreement table even in fallback
-        await supabase.from('agreements').upsert({
+        const { error: fallbackError } = await supabase.from('agreements').upsert({
           title: protocol?.title || `${table.includes('author') ? 'Author' : 'Partnership'} Collaboration Protocol`,
           description: protocol?.content || `Terms and conditions for your collaboration.`,
           template_url: path,
@@ -4738,10 +4892,15 @@ function AgreementsView({ partnerships, authors, protocols, onUpdate }: any) {
           protocol_id: protocol?.id
         }, { onConflict: 'partner_id, type' });
 
+        if (fallbackError) {
+          console.error('Fallback agreement sync failed:', fallbackError);
+        }
+
         toast.success('Agreement uploaded (Direct DB)', { id: loadingToast });
         onUpdate();
-      } catch (dbError) {
-        toast.error(error.message || 'Upload failed', { id: loadingToast });
+      } catch (dbError: any) {
+        console.error('Agreement fallback error:', dbError);
+        toast.error(dbError.message || 'Upload failed', { id: loadingToast });
       }
     } finally {
       setIsUploading(false);
@@ -5319,9 +5478,19 @@ function PromosView({ data, onUpdate }: any) {
     const loadingToast = toast.loading(editingPromo ? 'Updating Campaign...' : 'Initializing Campaign...');
     
     try {
+      // 1. Validate JSON first
+      let parsedLogic = {};
+      try {
+        parsedLogic = JSON.parse(formData.command_logic || '{}');
+      } catch (jsonErr: any) {
+        console.error('JSON Parse Error:', jsonErr);
+        toast.error(`Invalid Command Logic: ${jsonErr.message}`, { id: loadingToast });
+        return;
+      }
+
       const payload = {
         ...formData,
-        command_logic: JSON.parse(formData.command_logic || '{}')
+        command_logic: parsedLogic
       };
 
       if (editingPromo) {
@@ -5333,9 +5502,10 @@ function PromosView({ data, onUpdate }: any) {
       toast.success(editingPromo ? 'Campaign Modified' : 'Campaign Initialized', { id: loadingToast });
       setIsModalOpen(false);
       onUpdate();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Campaign error:', error);
-      toast.error('Campaign synchronization failed. Check JSON logic.', { id: loadingToast });
+      const errorMessage = error.message || 'Check database connectivity and permissions.';
+      toast.error(`Campaign synchronization failed: ${errorMessage}`, { id: loadingToast });
     }
   };
 
@@ -5626,8 +5796,9 @@ function PromosView({ data, onUpdate }: any) {
                   </div>
                 ) : (
                   <div className="space-y-8">
-                    <div className="h-64">
-                      <ResponsiveContainer width="100%" height="100%">
+                    <div className="h-64 relative">
+                      {isMounted && (
+                        <ResponsiveContainer width="100%" height="100%">
                         <AreaChart data={selectedMetrics}>
                           <defs>
                             <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
@@ -5645,6 +5816,7 @@ function PromosView({ data, onUpdate }: any) {
                           <Area type="monotone" dataKey="metric_value" stroke="#3b82f6" strokeWidth={4} fillOpacity={1} fill="url(#colorValue)" />
                         </AreaChart>
                       </ResponsiveContainer>
+                      )}
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
@@ -5742,7 +5914,10 @@ function PromosView({ data, onUpdate }: any) {
                           required
                           type="number" 
                           value={formData.discount_value}
-                          onChange={(e) => setFormData({...formData, discount_value: parseFloat(e.target.value)})}
+                          onChange={(e) => {
+                            const val = parseFloat(e.target.value);
+                            setFormData(prev => ({ ...prev, discount_value: isNaN(val) ? 0 : val }));
+                          }}
                           className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-2 focus:ring-primary/20 font-bold" 
                         />
                       </div>
@@ -5760,7 +5935,7 @@ function PromosView({ data, onUpdate }: any) {
                           required
                           type="datetime-local" 
                           value={formData.start_at}
-                          onChange={(e) => setFormData({...formData, start_at: e.target.value})}
+                          onChange={(e) => setFormData(prev => ({ ...prev, start_at: e.target.value }))}
                           className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-2 focus:ring-primary/20 font-bold text-xs" 
                         />
                       </div>
@@ -5769,7 +5944,7 @@ function PromosView({ data, onUpdate }: any) {
                         <input 
                           type="date" 
                           value={formData.expires_at}
-                          onChange={(e) => setFormData({...formData, expires_at: e.target.value})}
+                          onChange={(e) => setFormData(prev => ({ ...prev, expires_at: e.target.value }))}
                           className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-2 focus:ring-primary/20 font-bold text-xs" 
                         />
                       </div>
@@ -5781,7 +5956,10 @@ function PromosView({ data, onUpdate }: any) {
                           required
                           type="number" 
                           value={formData.usage_limit}
-                          onChange={(e) => setFormData({...formData, usage_limit: parseInt(e.target.value)})}
+                          onChange={(e) => {
+                            const val = parseInt(e.target.value);
+                            setFormData(prev => ({ ...prev, usage_limit: isNaN(val) ? 0 : val }));
+                          }}
                           className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-2 focus:ring-primary/20 font-bold" 
                         />
                       </div>
@@ -5791,7 +5969,10 @@ function PromosView({ data, onUpdate }: any) {
                           required
                           type="number" 
                           value={formData.predicted_impact}
-                          onChange={(e) => setFormData({...formData, predicted_impact: parseFloat(e.target.value)})}
+                          onChange={(e) => {
+                            const val = parseFloat(e.target.value);
+                            setFormData(prev => ({ ...prev, predicted_impact: isNaN(val) ? 0 : val }));
+                          }}
                           className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-2 focus:ring-primary/20 font-bold" 
                         />
                       </div>
@@ -5805,7 +5986,7 @@ function PromosView({ data, onUpdate }: any) {
                   </h3>
                   <textarea 
                     value={formData.command_logic}
-                    onChange={(e) => setFormData({...formData, command_logic: e.target.value})}
+                    onChange={(e) => setFormData(prev => ({ ...prev, command_logic: e.target.value }))}
                     placeholder='{"auto_expire": true, "notify_users": false}'
                     className="w-full h-40 px-6 py-4 bg-slate-900 text-green-400 font-mono text-xs rounded-2xl border-none outline-none focus:ring-2 focus:ring-primary/20 custom-scrollbar"
                   />

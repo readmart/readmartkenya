@@ -1083,6 +1083,7 @@ export async function createRecord(table: string, record: any) {
       throw err;
     }
   }, {
+    retries: 10,
     onRetry: (error, attempt) => {
       console.warn(`Retry attempt ${attempt} for createRecord on ${table}:`, error.message);
     }
@@ -1136,6 +1137,7 @@ export async function updateRecord(table: string, id: string, updates: any) {
       throw err;
     }
   }, {
+    retries: 10,
     onRetry: (error, attempt) => {
       console.warn(`Retry attempt ${attempt} for updateRecord on ${table}:`, error.message);
     }
@@ -1251,6 +1253,7 @@ export async function createProduct(product: any) {
   let currentData = { ...productData };
 
   return withRetry(async () => {
+    console.log('[API] Creating product with payload:', currentData);
     const { data, error } = await supabase
       .from('products')
       .insert([currentData])
@@ -1258,6 +1261,7 @@ export async function createProduct(product: any) {
       .maybeSingle();
 
     if (error) {
+      console.error('[API] Product insertion error:', error);
       // Handle missing columns
       if (error.code === 'PGRST204' || (error.message?.includes('column') && error.message?.includes('not found'))) {
         const match = error.message.match(/column ['"](.+)['"]/);
@@ -1271,8 +1275,10 @@ export async function createProduct(product: any) {
       throw error;
     }
 
+    console.log('[API] Product creation success:', data);
     if (data && productData.type === 'ebook' && ebook_metadata) {
       try {
+        console.log('[API] Saving ebook metadata for product:', data.id);
         await supabase.from('ebook_metadata').insert([{
           ...ebook_metadata,
           product_id: data.id
@@ -1287,7 +1293,7 @@ export async function createProduct(product: any) {
     }
 
     return data;
-  });
+  }, { retries: 3 });
 }
 
 export async function updateProduct(id: string, product: any) {
@@ -1306,6 +1312,7 @@ export async function updateProduct(id: string, product: any) {
   let currentData = { ...productData };
 
   return withRetry(async () => {
+    console.log(`[API] Updating product ${id} with payload:`, currentData);
     const { data, error } = await supabase
       .from('products')
       .update(currentData)
@@ -1314,6 +1321,7 @@ export async function updateProduct(id: string, product: any) {
       .maybeSingle();
 
     if (error) {
+      console.error('[API] Product update error:', error);
       // Handle missing columns
       if (error.code === 'PGRST204' || (error.message?.includes('column') && error.message?.includes('not found'))) {
         const match = error.message.match(/column ['"](.+)['"]/);
@@ -1327,27 +1335,15 @@ export async function updateProduct(id: string, product: any) {
       throw error;
     }
 
-    if (productData.type === 'ebook' && ebook_metadata) {
+    console.log('[API] Product update success:', data);
+    if (data && productData.type === 'ebook' && ebook_metadata) {
       try {
-        const { data: existing } = await supabase
-          .from('ebook_metadata')
-          .select('id')
-          .eq('product_id', id)
-          .maybeSingle();
-
-        if (existing) {
-          await supabase
-            .from('ebook_metadata')
-            .update(ebook_metadata)
-            .eq('id', existing.id);
-        } else {
-          await supabase
-            .from('ebook_metadata')
-            .insert([{
-              ...ebook_metadata,
-              product_id: id
-            }]);
-        }
+        console.log('[API] Updating ebook metadata for product:', id);
+        await supabase.from('ebook_metadata')
+          .upsert([{
+            ...ebook_metadata,
+            product_id: id
+          }]);
       } catch (err) {
         console.warn('Failed to update ebook metadata:', err);
       }

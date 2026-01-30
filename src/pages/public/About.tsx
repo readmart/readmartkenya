@@ -399,8 +399,10 @@ export default function About() {
               <form onSubmit={handleQuickInquiry} className="space-y-6">
                 <div className="grid md:grid-cols-2 gap-6">
                   <div className="space-y-2">
-                    <label className="text-sm font-black uppercase tracking-widest ml-1">Name</label>
+                    <label htmlFor="partnership-name" className="text-sm font-black uppercase tracking-widest ml-1">Name</label>
                     <input 
+                      id="partnership-name"
+                      name="partnership-name"
                       type="text"
                       required
                       value={formData.name}
@@ -410,8 +412,10 @@ export default function About() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-sm font-black uppercase tracking-widest ml-1">Email</label>
+                    <label htmlFor="partnership-email" className="text-sm font-black uppercase tracking-widest ml-1">Email</label>
                     <input 
+                      id="partnership-email"
+                      name="partnership-email"
                       type="email"
                       required
                       value={formData.email}
@@ -422,8 +426,10 @@ export default function About() {
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <label className="text-sm font-black uppercase tracking-widest ml-1">How can we partner?</label>
+                  <label htmlFor="partnership-message" className="text-sm font-black uppercase tracking-widest ml-1">How can we partner?</label>
                   <textarea 
+                    id="partnership-message"
+                    name="partnership-message"
                     required
                     value={formData.message}
                     onChange={e => setFormData({...formData, message: e.target.value})}
@@ -475,7 +481,10 @@ export default function About() {
             </p>
             
             <form className="flex flex-col sm:flex-row gap-4 max-w-lg mx-auto" onSubmit={handleNewsletterSubscribe}>
+              <label htmlFor="newsletter-email" className="sr-only">Email Address</label>
               <input 
+                id="newsletter-email"
+                name="newsletter-email"
                 type="email"
                 required
                 value={newsletterEmail}

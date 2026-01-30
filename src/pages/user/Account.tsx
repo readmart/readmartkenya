@@ -386,8 +386,10 @@ export default function Account() {
                           <form onSubmit={handlePasswordChange} className="glass p-8 rounded-3xl border-primary/30 space-y-6">
                             <div className="grid md:grid-cols-2 gap-6">
                               <div className="space-y-2">
-                                <label className="text-xs font-black uppercase tracking-widest text-muted-foreground ml-1">New Password</label>
+                                <label htmlFor="new_password" id="label-new_password" className="text-xs font-black uppercase tracking-widest text-muted-foreground ml-1">New Password</label>
                                 <input 
+                                  id="new_password"
+                                  name="new_password"
                                   type="password" 
                                   value={passwordForm.new}
                                   onChange={(e) => setPasswordForm({ ...passwordForm, new: e.target.value })}
@@ -396,8 +398,10 @@ export default function Account() {
                                 />
                               </div>
                               <div className="space-y-2">
-                                <label className="text-xs font-black uppercase tracking-widest text-muted-foreground ml-1">Confirm New Password</label>
+                                <label htmlFor="confirm_password" id="label-confirm_password" className="text-xs font-black uppercase tracking-widest text-muted-foreground ml-1">Confirm New Password</label>
                                 <input 
+                                  id="confirm_password"
+                                  name="confirm_password"
                                   type="password" 
                                   value={passwordForm.confirm}
                                   onChange={(e) => setPasswordForm({ ...passwordForm, confirm: e.target.value })}
@@ -678,11 +682,15 @@ export default function Account() {
                           <div className="flex items-center gap-4">
                             <div className="p-3 glass rounded-xl text-primary"><Clock className="w-5 h-5" /></div>
                             <div>
-                              <p className="font-black text-sm uppercase tracking-widest">Order Updates</p>
+                              <p id="sms-updates-label" className="font-black text-sm uppercase tracking-widest">Order Updates</p>
                               <p className="text-xs text-muted-foreground">Receive SMS for delivery status</p>
                             </div>
                           </div>
-                          <div 
+                          <button 
+                            type="button"
+                            role="switch"
+                            aria-checked={profile?.preferences?.sms_notifications}
+                            aria-labelledby="sms-updates-label"
                             onClick={toggleSMS}
                             className={`w-12 h-6 rounded-full relative p-1 cursor-pointer transition-colors ${
                               profile?.preferences?.sms_notifications ? 'bg-primary' : 'bg-white/10'
@@ -691,17 +699,21 @@ export default function Account() {
                             <div className={`w-4 h-4 bg-white rounded-full absolute transition-all ${
                               profile?.preferences?.sms_notifications ? 'right-1' : 'left-1'
                             }`} />
-                          </div>
+                          </button>
                         </div>
                         <div className="glass p-6 rounded-3xl flex items-center justify-between border-white/5">
                           <div className="flex items-center gap-4">
                             <div className="p-3 glass rounded-xl text-secondary"><Star className="w-5 h-5" /></div>
                             <div>
-                              <p className="font-black text-sm uppercase tracking-widest">Newsletter</p>
+                              <p id="newsletter-label" className="font-black text-sm uppercase tracking-widest">Newsletter</p>
                               <p className="text-xs text-muted-foreground">Weekly book recommendations</p>
                             </div>
                           </div>
-                          <div 
+                          <button 
+                            type="button"
+                            role="switch"
+                            aria-checked={profile?.preferences?.newsletter}
+                            aria-labelledby="newsletter-label"
                             onClick={toggleNewsletter}
                             className={`w-12 h-6 rounded-full relative p-1 cursor-pointer transition-colors ${
                               profile?.preferences?.newsletter ? 'bg-secondary' : 'bg-white/10'
@@ -710,7 +722,7 @@ export default function Account() {
                             <div className={`w-4 h-4 bg-white rounded-full absolute transition-all ${
                               profile?.preferences?.newsletter ? 'right-1' : 'left-1'
                             }`} />
-                          </div>
+                          </button>
                         </div>
                       </div>
                     </section>
@@ -759,7 +771,7 @@ export default function Account() {
                         ) : isAddingPayment ? (
                           <form onSubmit={handleAddPayment} className="glass p-8 rounded-3xl border-primary/30 space-y-6">
                             <div className="flex items-center justify-between mb-2">
-                              <h4 className="font-black uppercase text-sm tracking-widest">Add M-Pesa Number</h4>
+                              <label htmlFor="mpesa_number" className="font-black uppercase text-sm tracking-widest cursor-pointer">Add M-Pesa Number</label>
                               <button 
                                 type="button" 
                                 onClick={() => setIsAddingPayment(false)}
@@ -772,6 +784,8 @@ export default function Account() {
                               <div className="relative">
                                 <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
                                 <input 
+                                  id="mpesa_number"
+                                  name="mpesa_number"
                                   type="tel" 
                                   placeholder="e.g. 254794129958"
                                   value={newPaymentPhone}

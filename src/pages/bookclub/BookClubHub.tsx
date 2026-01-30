@@ -92,8 +92,11 @@ const BookClubHub: React.FC = () => {
           </div>
 
           <div className="relative w-full md:w-96">
+            <label htmlFor="club-search" className="sr-only">Search clubs</label>
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
             <input 
+              id="club-search"
+              name="club-search"
               type="text"
               placeholder="Search clubs by name or genre..."
               value={searchQuery}
@@ -229,6 +232,7 @@ const ClubCard: React.FC<{ club: any, index: number }> = ({ club, index }) => {
           <Link 
             to={`/book-club-hub/${club.id}`}
             className="flex items-center gap-1 text-primary font-bold text-sm hover:gap-2 transition-all"
+            aria-label={`Enter ${club.name} club`}
           >
             Enter Club
             <ChevronRight className="w-4 h-4" />

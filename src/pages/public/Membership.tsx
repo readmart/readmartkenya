@@ -143,7 +143,11 @@ export default function Membership() {
               }
             }
           )
-          .subscribe();
+          .subscribe((status) => {
+            if (status !== 'SUBSCRIBED') {
+              console.warn('Membership Realtime subscription status:', status);
+            }
+          });
 
         // Polling fallback
         let attempts = 0;
@@ -300,10 +304,12 @@ export default function Membership() {
 
                 <form onSubmit={handleJoin} className="space-y-6">
                   {/* Payment Method Selection */}
-                  <div className="grid grid-cols-2 gap-4 p-2 bg-slate-50 rounded-2xl border-2 border-slate-100">
+                  <div className="grid grid-cols-2 gap-4 p-2 bg-slate-50 rounded-2xl border-2 border-slate-100" role="radiogroup" aria-label="Select payment method">
                     <button
                       type="button"
                       onClick={() => setPaymentMethod('m-pesa')}
+                      role="radio"
+                      aria-checked={paymentMethod === 'm-pesa'}
                       className={`flex flex-col items-center gap-2 py-4 rounded-xl transition-all ${paymentMethod === 'm-pesa' ? 'bg-white shadow-lg shadow-slate-200/50 text-primary border-white' : 'text-slate-400 hover:text-slate-600'}`}
                     >
                       <div className={`p-2 rounded-lg ${paymentMethod === 'm-pesa' ? 'bg-primary/10' : 'bg-slate-100'}`}>
@@ -314,6 +320,8 @@ export default function Membership() {
                     <button
                       type="button"
                       onClick={() => setPaymentMethod('card')}
+                      role="radio"
+                      aria-checked={paymentMethod === 'card'}
                       className={`flex flex-col items-center gap-2 py-4 rounded-xl transition-all ${paymentMethod === 'card' ? 'bg-white shadow-lg shadow-slate-200/50 text-primary border-white' : 'text-slate-400 hover:text-slate-600'}`}
                     >
                       <div className={`p-2 rounded-lg ${paymentMethod === 'card' ? 'bg-primary/10' : 'bg-slate-100'}`}>
@@ -324,7 +332,7 @@ export default function Membership() {
                   </div>
 
                   <div className="space-y-3">
-                    <label className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground ml-2">
+                    <label htmlFor="membership_phone" className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground ml-2">
                       {paymentMethod === 'm-pesa' ? 'M-Pesa Phone Number' : 'Phone Number for Confirmation'}
                     </label>
                     <div className="relative group">
@@ -332,6 +340,8 @@ export default function Membership() {
                         <Phone className="w-5 h-5" />
                       </div>
                       <input
+                        id="membership_phone"
+                        name="membership_phone"
                         type="tel"
                         required
                         placeholder="2547XXXXXXXX"
@@ -345,6 +355,7 @@ export default function Membership() {
                   <button
                     type="submit"
                     disabled={isSubmitting}
+                    aria-label={isSubmitting ? "Processing membership payment" : "Join membership now"}
                     className="w-full bg-primary text-white py-6 rounded-[2rem] font-black uppercase tracking-[0.2em] text-sm flex items-center justify-center gap-3 hover:scale-[1.02] active:scale-[0.98] transition-all shadow-2xl shadow-primary/30 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {isSubmitting ? (

@@ -191,10 +191,12 @@ export default function AuthorApply() {
           <form onSubmit={handleSubmit} className="space-y-8">
             <div className="grid md:grid-cols-2 gap-8">
               <div className="space-y-2">
-                <label className="text-xs font-black uppercase tracking-widest text-muted-foreground ml-2">Full Name</label>
+                <label htmlFor="full_name" className="text-xs font-black uppercase tracking-widest text-muted-foreground ml-2">Full Name</label>
                 <div className="relative">
                   <User className="absolute left-6 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
                   <input 
+                    id="full_name"
+                    name="full_name"
                     type="text" 
                     required
                     value={formData.full_name}
@@ -206,10 +208,12 @@ export default function AuthorApply() {
               </div>
 
               <div className="space-y-2">
-                <label className="text-xs font-black uppercase tracking-widest text-muted-foreground ml-2">Email Address</label>
+                <label htmlFor="email_address" className="text-xs font-black uppercase tracking-widest text-muted-foreground ml-2">Email Address</label>
                 <div className="relative">
                   <Mail className="absolute left-6 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
                   <input 
+                    id="email_address"
+                    name="email_address"
                     type="email" 
                     required
                     value={formData.email}
@@ -223,10 +227,12 @@ export default function AuthorApply() {
 
             <div className="grid md:grid-cols-2 gap-8">
               <div className="space-y-2">
-                <label className="text-xs font-black uppercase tracking-widest text-muted-foreground ml-2">Contact Number</label>
+                <label htmlFor="contact_number" className="text-xs font-black uppercase tracking-widest text-muted-foreground ml-2">Contact Number</label>
                 <div className="relative">
                   <Phone className="absolute left-6 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
                   <input 
+                    id="contact_number"
+                    name="contact_number"
                     type="tel" 
                     required
                     value={formData.contact_info}
@@ -238,8 +244,10 @@ export default function AuthorApply() {
               </div>
 
               <div className="space-y-2">
-                <label className="text-xs font-black uppercase tracking-widest text-muted-foreground ml-2">Experience Level</label>
+                <label htmlFor="experience_level" className="text-xs font-black uppercase tracking-widest text-muted-foreground ml-2">Experience Level</label>
                 <select 
+                  id="experience_level"
+                  name="experience_level"
                   value={formData.experience}
                   onChange={(e) => setFormData({...formData, experience: e.target.value})}
                   className="glass w-full px-6 py-4 rounded-2xl outline-none focus:ring-2 focus:ring-primary font-bold appearance-none cursor-pointer"
@@ -252,7 +260,7 @@ export default function AuthorApply() {
             </div>
 
             <div className="space-y-4">
-              <label className="text-xs font-black uppercase tracking-widest text-muted-foreground ml-2">Qualification Proof</label>
+              <label htmlFor="qualification_proof" className="text-xs font-black uppercase tracking-widest text-muted-foreground ml-2">Qualification Proof</label>
               
               <div 
                 className={`glass-card p-8 border-2 border-dashed transition-all space-y-4 flex flex-col items-center justify-center text-center ${
@@ -261,6 +269,8 @@ export default function AuthorApply() {
                 onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
                 onDragLeave={() => setIsDragging(false)}
                 onDrop={handleDrop}
+                role="region"
+                aria-label="File upload drop zone"
               >
                 <div className={`w-16 h-16 rounded-full flex items-center justify-center mb-2 ${
                   uploadedFile ? 'bg-green-500/10 text-green-500' : 'bg-primary/10 text-primary'
@@ -279,6 +289,7 @@ export default function AuthorApply() {
                         type="button"
                         onClick={() => setUploadedFile(null)}
                         className="p-2 hover:bg-white/10 rounded-full transition-colors"
+                        aria-label="Remove uploaded file"
                       >
                         <X className="w-5 h-5 text-muted-foreground" />
                       </button>
@@ -295,8 +306,10 @@ export default function AuthorApply() {
                         PDF, DOCX, or Images (Max 10MB)
                       </p>
                     </div>
-                    <label className="inline-block">
+                    <label htmlFor="qualification_proof" className="inline-block">
                       <input 
+                        id="qualification_proof"
+                        name="qualification_proof"
                         type="file" 
                         className="hidden" 
                         accept=".pdf,.docx,.jpg,.jpeg,.png"
@@ -313,10 +326,12 @@ export default function AuthorApply() {
             </div>
 
             <div className="space-y-2">
-              <label className="text-xs font-black uppercase tracking-widest text-muted-foreground ml-2">Collaboration Intent</label>
+              <label htmlFor="collaboration_intent" className="text-xs font-black uppercase tracking-widest text-muted-foreground ml-2">Collaboration Intent</label>
               <div className="relative">
                 <MessageSquare className="absolute left-6 top-6 w-5 h-5 text-muted-foreground" />
                 <textarea 
+                  id="collaboration_intent"
+                  name="collaboration_intent"
                   required
                   value={formData.collaboration_intent}
                   onChange={(e) => setFormData({...formData, collaboration_intent: e.target.value})}

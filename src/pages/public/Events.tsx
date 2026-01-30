@@ -74,7 +74,10 @@ export default function Events() {
                 <div>
                   <div className="flex justify-between items-start mb-4">
                     <h3 className="text-3xl font-black tracking-tight group-hover:text-primary transition-colors">{event.title}</h3>
-                    <button className="p-3 glass rounded-xl hover:bg-white/10 transition-all">
+                    <button 
+                      className="p-3 glass rounded-xl hover:bg-white/10 transition-all"
+                      aria-label={`Share event: ${event.title}`}
+                    >
                       <Share2 className="w-5 h-5" />
                     </button>
                   </div>
@@ -123,7 +126,10 @@ export default function Events() {
                   </p>
                 </div>
                 
-                <button className="w-full sm:w-fit bg-primary text-white px-10 py-4 rounded-2xl font-black uppercase tracking-widest text-xs hover:scale-105 transition-all shadow-xl shadow-primary/20">
+                <button 
+                  className="w-full sm:w-fit bg-primary text-white px-10 py-4 rounded-2xl font-black uppercase tracking-widest text-xs hover:scale-105 transition-all shadow-xl shadow-primary/20"
+                  aria-label={`Book Your Spot for ${event.title}`}
+                >
                   Book Your Spot
                 </button>
               </div>

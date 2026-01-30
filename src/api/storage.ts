@@ -33,11 +33,12 @@ export async function uploadProductImage(file: File, options: UploadOptions = {}
     allowedTypes: options.allowedTypes || ['image/jpeg', 'image/png', 'image/webp'] 
   });
 
-  const fileExt = file.name.split('.').pop();
+  const fileExt = file.name.includes('.') ? file.name.split('.').pop() : 'jpg';
   const fileName = `${Math.random().toString(36).substring(2)}_${Date.now()}.${fileExt}`;
   const filePath = options.path ? `${options.path}/${fileName}` : fileName;
 
   return withRetry(async () => {
+    console.log(`[Storage] Uploading to products: ${filePath} (${file.size} bytes)`);
     const { data, error } = await supabase.storage
       .from('products')
       .upload(filePath, file, {
@@ -47,8 +48,15 @@ export async function uploadProductImage(file: File, options: UploadOptions = {}
         onUploadProgress: options.onProgress
       });
 
-    if (error) throw error;
+    if (error) {
+      console.error('[Storage] Upload error:', error);
+      if (error.message.includes('bucket not found')) {
+        throw new Error('Products storage bucket not initialized. Please contact support.');
+      }
+      throw error;
+    }
 
+    console.log('[Storage] Upload success:', data);
     const { data: { publicUrl } } = supabase.storage
       .from('products')
       .getPublicUrl(data.path);
@@ -75,29 +83,26 @@ export async function uploadEbookFile(file: File, identifier: string, options: U
   console.log(`[Storage] Starting ${useTus ? 'TUS ' : ''}upload for ${file.name} (${(file.size / 1024 / 1024).toFixed(2)}MB) to ebooks bucket`);
 
   return withRetry(async () => {
+    console.log(`[Storage] Uploading ebook: ${fileName} (${file.size} bytes, useTus: ${useTus})`);
     const { data, error } = await supabase.storage
       .from('ebooks')
       .upload(fileName, file, {
         cacheControl: '3600',
         upsert: true,
-        // @ts-ignore - Some versions of the client might not have this in types but it's supported
+        // @ts-ignore
+        onUploadProgress: options.onProgress,
         useTus: useTus,
-        duplex: 'half',
-        contentType: file.type,
-        onUploadProgress: (progress: { loaded: number; total: number }) => {
-          if (options.onProgress) {
-            options.onProgress(progress);
-          }
-        }
       });
 
     if (error) {
+      console.error('[Storage] Ebook upload error:', error);
       if (error.message.includes('bucket not found')) {
         throw new Error('E-books storage bucket not initialized. Please contact support.');
       }
       throw error;
     }
 
+    console.log('[Storage] Ebook upload success:', data);
     return data.path;
   }, { retries: 2 });
 }
@@ -112,11 +117,12 @@ export async function uploadAgreementFile(file: File, identifier: string, bucket
   });
 
   const fileName = `${bucket === 'signed_agreements' ? 'signed_' : 'template_'}${identifier}_${Date.now()}.pdf`;
+  const filePath = bucket === 'signed_agreements' ? `${identifier.split('_')[0]}/${fileName}` : fileName;
   
   return withRetry(async () => {
     const { data, error } = await supabase.storage
       .from(bucket)
-      .upload(fileName, file, {
+      .upload(filePath, file, {
         cacheControl: '3600',
         upsert: true,
         // @ts-ignore

@@ -56,18 +56,21 @@ export default function ForgotPassword() {
           {!isSubmitted ? (
             <form onSubmit={handleSubmit} className="space-y-6">
               <div className="space-y-2">
-                <label className="text-xs font-black uppercase tracking-widest text-muted-foreground ml-1">
+                <label htmlFor="email" className="text-xs font-black uppercase tracking-widest text-muted-foreground ml-1">
                   Email Address
                 </label>
                 <div className="relative">
                   <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
                   <input
+                    id="email"
+                    name="email"
                     type="email"
                     required
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 pl-12 pr-4 focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all font-medium"
                     placeholder="name@example.com"
+                    autoComplete="email"
                   />
                 </div>
               </div>

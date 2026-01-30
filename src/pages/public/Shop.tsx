@@ -113,8 +113,11 @@ export default function Shop() {
         
         <div className="flex items-center gap-4">
           <div className="relative">
+            <label htmlFor="product-search" className="sr-only">Search products</label>
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
             <input 
+              id="product-search"
+              name="product-search"
               type="text" 
               placeholder="Search products..." 
               value={searchQuery}
@@ -125,6 +128,7 @@ export default function Shop() {
           <button 
             onClick={() => setShowMobileFilters(!showMobileFilters)}
             className="lg:hidden glass p-3 rounded-2xl hover:bg-primary/10 transition-colors"
+            aria-label="Open filters"
           >
             <Filter className="h-6 w-6" />
           </button>
@@ -140,8 +144,9 @@ export default function Shop() {
             </h3>
             <div className="space-y-2">
               {categories.map(cat => (
-                <label key={cat} className="flex items-center gap-3 cursor-pointer group">
+                <label key={cat} htmlFor={`cat-${cat}`} className="flex items-center gap-3 cursor-pointer group">
                   <input 
+                    id={`cat-${cat}`}
                     type="radio" 
                     name="category"
                     checked={selectedCategory === cat}
@@ -161,11 +166,13 @@ export default function Shop() {
               Price Range <ChevronDown className="h-4 w-4" />
             </h3>
             <div className="px-2">
+              <label htmlFor="price-range" className="sr-only">Price Range</label>
               <div className="flex justify-between mb-4 text-sm font-black text-primary">
                 <span>{formatPrice(0)}</span>
                 <span>{formatPrice(priceRange)}</span>
               </div>
               <input 
+                id="price-range"
                 type="range" 
                 min="0"
                 max="200"
@@ -192,8 +199,9 @@ export default function Shop() {
               </h3>
               <div className="space-y-2 max-h-48 overflow-y-auto pr-2 scrollbar-hide">
                 {genres.map(genre => (
-                  <label key={genre} className="flex items-center gap-3 cursor-pointer group">
+                  <label key={genre} htmlFor={`genre-${genre.replace(/\s+/g, '-').toLowerCase()}`} className="flex items-center gap-3 cursor-pointer group">
                     <input 
+                      id={`genre-${genre.replace(/\s+/g, '-').toLowerCase()}`}
                       type="radio" 
                       name="genre"
                       checked={selectedGenre === genre}
@@ -215,8 +223,9 @@ export default function Shop() {
             </h3>
             <div className="space-y-2">
               {['New', 'Pre-loved'].map(condition => (
-                <label key={condition} className="flex items-center gap-3 cursor-pointer group">
+                <label key={condition} htmlFor={`condition-${condition.toLowerCase()}`} className="flex items-center gap-3 cursor-pointer group">
                   <input 
+                    id={`condition-${condition.toLowerCase()}`}
                     type="checkbox" 
                     checked={selectedConditions.includes(condition)}
                     onChange={() => {
@@ -242,8 +251,9 @@ export default function Shop() {
             </h3>
             <div className="space-y-2">
               {['Physical', 'E-book'].map(format => (
-                <label key={format} className="flex items-center gap-3 cursor-pointer group">
+                <label key={format} htmlFor={`format-${format.toLowerCase()}`} className="flex items-center gap-3 cursor-pointer group">
                   <input 
+                    id={`format-${format.toLowerCase()}`}
                     type="checkbox" 
                     checked={selectedFormats.includes(format)}
                     onChange={() => {
@@ -402,7 +412,11 @@ export default function Shop() {
             >
               <div className="flex justify-between items-center mb-8">
                 <h2 className="text-2xl font-black uppercase text-slate-900">Filters</h2>
-                <button onClick={() => setShowMobileFilters(false)} className="p-2 hover:bg-slate-100 rounded-full transition-colors">
+                <button 
+                  onClick={() => setShowMobileFilters(false)} 
+                  className="p-2 hover:bg-slate-100 rounded-full transition-colors"
+                  aria-label="Close filters"
+                >
                   <X className="w-6 h-6 text-slate-900" />
                 </button>
               </div>
@@ -413,8 +427,9 @@ export default function Shop() {
                   <h3 className="font-black mb-4 uppercase text-xs tracking-widest text-slate-500">Categories</h3>
                   <div className="space-y-2">
                     {categories.map(cat => (
-                      <label key={cat} className="flex items-center gap-3 cursor-pointer group">
+                      <label key={cat} htmlFor={`cat-mobile-${cat}`} className="flex items-center gap-3 cursor-pointer group">
                         <input 
+                          id={`cat-mobile-${cat}`}
                           type="radio" 
                           name="category-mobile"
                           checked={selectedCategory === cat}
@@ -430,11 +445,13 @@ export default function Shop() {
                 <div>
                   <h3 className="font-black mb-4 uppercase text-xs tracking-widest text-slate-500">Price Range</h3>
                   <div className="px-2">
+                    <label htmlFor="price-range-mobile" className="sr-only">Price Range</label>
                     <div className="flex justify-between mb-4 text-sm font-black text-primary">
                       <span>{formatPrice(0)}</span>
                       <span>{formatPrice(priceRange)}</span>
                     </div>
                     <input 
+                      id="price-range-mobile"
                       type="range" 
                       min="0"
                       max="200"
@@ -455,8 +472,9 @@ export default function Shop() {
                     <h3 className="font-black mb-4 uppercase text-xs tracking-widest text-slate-500">Genres</h3>
                     <div className="space-y-2 max-h-40 overflow-y-auto pr-2">
                       {genres.map(genre => (
-                        <label key={genre} className="flex items-center gap-3 cursor-pointer group">
+                        <label key={genre} htmlFor={`genre-mobile-${genre.replace(/\s+/g, '-').toLowerCase()}`} className="flex items-center gap-3 cursor-pointer group">
                           <input 
+                            id={`genre-mobile-${genre.replace(/\s+/g, '-').toLowerCase()}`}
                             type="radio" 
                             name="genre-mobile"
                             checked={selectedGenre === genre}
@@ -474,8 +492,9 @@ export default function Shop() {
                   <h3 className="font-black mb-4 uppercase text-xs tracking-widest text-slate-500">Condition</h3>
                   <div className="space-y-2">
                     {['New', 'Pre-loved'].map(condition => (
-                      <label key={condition} className="flex items-center gap-3 cursor-pointer group">
+                      <label key={condition} htmlFor={`condition-mobile-${condition.toLowerCase()}`} className="flex items-center gap-3 cursor-pointer group">
                         <input 
+                          id={`condition-mobile-${condition.toLowerCase()}`}
                           type="checkbox" 
                           checked={selectedConditions.includes(condition)}
                           onChange={() => {
@@ -497,8 +516,9 @@ export default function Shop() {
                   <h3 className="font-black mb-4 uppercase text-xs tracking-widest">Format</h3>
                   <div className="space-y-2">
                     {['Physical', 'E-book'].map(format => (
-                      <label key={format} className="flex items-center gap-3">
+                      <label key={format} htmlFor={`format-mobile-${format.toLowerCase()}`} className="flex items-center gap-3">
                         <input 
+                          id={`format-mobile-${format.toLowerCase()}`}
                           type="checkbox" 
                           checked={selectedFormats.includes(format)}
                           onChange={() => {

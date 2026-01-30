@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { getUserAgreements, submitSignedAgreement } from '@/api/dashboards';
 import { uploadAgreementFile } from '@/api/storage';
+import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 
 interface AgreementsSectionProps {
@@ -20,10 +21,34 @@ export default function AgreementsSection({ userId, type }: AgreementsSectionPro
   const [isUploading, setIsUploading] = useState<string | null>(null);
   const [selectedAgreement, setSelectedAgreement] = useState<any>(null);
   const [hasReadTerms, setHasReadTerms] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
   useEffect(() => {
     fetchAgreements();
   }, [userId]);
+
+  useEffect(() => {
+    if (selectedAgreement) {
+      generatePreviewUrl(selectedAgreement.template_url);
+    } else {
+      setPreviewUrl(null);
+    }
+  }, [selectedAgreement]);
+
+  const generatePreviewUrl = async (path: string) => {
+     if (!path) return;
+     try {
+       const bucket = path.includes('signed') ? 'signed_agreements' : 'agreements';
+       const { data, error } = await supabase.storage
+         .from(bucket)
+         .createSignedUrl(path, 3600); // 1 hour
+
+       if (error) throw error;
+       setPreviewUrl(data.signedUrl);
+     } catch (error) {
+       console.error('Failed to generate preview URL:', error);
+     }
+   };
 
   const fetchAgreements = async () => {
     try {
@@ -33,6 +58,28 @@ export default function AgreementsSection({ userId, type }: AgreementsSectionPro
       console.error('Failed to fetch agreements:', error);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleViewFile = async (path: string) => {
+    if (!path) {
+      toast.error('No document file found');
+      return;
+    }
+    
+    // Determine bucket based on path or context
+    const bucket = path.includes('signed') ? 'signed_agreements' : 'agreements';
+    
+    try {
+      const { data, error } = await supabase.storage
+        .from(bucket)
+        .createSignedUrl(path, 600); // 10 minutes
+
+      if (error) throw error;
+      window.open(data.signedUrl, '_blank');
+    } catch (error) {
+      console.error('View file error:', error);
+      toast.error('Could not generate document link');
     }
   };
 
@@ -155,15 +202,13 @@ export default function AgreementsSection({ userId, type }: AgreementsSectionPro
                   Sign & Upload
                 </button>
               ) : agreement.signed_url ? (
-                <a 
-                  href={agreement.signed_url} 
-                  target="_blank" 
-                  rel="noopener noreferrer"
+                <button 
+                  onClick={() => handleViewFile(agreement.signed_url)}
                   className="flex-1 md:flex-none glass px-4 py-2 rounded-xl text-sm font-bold flex items-center justify-center gap-2 hover:bg-white/10 transition-all"
                 >
                   <FileText className="w-4 h-4" />
                   View Signed
-                </a>
+                </button>
               ) : null}
             </div>
           </motion.div>
@@ -239,25 +284,23 @@ export default function AgreementsSection({ userId, type }: AgreementsSectionPro
                     Agreement Document
                   </h4>
                   <div className="aspect-[4/3] w-full rounded-2xl overflow-hidden bg-black/40 border border-white/5">
-                    {selectedAgreement.template_url?.endsWith('.pdf') ? (
+                    {previewUrl ? (
                       <iframe 
-                        src={`${selectedAgreement.template_url}#toolbar=0`} 
+                        src={`${previewUrl}#toolbar=0`} 
                         className="w-full h-full border-none"
                       />
                     ) : (
                       <div className="w-full h-full flex flex-col items-center justify-center p-8 text-center">
-                        <FileText className="w-16 h-16 text-muted-foreground mb-4" />
-                        <p className="text-muted-foreground mb-6">
-                          This document is available for download. Please review it carefully before signing.
-                        </p>
-                        <a 
-                          href={selectedAgreement.template_url}
-                          download
-                          className="px-6 py-3 rounded-xl bg-white/5 border border-white/10 font-bold flex items-center gap-2 hover:bg-white/10 transition-all"
-                        >
-                          <Download className="w-5 h-5" />
-                          Download Agreement
-                        </a>
+                        {isLoading ? (
+                          <Loader2 className="w-16 h-16 text-primary animate-spin mb-4" />
+                        ) : (
+                          <>
+                            <FileText className="w-16 h-16 text-muted-foreground mb-4" />
+                            <p className="text-muted-foreground mb-6">
+                              Preparing document preview...
+                            </p>
+                          </>
+                        )}
                       </div>
                     )}
                   </div>

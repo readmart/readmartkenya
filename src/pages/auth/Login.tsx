@@ -53,15 +53,18 @@ export default function Login() {
 
         <form onSubmit={handleLogin} className="space-y-6">
           <div className="space-y-2">
-            <label className="text-sm font-semibold ml-1">Email Address</label>
+            <label htmlFor="email" className="text-sm font-semibold ml-1">Email Address</label>
             <div className="relative">
               <Mail className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
               <input 
+                id="email"
+                name="email"
                 type="email" 
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="name@example.com" 
                 className="glass w-full pl-12 pr-6 py-3 rounded-2xl outline-none focus:ring-2 focus:ring-primary"
+                autoComplete="email"
                 required
               />
             </div>
@@ -69,7 +72,7 @@ export default function Login() {
 
           <div className="space-y-2">
             <div className="flex justify-between items-center ml-1">
-              <label className="text-sm font-semibold">Password</label>
+              <label htmlFor="password" university-transition-colors="true" className="text-sm font-semibold">Password</label>
               <Link to="/forgot-password" university-transition-colors="true" className="text-xs text-primary hover:underline font-bold">
                 Forgot password?
               </Link>
@@ -77,11 +80,14 @@ export default function Login() {
             <div className="relative">
               <Lock className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
               <input 
+                id="password"
+                name="password"
                 type="password" 
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••" 
                 className="glass w-full pl-12 pr-6 py-3 rounded-2xl outline-none focus:ring-2 focus:ring-primary"
+                autoComplete="current-password"
                 required
               />
             </div>

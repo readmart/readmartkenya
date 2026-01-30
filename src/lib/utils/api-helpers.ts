@@ -42,27 +42,42 @@ export function calculateTrend(current: number, previous: number): string {
  * Utility to verify roles
  */
 export async function verifyRole(allowedRoles: string[]) {
+  console.log(`[Auth] Verifying role. Allowed: ${allowedRoles.join(', ')}`);
   // Development bypass: Check localStorage for dev role first
   // ONLY allowed in development environment
   if (import.meta.env.DEV && typeof window !== 'undefined') {
     const devRole = localStorage.getItem('rm_dev_role');
+    console.log('[Auth] Dev role check:', devRole);
     if (devRole && allowedRoles.includes(devRole)) {
+      console.log('[Auth] Dev bypass granted for role:', devRole);
       return { user: { id: 'dev-id' } }; // Mock session for dev
     }
   }
 
   const { data: { session } } = await supabase.auth.getSession();
-  if (!session) throw new Error('Not authenticated');
+  if (!session) {
+    console.error('[Auth] No session found');
+    throw new Error('Not authenticated');
+  }
 
-  const { data: profile } = await supabase
+  console.log('[Auth] Session user ID:', session.user.id);
+  const { data: profile, error } = await supabase
     .from('profiles')
     .select('role')
     .eq('id', session.user.id)
     .single();
 
+  if (error) {
+    console.error('[Auth] Profile fetch error:', error);
+  }
+
+  console.log('[Auth] User profile role:', profile?.role);
   if (!profile || !allowedRoles.includes(profile.role)) {
+    console.error(`[Auth] Unauthorized. User role ${profile?.role} not in ${allowedRoles.join(', ')}`);
     throw new Error('Unauthorized access: Required privileges missing');
   }
+  
+  console.log('[Auth] Authorization successful');
   return session;
 }
 

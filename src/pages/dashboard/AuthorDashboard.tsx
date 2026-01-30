@@ -35,6 +35,11 @@ export default function AuthorDashboard() {
   const [settings, setSettings] = useState<any>(null);
   const [categories, setCategories] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   // Modal & Form State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -299,19 +304,21 @@ export default function AuthorDashboard() {
                 <button className="bg-primary text-white px-3 py-1 rounded-lg text-xs font-bold">1Y</button>
               </div>
             </div>
-            <div className="h-[400px] w-full min-h-[400px] relative">
-              <ResponsiveContainer width="100%" height="100%" minHeight={400} debounce={100}>
-                <BarChart data={performanceData}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.1)" />
-                  <XAxis dataKey="month" stroke="rgba(255,255,255,0.5)" />
-                  <YAxis stroke="rgba(255,255,255,0.5)" />
-                  <Tooltip 
-                    contentStyle={{ background: 'rgba(0,0,0,0.8)', border: 'none', borderRadius: '12px' }}
-                    itemStyle={{ color: '#fff' }}
-                  />
-                  <Bar dataKey="sales" fill="var(--primary)" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+            <div className="h-[400px] w-full relative">
+              {isMounted && (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={performanceData}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.1)" />
+                    <XAxis dataKey="month" stroke="rgba(255,255,255,0.5)" />
+                    <YAxis stroke="rgba(255,255,255,0.5)" />
+                    <Tooltip 
+                      contentStyle={{ background: 'rgba(0,0,0,0.8)', border: 'none', borderRadius: '12px' }}
+                      itemStyle={{ color: '#fff' }}
+                    />
+                    <Bar dataKey="sales" fill="var(--primary)" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
             </div>
           </motion.div>
 
@@ -360,6 +367,7 @@ export default function AuthorDashboard() {
                       <button 
                         onClick={() => handleEdit(book)}
                         className="p-2 hover:bg-primary hover:text-white rounded-lg transition-all text-muted-foreground"
+                        aria-label={`Edit ${book.title}`}
                       >
                         <Edit className="w-4 h-4" />
                       </button>
@@ -520,7 +528,11 @@ export default function AuthorDashboard() {
                   </h2>
                   <p className="text-sm font-bold text-slate-400 uppercase tracking-widest">ReadMart Author Protocol</p>
                 </div>
-                <button onClick={() => setIsModalOpen(false)} className="p-2 hover:bg-white rounded-full transition-all text-slate-400 hover:text-red-500">
+                <button 
+                  onClick={() => setIsModalOpen(false)} 
+                  className="p-2 hover:bg-white rounded-full transition-all text-slate-400 hover:text-red-500"
+                  aria-label="Close modal"
+                >
                   <XCircle className="w-8 h-8" />
                 </button>
               </div>
@@ -529,8 +541,10 @@ export default function AuthorDashboard() {
                 <div className="grid md:grid-cols-2 gap-10">
                   <div className="space-y-6">
                     <div>
-                      <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Manuscript Title</label>
+                      <label htmlFor="manuscript_title" className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Manuscript Title</label>
                       <input 
+                        id="manuscript_title"
+                        name="title"
                         required
                         type="text" 
                         value={formData.title}
@@ -542,8 +556,10 @@ export default function AuthorDashboard() {
 
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Listing Price (KES)</label>
+                        <label htmlFor="listing_price" className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Listing Price (KES)</label>
                         <input 
+                          id="listing_price"
+                          name="price"
                           required
                           type="number" 
                           value={formData.price}
@@ -553,8 +569,10 @@ export default function AuthorDashboard() {
                         />
                       </div>
                       <div>
-                        <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Impact Price (Optional)</label>
+                        <label htmlFor="impact_price" className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Impact Price (Optional)</label>
                         <input 
+                          id="impact_price"
+                          name="sale_price"
                           type="number" 
                           value={formData.sale_price}
                           onChange={(e) => setFormData({...formData, sale_price: e.target.value})}
@@ -565,8 +583,10 @@ export default function AuthorDashboard() {
                     </div>
 
                     <div>
-                      <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Genre/Category</label>
+                      <label htmlFor="genre_category" className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Genre/Category</label>
                       <select 
+                        id="genre_category"
+                        name="category_id"
                         required
                         value={formData.category_id}
                         onChange={(e) => setFormData({...formData, category_id: e.target.value})}
@@ -580,8 +600,10 @@ export default function AuthorDashboard() {
                     </div>
 
                     <div>
-                      <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Abstract/Description</label>
+                      <label htmlFor="manuscript_description" className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Abstract/Description</label>
                       <textarea 
+                        id="manuscript_description"
+                        name="description"
                         required
                         rows={4}
                         value={formData.description}
@@ -594,13 +616,16 @@ export default function AuthorDashboard() {
 
                   <div className="space-y-6">
                     <div>
-                      <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Cover Imagery</label>
+                      <label htmlFor="cover_imagery" className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Cover Imagery</label>
                       <div className="relative group cursor-pointer">
                         <input 
+                          id="cover_imagery"
+                          name="image_url"
                           type="file" 
                           accept="image/*"
                           onChange={handleImageUpload}
                           className="absolute inset-0 opacity-0 z-10 cursor-pointer" 
+                          aria-label="Upload book cover imagery"
                         />
                         <div className="w-full aspect-[3/4] bg-slate-50 rounded-[32px] border-4 border-dashed border-slate-100 flex flex-col items-center justify-center p-8 transition-all group-hover:border-primary/20 group-hover:bg-slate-100/50 overflow-hidden relative">
                           {formData.image_url ? (
@@ -621,7 +646,7 @@ export default function AuthorDashboard() {
                           )}
                           
                           {uploadProgress.cover > 0 && uploadProgress.cover < 100 && (
-                            <div className="absolute inset-0 bg-white/90 flex flex-col items-center justify-center p-8">
+                            <div className="absolute inset-0 bg-white/90 flex flex-col items-center justify-center p-8" role="progressbar" aria-valuenow={uploadProgress.cover} aria-valuemin={0} aria-valuemax={100}>
                               <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden mb-4">
                                 <div 
                                   className="h-full bg-primary transition-all duration-300" 
@@ -636,13 +661,16 @@ export default function AuthorDashboard() {
                     </div>
 
                     <div>
-                      <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Digital Asset (PDF/EPUB)</label>
+                      <label htmlFor="digital_asset" className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Digital Asset (PDF/EPUB)</label>
                       <div className="relative group cursor-pointer">
                         <input 
+                          id="digital_asset"
+                          name="ebook_url"
                           type="file" 
                           accept=".pdf,.epub"
                           onChange={handleEbookUpload}
                           className="absolute inset-0 opacity-0 z-10 cursor-pointer" 
+                          aria-label="Upload manuscript digital asset"
                         />
                         <div className={`w-full p-6 rounded-2xl border-2 border-dashed transition-all flex items-center gap-4 ${
                           formData.ebook_url 
@@ -663,7 +691,7 @@ export default function AuthorDashboard() {
                         </div>
 
                         {uploadProgress.ebook > 0 && uploadProgress.ebook < 100 && (
-                          <div className="mt-4">
+                          <div className="mt-4" role="progressbar" aria-valuenow={uploadProgress.ebook} aria-valuemin={0} aria-valuemax={100}>
                             <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
                               <div 
                                 className="h-full bg-primary transition-all duration-300" 

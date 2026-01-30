@@ -135,8 +135,10 @@ export default function Contact() {
                 <form onSubmit={handleSubmit} className="space-y-6">
                   <div className="grid md:grid-cols-2 gap-6">
                     <div className="space-y-2">
-                      <label className="text-sm font-black uppercase tracking-widest ml-1">Your Name</label>
+                      <label htmlFor="contact_name" className="text-sm font-black uppercase tracking-widest ml-1">Your Name</label>
                       <input 
+                        id="contact_name"
+                        name="contact_name"
                         required
                         type="text"
                         value={formData.name}
@@ -146,8 +148,10 @@ export default function Contact() {
                       />
                     </div>
                     <div className="space-y-2">
-                      <label className="text-sm font-black uppercase tracking-widest ml-1">Email Address</label>
+                      <label htmlFor="contact_email" className="text-sm font-black uppercase tracking-widest ml-1">Email Address</label>
                       <input 
+                        id="contact_email"
+                        name="contact_email"
                         required
                         type="email"
                         value={formData.email}
@@ -159,8 +163,10 @@ export default function Contact() {
                   </div>
 
                   <div className="space-y-2">
-                    <label className="text-sm font-black uppercase tracking-widest ml-1">Subject / Destination Email</label>
+                    <label htmlFor="contact_subject" className="text-sm font-black uppercase tracking-widest ml-1">Subject / Destination Email</label>
                     <select 
+                      id="contact_subject"
+                      name="contact_subject"
                       value={formData.subject}
                       onChange={e => setFormData({...formData, subject: e.target.value})}
                       className="w-full px-6 py-4 glass rounded-2xl border-white/10 focus:border-primary/50 transition-all outline-none font-medium appearance-none"
@@ -172,8 +178,10 @@ export default function Contact() {
                   </div>
 
                   <div className="space-y-2">
-                    <label className="text-sm font-black uppercase tracking-widest ml-1">Message</label>
+                    <label htmlFor="contact_message" className="text-sm font-black uppercase tracking-widest ml-1">Message</label>
                     <textarea 
+                      id="contact_message"
+                      name="contact_message"
                       required
                       value={formData.message}
                       onChange={e => setFormData({...formData, message: e.target.value})}
@@ -184,9 +192,9 @@ export default function Contact() {
                   </div>
 
                   <div className="space-y-2">
-                    <label className="text-sm font-black uppercase tracking-widest ml-1">Attachment (optional, max 10MB)</label>
-                    <div 
-                      onClick={() => fileInputRef.current?.click()}
+                    <label htmlFor="contact_attachment" className="text-sm font-black uppercase tracking-widest ml-1">Attachment (optional, max 10MB)</label>
+                    <label 
+                      htmlFor="contact_attachment"
                       className="w-full px-6 py-4 glass rounded-2xl border-white/10 border-dashed hover:border-primary/50 transition-all cursor-pointer flex items-center gap-3"
                     >
                       <Paperclip className="w-5 h-5 text-muted-foreground" />
@@ -194,12 +202,14 @@ export default function Contact() {
                         {formData.attachment ? formData.attachment.name : 'No file chosen'}
                       </span>
                       <input 
+                        id="contact_attachment"
+                        name="contact_attachment"
                         type="file"
                         ref={fileInputRef}
                         onChange={handleFileChange}
                         className="hidden"
                       />
-                    </div>
+                    </label>
                   </div>
 
                   <div className="flex flex-col sm:flex-row gap-4 pt-4">
@@ -364,6 +374,7 @@ export default function Contact() {
                     rel="noopener noreferrer"
                     className="w-12 h-12 bg-green-500/10 text-green-500 rounded-xl flex items-center justify-center hover:bg-green-500 hover:text-white transition-all"
                     title="WhatsApp Primary"
+                    aria-label="Contact via WhatsApp Primary"
                   >
                     <MessageCircle className="w-6 h-6" />
                   </a>
@@ -386,6 +397,7 @@ export default function Contact() {
                       rel="noopener noreferrer"
                       className="w-12 h-12 bg-green-500/10 text-green-500 rounded-xl flex items-center justify-center hover:bg-green-500 hover:text-white transition-all"
                       title="WhatsApp Secondary"
+                      aria-label="Contact via WhatsApp Secondary"
                     >
                       <MessageCircle className="w-6 h-6" />
                     </a>
@@ -430,6 +442,7 @@ export default function Contact() {
                 target="_blank"
                 rel="noopener noreferrer"
                 className="w-full py-4 bg-black text-white rounded-xl font-black flex items-center justify-center gap-2 hover:bg-zinc-900 transition-all shadow-lg shadow-black/25"
+                aria-label="Follow ReadMart on TikTok"
               >
                 FOLLOW US
                 <Music2 className="w-4 h-4" />
@@ -452,6 +465,7 @@ export default function Contact() {
                 target="_blank"
                 rel="noopener noreferrer"
                 className="w-full py-4 bg-blue-600 text-white rounded-xl font-black flex items-center justify-center gap-2 hover:bg-blue-700 transition-all shadow-lg shadow-blue-600/25"
+                aria-label="Follow ReadMart on LinkedIn"
               >
                 FOLLOW US
                 <Linkedin className="w-4 h-4" />

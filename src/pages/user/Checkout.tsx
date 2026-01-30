@@ -315,7 +315,11 @@ export default function Checkout() {
               }
             }
           )
-          .subscribe();
+          .subscribe((status) => {
+            if (status !== 'SUBSCRIBED') {
+              console.warn('Checkout Realtime subscription status:', status);
+            }
+          });
 
         // Fallback polling (in case Realtime fails or is not enabled)
         let attempts = 0;
@@ -396,8 +400,10 @@ export default function Checkout() {
                 </h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <label className="text-sm font-medium">Full Name</label>
+                    <label htmlFor="fullName" className="text-sm font-medium">Full Name</label>
                     <input 
+                      id="fullName"
+                      name="fullName"
                       type="text" 
                       value={formData.fullName}
                       onChange={e => setFormData({...formData, fullName: e.target.value})}
@@ -406,8 +412,10 @@ export default function Checkout() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-sm font-medium">Phone Number (M-Pesa)</label>
+                    <label htmlFor="phone" className="text-sm font-medium">Phone Number (M-Pesa)</label>
                     <input 
+                      id="phone"
+                      name="phone"
                       type="tel" 
                       value={formData.phone}
                       onChange={e => setFormData({...formData, phone: e.target.value})}
@@ -416,8 +424,10 @@ export default function Checkout() {
                     />
                   </div>
                   <div className="md:col-span-2 space-y-2">
-                    <label className="text-sm font-medium">Delivery Address</label>
+                    <label htmlFor="address" className="text-sm font-medium">Delivery Address</label>
                     <textarea 
+                      id="address"
+                      name="address"
                       value={formData.address}
                       onChange={e => setFormData({...formData, address: e.target.value})}
                       className="glass w-full px-4 py-3 rounded-xl outline-none focus:ring-2 focus:ring-primary min-h-[100px]" 
@@ -425,8 +435,10 @@ export default function Checkout() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-sm font-medium">City / Town</label>
+                    <label htmlFor="city" className="text-sm font-medium">City / Town</label>
                     <input 
+                      id="city"
+                      name="city"
                       type="text" 
                       value={formData.city}
                       onChange={e => setFormData({...formData, city: e.target.value})}
@@ -435,8 +447,10 @@ export default function Checkout() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-sm font-medium">Postal Code (Optional)</label>
+                    <label htmlFor="postalCode" className="text-sm font-medium">Postal Code (Optional)</label>
                     <input 
+                      id="postalCode"
+                      name="postalCode"
                       type="text" 
                       value={formData.postalCode}
                       onChange={e => setFormData({...formData, postalCode: e.target.value})}
@@ -445,8 +459,10 @@ export default function Checkout() {
                     />
                   </div>
                   <div className="md:col-span-2 space-y-2">
-                    <label className="text-sm font-medium">Shipping Method & Region</label>
+                    <label htmlFor="shippingZone" className="text-sm font-medium">Shipping Method & Region</label>
                     <select
+                      id="shippingZone"
+                      name="shippingZone"
                       value={selectedZoneId}
                       onChange={e => setSelectedZoneId(e.target.value)}
                       className="glass w-full px-4 py-3 rounded-xl outline-none focus:ring-2 focus:ring-primary bg-transparent font-bold"

@@ -170,6 +170,8 @@ export default function BookDetail() {
           <button 
             onClick={toggleWishlist}
             className={`absolute top-6 right-6 p-4 glass rounded-full transition-all ${isInWishlist(book.id) ? 'bg-secondary text-white' : 'hover:bg-secondary hover:text-white'}`}
+            aria-label={isInWishlist(book.id) ? "Remove from wishlist" : "Add to wishlist"}
+            aria-pressed={isInWishlist(book.id)}
           >
             <Heart className={`w-6 h-6 ${isInWishlist(book.id) ? 'fill-current' : ''}`} />
           </button>
@@ -255,17 +257,24 @@ export default function BookDetail() {
               <Zap className="w-6 h-6 fill-white" />
               {(book.stock_quantity || 0) <= 0 ? 'OUT OF STOCK' : 'BUY IT NOW'}
             </button>
-            <button className="w-16 h-16 glass rounded-2xl flex items-center justify-center hover:bg-white/10 transition-all">
+            <button 
+              className="w-16 h-16 glass rounded-2xl flex items-center justify-center hover:bg-white/10 transition-all"
+              aria-label="Share this book"
+            >
               <Share2 className="w-6 h-6" />
             </button>
           </div>
 
           {/* Additional Info Tabs */}
           <div className="pt-8">
-            <div className="flex gap-8 border-b border-white/10 mb-8 overflow-x-auto no-scrollbar">
+            <div className="flex gap-8 border-b border-white/10 mb-8 overflow-x-auto no-scrollbar" role="tablist" aria-label="Book information tabs">
               {['details', 'reviews', 'author'].map((tab) => (
                 <button 
                   key={tab}
+                  id={`tab-${tab}`}
+                  role="tab"
+                  aria-selected={activeTab === tab}
+                  aria-controls={`panel-${tab}`}
                   onClick={() => setActiveTab(tab)}
                   className={`pb-4 text-sm font-black uppercase tracking-widest transition-all relative ${
                     activeTab === tab ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
@@ -283,6 +292,9 @@ export default function BookDetail() {
               {activeTab === 'details' && (
                 <motion.div 
                   key="details"
+                  id="panel-details"
+                  role="tabpanel"
+                  aria-labelledby="tab-details"
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -10 }}
@@ -302,6 +314,9 @@ export default function BookDetail() {
               {activeTab === 'reviews' && (
                 <motion.div 
                   key="reviews"
+                  id="panel-reviews"
+                  role="tabpanel"
+                  aria-labelledby="tab-reviews"
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -10 }}
@@ -313,13 +328,16 @@ export default function BookDetail() {
                         <span className="font-black text-primary">{review.user}</span>
                         <span className="text-xs text-muted-foreground font-bold">{review.date}</span>
                       </div>
-                      <div className="flex gap-1">
+                      <div className="flex gap-1" role="img" aria-label={`Rating: ${review.rating} out of 5 stars`}>
                         {[...Array(5)].map((_, i) => (
-                          <Star key={i} className={`w-3 h-3 ${i < review.rating ? 'text-secondary fill-secondary' : 'text-muted-foreground'}`} />
+                          <Star key={i} className={`w-3 h-3 ${i < review.rating ? 'text-secondary fill-secondary' : 'text-muted-foreground'}`} aria-hidden="true" />
                         ))}
                       </div>
                       <p className="text-sm text-muted-foreground leading-relaxed">{review.comment}</p>
-                      <button className="flex items-center gap-2 text-xs font-black text-primary hover:opacity-70 transition-all uppercase tracking-widest">
+                      <button 
+                        className="flex items-center gap-2 text-xs font-black text-primary hover:opacity-70 transition-all uppercase tracking-widest"
+                        aria-label={`Mark review by ${review.user} as helpful`}
+                      >
                         <ThumbsUp className="w-3 h-3" />
                         Helpful ({review.likes})
                       </button>
@@ -331,6 +349,9 @@ export default function BookDetail() {
               {activeTab === 'author' && (
                 <motion.div 
                   key="author"
+                  id="panel-author"
+                  role="tabpanel"
+                  aria-labelledby="tab-author"
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -10 }}

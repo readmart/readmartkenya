@@ -107,8 +107,10 @@ const CreateClub: React.FC = () => {
 
               <div className="space-y-6">
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Club Name</label>
+                  <label htmlFor="club_name" className="block text-sm font-semibold text-gray-700 mb-2">Club Name</label>
                   <input 
+                    id="club_name"
+                    name="club_name"
                     type="text"
                     placeholder="e.g. The Midnight Readers"
                     className="w-full px-4 py-3 bg-gray-50 border rounded-xl focus:ring-2 focus:ring-primary/20 outline-none transition-all"
@@ -118,8 +120,10 @@ const CreateClub: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Description</label>
+                  <label htmlFor="club_description" className="block text-sm font-semibold text-gray-700 mb-2">Description</label>
                   <textarea 
+                    id="club_description"
+                    name="club_description"
                     placeholder="Tell potential members what your club is about..."
                     rows={4}
                     className="w-full px-4 py-3 bg-gray-50 border rounded-xl focus:ring-2 focus:ring-primary/20 outline-none transition-all resize-none"
@@ -129,11 +133,13 @@ const CreateClub: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Primary Genre</label>
-                  <div className="flex flex-wrap gap-2">
+                  <label id="genre-label" className="block text-sm font-semibold text-gray-700 mb-2">Primary Genre</label>
+                  <div role="radiogroup" aria-labelledby="genre-label" className="flex flex-wrap gap-2">
                     {GENRES.map((genre) => (
                       <button
                         key={genre}
+                        role="radio"
+                        aria-checked={formData.genre === genre}
                         onClick={() => setFormData({ ...formData, genre })}
                         className={`px-4 py-2 rounded-full text-sm font-medium border transition-all ${
                           formData.genre === genre 
@@ -164,8 +170,12 @@ const CreateClub: React.FC = () => {
                 <p className="text-gray-500">Control who can see and join your club.</p>
               </div>
 
-              <div className="space-y-4">
+              <div id="privacy-radiogroup" role="radiogroup" aria-labelledby="privacy-title" className="space-y-4">
+                <h3 id="privacy-title" className="sr-only">Privacy & Access</h3>
                 <button
+                  type="button"
+                  role="radio"
+                  aria-checked={formData.is_public}
                   onClick={() => setFormData({ ...formData, is_public: true })}
                   className={`w-full p-6 rounded-2xl border-2 transition-all flex items-start gap-4 text-left ${
                     formData.is_public ? 'border-primary bg-primary/5' : 'border-gray-100 hover:border-gray-200'
@@ -182,6 +192,9 @@ const CreateClub: React.FC = () => {
                 </button>
 
                 <button
+                  type="button"
+                  role="radio"
+                  aria-checked={!formData.is_public}
                   onClick={() => setFormData({ ...formData, is_public: false })}
                   className={`w-full p-6 rounded-2xl border-2 transition-all flex items-start gap-4 text-left ${
                     !formData.is_public ? 'border-primary bg-primary/5' : 'border-gray-100 hover:border-gray-200'
@@ -199,10 +212,14 @@ const CreateClub: React.FC = () => {
 
                 <div className="pt-6 border-t mt-6 flex items-center justify-between">
                   <div>
-                    <h4 className="font-bold text-gray-900">Require Approval</h4>
+                    <h4 id="require-approval-label" className="font-bold text-gray-900">Require Approval</h4>
                     <p className="text-sm text-gray-500">Members must be approved by an admin before joining.</p>
                   </div>
                   <button
+                    type="button"
+                    role="switch"
+                    aria-checked={formData.require_approval}
+                    aria-labelledby="require-approval-label"
                     onClick={() => setFormData({ ...formData, require_approval: !formData.require_approval })}
                     className={`w-12 h-6 rounded-full transition-colors relative ${
                       formData.require_approval ? 'bg-primary' : 'bg-gray-300'
@@ -233,11 +250,14 @@ const CreateClub: React.FC = () => {
 
               <div className="space-y-8">
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-4">Frequency</label>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <label id="frequency-label" className="block text-sm font-semibold text-gray-700 mb-4">Frequency</label>
+                  <div role="radiogroup" aria-labelledby="frequency-label" className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     {FREQUENCIES.map((freq) => (
                       <button
                         key={freq.id}
+                        type="button"
+                        role="radio"
+                        aria-checked={formData.meeting_frequency === freq.id}
                         onClick={() => setFormData({ ...formData, meeting_frequency: freq.id })}
                         className={`p-4 rounded-xl border-2 transition-all text-left ${
                           formData.meeting_frequency === freq.id ? 'border-primary bg-primary/5' : 'border-gray-100 hover:border-gray-200'
@@ -251,11 +271,14 @@ const CreateClub: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-4">Format</label>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <label id="format-label" className="block text-sm font-semibold text-gray-700 mb-4">Format</label>
+                  <div role="radiogroup" aria-labelledby="format-label" className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     {FORMATS.map((format) => (
                       <button
                         key={format.id}
+                        type="button"
+                        role="radio"
+                        aria-checked={formData.meeting_format === format.id}
                         onClick={() => setFormData({ ...formData, meeting_format: format.id })}
                         className={`p-4 rounded-xl border-2 transition-all text-left ${
                           formData.meeting_format === format.id ? 'border-primary bg-primary/5' : 'border-gray-100 hover:border-gray-200'
@@ -271,8 +294,10 @@ const CreateClub: React.FC = () => {
 
                 {formData.meeting_format === 'online' && (
                   <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">Preferred Platform</label>
+                    <label htmlFor="meeting_platform" className="block text-sm font-semibold text-gray-700 mb-2">Preferred Platform</label>
                     <input 
+                      id="meeting_platform"
+                      name="meeting_platform"
                       type="text"
                       placeholder="e.g. Zoom, Google Meet, Discord"
                       className="w-full px-4 py-3 bg-gray-50 border rounded-xl focus:ring-2 focus:ring-primary/20 outline-none transition-all"

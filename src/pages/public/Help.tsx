@@ -201,8 +201,11 @@ export default function Help() {
           </p>
           
           <div className="max-w-2xl mx-auto relative group">
+            <label htmlFor="help-search" className="sr-only">Search help articles</label>
             <Search className="absolute left-6 top-1/2 -translate-y-1/2 w-6 h-6 text-slate-400 group-focus-within:text-primary transition-colors" />
             <input 
+              id="help-search"
+              name="help-search"
               type="text"
               placeholder="Search for answers..."
               className="w-full pl-16 pr-6 py-5 rounded-2xl text-slate-900 font-medium text-lg shadow-2xl focus:ring-4 focus:ring-white/20 outline-none transition-all"
@@ -426,15 +429,17 @@ export default function Help() {
               <h3 className="text-xl font-black mb-6">HELP US IMPROVE</h3>
               <form onSubmit={handleFeedbackSubmit} className="space-y-4">
                 <div>
-                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 block">
+                  <label htmlFor="feedback-rating" className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 block">
                     Your Rating
                   </label>
-                  <div className="flex items-center gap-2">
+                  <div id="feedback-rating" className="flex items-center gap-2" role="group" aria-label="Star rating">
                     {[1, 2, 3, 4, 5].map((star) => (
                       <button
                         key={star}
                         type="button"
                         onClick={() => setFeedbackRating(star)}
+                        aria-label={`Rate ${star} stars`}
+                        aria-pressed={feedbackRating >= star}
                         className={`p-2 transition-all ${feedbackRating >= star ? 'text-amber-400 scale-110' : 'text-slate-200 hover:text-slate-300'}`}
                       >
                         <Star className={`w-6 h-6 ${feedbackRating >= star ? 'fill-current' : ''}`} />
@@ -444,10 +449,11 @@ export default function Help() {
                 </div>
 
                 <div>
-                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 block">
+                  <label htmlFor="feedback-category" className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 block">
                     Category
                   </label>
                   <select 
+                    id="feedback-category"
                     name="category"
                     required
                     className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-100 font-bold text-sm outline-none focus:ring-2 focus:ring-primary/20"
@@ -460,10 +466,11 @@ export default function Help() {
                 </div>
 
                 <div>
-                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 block">
+                  <label htmlFor="feedback-message" className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 block">
                     Message
                   </label>
                   <textarea 
+                    id="feedback-message"
                     name="message"
                     required
                     rows={4}

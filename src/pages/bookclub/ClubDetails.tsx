@@ -100,7 +100,11 @@ const ClubDetails: React.FC = () => {
         <div className="max-w-7xl mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <button onClick={() => navigate('/book-club-hub')} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
+              <button 
+                onClick={() => navigate('/book-club-hub')} 
+                className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+                aria-label="Back to Book Club Hub"
+              >
                 <ChevronLeft className="w-5 h-5 text-gray-500" />
               </button>
               <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center text-primary font-bold text-xl">
@@ -116,7 +120,10 @@ const ClubDetails: React.FC = () => {
             </div>
             <div className="flex items-center gap-2">
               {myRole === 'admin' && (
-                <button className="p-2 hover:bg-gray-100 rounded-full transition-colors text-gray-500">
+                <button 
+                  className="p-2 hover:bg-gray-100 rounded-full transition-colors text-gray-500"
+                  aria-label="Club settings"
+                >
                   <Settings className="w-5 h-5" />
                 </button>
               )}
@@ -213,10 +220,17 @@ const ClubDetails: React.FC = () => {
                 <p className="text-white/70 text-sm mb-4">F. Scott Fitzgerald</p>
                 <div className="space-y-2">
                   <div className="flex justify-between text-xs font-medium">
-                    <span>Reading Progress</span>
+                    <span id="reading-progress-label">Reading Progress</span>
                     <span>65%</span>
                   </div>
-                  <div className="h-1.5 bg-white/20 rounded-full overflow-hidden">
+                  <div 
+                    className="h-1.5 bg-white/20 rounded-full overflow-hidden"
+                    role="progressbar"
+                    aria-valuenow={65}
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-labelledby="reading-progress-label"
+                  >
                     <div className="h-full bg-white w-[65%]" />
                   </div>
                 </div>
@@ -270,14 +284,20 @@ const DiscussionsTab: React.FC<{ clubId: string, discussions: any[], isMember: b
             </button>
           ) : (
             <div className="space-y-4">
+              <label htmlFor="discussion-title" className="sr-only">Discussion Title</label>
               <input 
+                id="discussion-title"
+                name="discussion-title"
                 type="text" 
                 placeholder="Topic title..." 
                 className="w-full text-lg font-bold outline-none border-b pb-2"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
               />
+              <label htmlFor="discussion-content" className="sr-only">Discussion Content</label>
               <textarea 
+                id="discussion-content"
+                name="discussion-content"
                 placeholder="What's on your mind?" 
                 rows={4}
                 className="w-full outline-none resize-none bg-gray-50 p-4 rounded-xl"
@@ -422,7 +442,10 @@ const MembersTab: React.FC<{ members: any[] }> = ({ members }) => {
       <div className="p-6 border-b flex justify-between items-center">
         <h3 className="font-bold text-gray-900">All Members ({members.length})</h3>
         <div className="relative">
+          <label htmlFor="member-search" className="sr-only">Search members</label>
           <input 
+            id="member-search"
+            name="member-search"
             type="text" 
             placeholder="Search members..." 
             className="pl-8 pr-4 py-1.5 bg-gray-50 border rounded-lg text-sm outline-none focus:ring-1 focus:ring-primary/20"

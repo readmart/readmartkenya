@@ -67,8 +67,11 @@ export default function TrackOrder() {
         >
           <form onSubmit={handleTrack} className="flex flex-col md:flex-row gap-4">
             <div className="relative flex-1">
+              <label htmlFor="order_id" className="sr-only">Order ID</label>
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground w-5 h-5" />
               <input 
+                id="order_id"
+                name="order_id"
                 type="text" 
                 value={orderId}
                 onChange={(e) => setOrderId(e.target.value)}
@@ -96,18 +99,21 @@ export default function TrackOrder() {
               className="space-y-8"
             >
               {/* Status Stepper */}
-              <div className="glass-card p-8">
-                <div className="flex flex-col md:flex-row justify-between gap-8">
+              <div className="glass-card p-8" role="region" aria-label="Order status tracker">
+                <div className="flex flex-col md:flex-row justify-between gap-8" role="list">
                   {steps.map((step, index) => {
                     const isCompleted = index <= currentStepIndex;
                     const isCurrent = index === currentStepIndex;
                     
                     return (
-                      <div key={step.status} className="flex-1 relative">
+                      <div key={step.status} className="flex-1 relative" role="listitem" aria-current={isCurrent ? 'step' : undefined}>
                         <div className="flex flex-col items-center text-center gap-3">
-                          <div className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${
-                            isCompleted ? 'bg-primary text-white shadow-lg shadow-primary/20' : 'bg-white/5 text-muted-foreground'
-                          } ${isCurrent ? 'ring-4 ring-primary/20 scale-110' : ''}`}>
+                          <div 
+                            className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${
+                              isCompleted ? 'bg-primary text-white shadow-lg shadow-primary/20' : 'bg-white/5 text-muted-foreground'
+                            } ${isCurrent ? 'ring-4 ring-primary/20 scale-110' : ''}`}
+                            aria-hidden="true"
+                          >
                             {step.icon}
                           </div>
                           <div>
@@ -120,7 +126,7 @@ export default function TrackOrder() {
                           </div>
                         </div>
                         {index < steps.length - 1 && (
-                          <div className="hidden md:block absolute top-6 left-[60%] w-[80%] h-[2px] bg-white/5">
+                          <div className="hidden md:block absolute top-6 left-[60%] w-[80%] h-[2px] bg-white/5" aria-hidden="true">
                             <div 
                               className="h-full bg-primary transition-all duration-500" 
                               style={{ width: index < currentStepIndex ? '100%' : '0%' }}
@@ -213,5 +219,5 @@ export default function TrackOrder() {
 }
 
 const MapPin = ({ className }: { className?: string }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
 );

@@ -93,6 +93,9 @@ export default function Navbar() {
             <button 
               onClick={() => setIsExploreOpen(!isExploreOpen)}
               className={`hover:text-primary transition-colors flex items-center gap-1 font-black uppercase tracking-widest text-[10px] ${isExploreOpen ? 'text-primary' : ''}`}
+              aria-expanded={isExploreOpen}
+              aria-haspopup="true"
+              aria-label="Toggle explore categories"
             >
               Explore
               <motion.div
@@ -152,10 +155,11 @@ export default function Navbar() {
         <button 
           onClick={() => setIsSearchOpen(true)}
           className="hidden sm:flex items-center gap-3 px-4 py-2 rounded-full bg-muted/50 hover:bg-muted transition-all border border-white/5 group min-w-[240px]"
+          aria-label="Open search dialog"
         >
           <Search className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
           <span className="text-sm text-muted-foreground flex-1 text-left">Search books...</span>
-          <div className="flex items-center gap-1 px-1.5 py-0.5 rounded border border-white/10 bg-white/5 text-[10px] font-medium text-muted-foreground">
+          <div className="flex items-center gap-1 px-1.5 py-0.5 rounded border border-white/10 bg-white/5 text-[10px] font-medium text-muted-foreground" aria-hidden="true">
             <Command className="w-2.5 h-2.5" />
             <span>K</span>
           </div>
@@ -165,10 +169,11 @@ export default function Navbar() {
           <button 
             onClick={() => setIsSearchOpen(true)}
             className="sm:hidden p-2 hover:bg-primary/10 rounded-full transition-colors"
+            aria-label="Open search dialog"
           >
             <Search className="h-5 w-5" />
           </button>
-          <Link to="/wishlist" className="p-2 hover:bg-primary/10 rounded-full transition-colors relative group">
+          <Link to="/wishlist" className="p-2 hover:bg-primary/10 rounded-full transition-colors relative group" aria-label={`View wishlist, ${wishlistCount} items`}>
             <Heart className="h-5 w-5 group-hover:scale-110 transition-transform" />
             {wishlistCount > 0 && (
               <span className="absolute -top-1 -right-1 bg-secondary text-white text-[10px] font-bold min-w-[20px] h-5 px-1 rounded-full flex items-center justify-center animate-in zoom-in">
@@ -176,7 +181,7 @@ export default function Navbar() {
               </span>
             )}
           </Link>
-          <Link to="/cart" className="p-2 hover:bg-primary/10 rounded-full transition-colors relative group">
+          <Link to="/cart" className="p-2 hover:bg-primary/10 rounded-full transition-colors relative group" aria-label={`View shopping cart, ${cartCount} items`}>
             <ShoppingCart className="h-5 w-5 group-hover:scale-110 transition-transform" />
             {cartCount > 0 && (
               <span className="absolute -top-1 -right-1 bg-primary text-white text-[10px] font-bold min-w-[20px] h-5 px-1 rounded-full flex items-center justify-center animate-in zoom-in">
@@ -190,6 +195,9 @@ export default function Navbar() {
             <button 
               onClick={() => setIsProfileOpen(!isProfileOpen)}
               className={`p-2 rounded-full transition-all ${isProfileOpen ? 'bg-primary/20 text-primary' : 'hover:bg-primary/10'}`}
+              aria-expanded={isProfileOpen}
+              aria-haspopup="true"
+              aria-label="User profile menu"
             >
               <User className="h-5 w-5" />
             </button>
@@ -250,6 +258,8 @@ export default function Navbar() {
           <button 
             onClick={() => setIsMenuOpen(!isMenuOpen)}
             className="lg:hidden p-2 hover:bg-primary/10 rounded-full transition-colors"
+            aria-expanded={isMenuOpen}
+            aria-label={isMenuOpen ? "Close menu" : "Open menu"}
           >
             {isMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </button>
@@ -276,15 +286,22 @@ export default function Navbar() {
             >
               <div className="flex items-center justify-between mb-4">
                 <img src="/assets/logo.jpg" alt="ReadMart" className="h-10 w-auto rounded" />
-                <button onClick={() => setIsMenuOpen(false)} className="p-2 hover:bg-slate-100 rounded-full transition-colors">
+                <button 
+                  onClick={() => setIsMenuOpen(false)} 
+                  className="p-2 hover:bg-slate-100 rounded-full transition-colors"
+                  aria-label="Close menu"
+                >
                   <X className="h-6 w-6 text-slate-900" />
                 </button>
               </div>
 
               {/* Mobile Search */}
               <div className="relative">
+                <label htmlFor="mobile-search-input" className="sr-only">Search books</label>
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                 <input 
+                  id="mobile-search-input"
+                  name="mobile-search"
                   type="text" 
                   placeholder="Search books..." 
                   className="w-full pl-10 pr-4 py-4 rounded-2xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-primary text-sm text-slate-900 outline-none"
