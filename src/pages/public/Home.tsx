@@ -35,13 +35,19 @@ export default function Home() {
         // Fetch latest books
         const { data: latestBooks } = await supabase
           .from('products')
-          .select('*')
+          .select('*, category:categories(name)')
           .eq('is_active', true)
           .order('created_at', { ascending: false })
           .limit(4);
         
         if (latestBooks) {
-          setFeaturedBooks(latestBooks);
+          // Map metadata to top-level props for BookCard
+          const mappedBooks = latestBooks.map(book => ({
+            ...book,
+            category: (book.category as any)?.name || 'Uncategorized',
+            rating: book.metadata?.rating || 0
+          }));
+          setFeaturedBooks(mappedBooks);
         }
 
         // Get site settings for Hero and Author of the Day
@@ -236,7 +242,7 @@ export default function Home() {
                               transition={{ delay: 1 + (idx * 0.1) }}
                               className="flex-shrink-0 group/book"
                             >
-                              <Link to={`/product/${book.id}`} className="block">
+                              <Link to={`/book/${book.id}`} className="block">
                                 <div className="relative w-12 h-16 rounded-lg overflow-hidden shadow-md group-hover/book:shadow-lg transition-all group-hover/book:-translate-y-1">
                                   <img 
                                     src={book.image_url} 

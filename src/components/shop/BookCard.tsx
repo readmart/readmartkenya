@@ -13,7 +13,8 @@ interface BookCardProps {
   author: string;
   author_id?: string;
   price: number;
-  image: string;
+  image?: string;
+  image_url?: string;
   rating: number;
   category: string;
   type?: 'physical' | 'ebook';
@@ -21,12 +22,17 @@ interface BookCardProps {
   volume?: number;
 }
 
-export default function BookCard({ id, title, author, author_id, price, image, rating, category, type, weight, volume }: BookCardProps) {
+export default function BookCard({ 
+  id, title, author, author_id, price, image, image_url, 
+  rating, category, type, weight, volume 
+}: BookCardProps) {
   const navigate = useNavigate();
   const { addToCart, buyNow } = useCart();
   const { addToWishlist, removeFromWishlist, isInWishlist } = useWishlist();
   const { formatPrice } = useCurrency();
   const { settings } = useSettings();
+
+  const displayImage = image_url || image || 'https://images.unsplash.com/photo-1543003919-a9957004bcc5?q=80&w=400';
 
   const taxRate = settings?.tax_rate ?? 16;
   const taxInclusivePrice = price * (1 + taxRate / 100);
@@ -34,14 +40,14 @@ export default function BookCard({ id, title, author, author_id, price, image, r
   const handleAddToCart = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    addToCart({ id, title, author, author_id, price, image, category, type, weight, volume });
+    addToCart({ id, title, author, author_id, price, image: displayImage, category, type, weight, volume });
     toast.success(`${title} added to cart!`);
   };
 
   const handleBuyNow = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    buyNow({ id, title, author, author_id, price, image, category, type, weight, volume });
+    buyNow({ id, title, author, author_id, price, image: displayImage, category, type, weight, volume });
     navigate('/checkout');
   };
 
@@ -52,7 +58,7 @@ export default function BookCard({ id, title, author, author_id, price, image, r
       removeFromWishlist(id);
       toast.info(`${title} removed from wishlist`);
     } else {
-      addToWishlist({ id, title, author, price, image, category, rating });
+      addToWishlist({ id, title, author, price, image: displayImage, category, rating });
       toast.success(`${title} added to wishlist!`);
     }
   };
@@ -64,7 +70,7 @@ export default function BookCard({ id, title, author, author_id, price, image, r
     >
       <Link to={`/book/${id}`} className="block relative aspect-[3/4] overflow-hidden">
         <img 
-          src={image} 
+          src={displayImage} 
           alt={title} 
           className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
           referrerPolicy="no-referrer"

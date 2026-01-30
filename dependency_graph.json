@@ -1,0 +1,922 @@
+{
+  "nodes": [
+    {
+      "id": "src/api/auth.ts",
+      "type": "lib"
+    },
+    {
+      "id": "src/api/bookclub.ts",
+      "type": "lib"
+    },
+    {
+      "id": "src/api/community.ts",
+      "type": "lib"
+    },
+    {
+      "id": "src/api/dashboards.ts",
+      "type": "lib"
+    },
+    {
+      "id": "src/api/ebooks.ts",
+      "type": "lib"
+    },
+    {
+      "id": "src/api/newsletter.ts",
+      "type": "lib"
+    },
+    {
+      "id": "src/api/orders.ts",
+      "type": "lib"
+    },
+    {
+      "id": "src/api/payments.ts",
+      "type": "lib"
+    },
+    {
+      "id": "src/api/products.ts",
+      "type": "lib"
+    },
+    {
+      "id": "src/api/storage.ts",
+      "type": "lib"
+    },
+    {
+      "id": "src/App.tsx",
+      "type": "lib"
+    },
+    {
+      "id": "src/components/auth/ProtectedRoute.tsx",
+      "type": "component"
+    },
+    {
+      "id": "src/components/dashboard/AgreementsSection.tsx",
+      "type": "component"
+    },
+    {
+      "id": "src/components/ErrorBoundary.tsx",
+      "type": "component"
+    },
+    {
+      "id": "src/components/layout/Footer.tsx",
+      "type": "component"
+    },
+    {
+      "id": "src/components/layout/Layout.tsx",
+      "type": "component"
+    },
+    {
+      "id": "src/components/layout/Navbar.tsx",
+      "type": "component"
+    },
+    {
+      "id": "src/components/layout/ScrollToTop.tsx",
+      "type": "component"
+    },
+    {
+      "id": "src/components/layout/StoryModal.tsx",
+      "type": "component"
+    },
+    {
+      "id": "src/components/membership/PaymentWall.tsx",
+      "type": "component"
+    },
+    {
+      "id": "src/components/search/SearchDialog.tsx",
+      "type": "component"
+    },
+    {
+      "id": "src/components/shop/BookCard.tsx",
+      "type": "component"
+    },
+    {
+      "id": "src/contexts/AuthContext.tsx",
+      "type": "context"
+    },
+    {
+      "id": "src/contexts/CartContext.tsx",
+      "type": "context"
+    },
+    {
+      "id": "src/contexts/CurrencyContext.tsx",
+      "type": "context"
+    },
+    {
+      "id": "src/contexts/WishlistContext.tsx",
+      "type": "context"
+    },
+    {
+      "id": "src/hooks/useClubMembership.ts",
+      "type": "hook"
+    },
+    {
+      "id": "src/hooks/useHttpsEnforcement.ts",
+      "type": "hook"
+    },
+    {
+      "id": "src/hooks/useSettings.ts",
+      "type": "hook"
+    },
+    {
+      "id": "src/lib/constants.ts",
+      "type": "lib"
+    },
+    {
+      "id": "src/lib/images.ts",
+      "type": "lib"
+    },
+    {
+      "id": "src/lib/retry.ts",
+      "type": "lib"
+    },
+    {
+      "id": "src/lib/supabase/client.ts",
+      "type": "lib"
+    },
+    {
+      "id": "src/lib/utils/api-helpers.ts",
+      "type": "lib"
+    },
+    {
+      "id": "src/lib/utils/__tests__/api-helpers.test.ts",
+      "type": "lib"
+    },
+    {
+      "id": "src/lib/utils.ts",
+      "type": "lib"
+    },
+    {
+      "id": "src/main.tsx",
+      "type": "lib"
+    },
+    {
+      "id": "src/pages/auth/AdminLogin.tsx",
+      "type": "page"
+    },
+    {
+      "id": "src/pages/auth/ForgotPassword.tsx",
+      "type": "page"
+    },
+    {
+      "id": "src/pages/auth/Login.tsx",
+      "type": "page"
+    },
+    {
+      "id": "src/pages/auth/ResetPassword.tsx",
+      "type": "page"
+    },
+    {
+      "id": "src/pages/auth/Signup.tsx",
+      "type": "page"
+    },
+    {
+      "id": "src/pages/bookclub/BookClubHub.tsx",
+      "type": "page"
+    },
+    {
+      "id": "src/pages/bookclub/ClubDetails.tsx",
+      "type": "page"
+    },
+    {
+      "id": "src/pages/bookclub/CreateClub.tsx",
+      "type": "page"
+    },
+    {
+      "id": "src/pages/dashboard/AuthorDashboard.tsx",
+      "type": "page"
+    },
+    {
+      "id": "src/pages/dashboard/FounderDashboard.tsx",
+      "type": "page"
+    },
+    {
+      "id": "src/pages/dashboard/PartnerDashboard.tsx",
+      "type": "page"
+    },
+    {
+      "id": "src/pages/public/About.tsx",
+      "type": "page"
+    },
+    {
+      "id": "src/pages/public/AuthorApply.tsx",
+      "type": "page"
+    },
+    {
+      "id": "src/pages/public/BookClub.tsx",
+      "type": "page"
+    },
+    {
+      "id": "src/pages/public/BookDetail.tsx",
+      "type": "page"
+    },
+    {
+      "id": "src/pages/public/Contact.tsx",
+      "type": "page"
+    },
+    {
+      "id": "src/pages/public/Events.tsx",
+      "type": "page"
+    },
+    {
+      "id": "src/pages/public/Help.tsx",
+      "type": "page"
+    },
+    {
+      "id": "src/pages/public/Home.tsx",
+      "type": "page"
+    },
+    {
+      "id": "src/pages/public/Membership.tsx",
+      "type": "page"
+    },
+    {
+      "id": "src/pages/public/PartnershipApply.tsx",
+      "type": "page"
+    },
+    {
+      "id": "src/pages/public/Privacy.tsx",
+      "type": "page"
+    },
+    {
+      "id": "src/pages/public/Returns.tsx",
+      "type": "page"
+    },
+    {
+      "id": "src/pages/public/Shipping.tsx",
+      "type": "page"
+    },
+    {
+      "id": "src/pages/public/Shop.tsx",
+      "type": "page"
+    },
+    {
+      "id": "src/pages/public/Terms.tsx",
+      "type": "page"
+    },
+    {
+      "id": "src/pages/public/TrackOrder.tsx",
+      "type": "page"
+    },
+    {
+      "id": "src/pages/user/Account.tsx",
+      "type": "page"
+    },
+    {
+      "id": "src/pages/user/Cart.tsx",
+      "type": "page"
+    },
+    {
+      "id": "src/pages/user/Checkout.tsx",
+      "type": "page"
+    },
+    {
+      "id": "src/pages/user/OrderHistory.tsx",
+      "type": "page"
+    },
+    {
+      "id": "src/pages/user/Wishlist.tsx",
+      "type": "page"
+    },
+    {
+      "id": "src/vite-env.d.ts",
+      "type": "lib"
+    },
+    {
+      "id": "api/applications.ts",
+      "type": "api"
+    },
+    {
+      "id": "api/auth.ts",
+      "type": "api"
+    },
+    {
+      "id": "api/community.ts",
+      "type": "api"
+    },
+    {
+      "id": "api/contact.ts",
+      "type": "api"
+    },
+    {
+      "id": "api/dashboards.ts",
+      "type": "api"
+    },
+    {
+      "id": "api/ebooks.ts",
+      "type": "api"
+    },
+    {
+      "id": "api/health.ts",
+      "type": "api"
+    },
+    {
+      "id": "api/newsletter.ts",
+      "type": "api"
+    },
+    {
+      "id": "api/orders.ts",
+      "type": "api"
+    },
+    {
+      "id": "api/payments.ts",
+      "type": "api"
+    },
+    {
+      "id": "api/products.ts",
+      "type": "api"
+    },
+    {
+      "id": "api/reminders.ts",
+      "type": "api"
+    },
+    {
+      "id": "api/_db.ts",
+      "type": "api"
+    },
+    {
+      "id": "api/_email.ts",
+      "type": "api"
+    },
+    {
+      "id": "api/_payments.ts",
+      "type": "api"
+    },
+    {
+      "id": "api/_utils.ts",
+      "type": "api"
+    }
+  ],
+  "links": [
+    {
+      "source": "src/api/bookclub.ts",
+      "target": "src/lib/supabase/client.ts"
+    },
+    {
+      "source": "src/api/community.ts",
+      "target": "src/lib/supabase/client.ts"
+    },
+    {
+      "source": "src/api/dashboards.ts",
+      "target": "src/lib/supabase/client.ts"
+    },
+    {
+      "source": "src/api/dashboards.ts",
+      "target": "src/lib/retry.ts"
+    },
+    {
+      "source": "src/api/dashboards.ts",
+      "target": "src/api/storage.ts"
+    },
+    {
+      "source": "src/api/ebooks.ts",
+      "target": "src/lib/supabase/client.ts"
+    },
+    {
+      "source": "src/api/newsletter.ts",
+      "target": "src/lib/supabase/client.ts"
+    },
+    {
+      "source": "src/api/orders.ts",
+      "target": "src/lib/supabase/client.ts"
+    },
+    {
+      "source": "src/api/payments.ts",
+      "target": "src/lib/supabase/client.ts"
+    },
+    {
+      "source": "src/api/products.ts",
+      "target": "src/lib/supabase/client.ts"
+    },
+    {
+      "source": "src/api/storage.ts",
+      "target": "src/lib/supabase/client.ts"
+    },
+    {
+      "source": "src/api/storage.ts",
+      "target": "src/lib/retry.ts"
+    },
+    {
+      "source": "src/App.tsx",
+      "target": "src/components/auth/ProtectedRoute.tsx"
+    },
+    {
+      "source": "src/App.tsx",
+      "target": "src/components/layout/Layout.tsx"
+    },
+    {
+      "source": "src/App.tsx",
+      "target": "src/components/layout/ScrollToTop.tsx"
+    },
+    {
+      "source": "src/App.tsx",
+      "target": "src/lib/utils.ts"
+    },
+    {
+      "source": "src/App.tsx",
+      "target": "src/hooks/useHttpsEnforcement.ts"
+    },
+    {
+      "source": "src/components/auth/ProtectedRoute.tsx",
+      "target": "src/contexts/AuthContext.tsx"
+    },
+    {
+      "source": "src/components/dashboard/AgreementsSection.tsx",
+      "target": "src/api/dashboards.ts"
+    },
+    {
+      "source": "src/components/dashboard/AgreementsSection.tsx",
+      "target": "src/api/storage.ts"
+    },
+    {
+      "source": "src/components/dashboard/AgreementsSection.tsx",
+      "target": "src/lib/supabase/client.ts"
+    },
+    {
+      "source": "src/components/layout/Footer.tsx",
+      "target": "src/hooks/useSettings.ts"
+    },
+    {
+      "source": "src/components/layout/Footer.tsx",
+      "target": "src/lib/constants.ts"
+    },
+    {
+      "source": "src/components/layout/Footer.tsx",
+      "target": "src/components/layout/StoryModal.tsx"
+    },
+    {
+      "source": "src/components/layout/Layout.tsx",
+      "target": "src/components/layout/Navbar.tsx"
+    },
+    {
+      "source": "src/components/layout/Layout.tsx",
+      "target": "src/components/layout/Footer.tsx"
+    },
+    {
+      "source": "src/components/layout/Layout.tsx",
+      "target": "src/hooks/useSettings.ts"
+    },
+    {
+      "source": "src/components/layout/Navbar.tsx",
+      "target": "src/contexts/AuthContext.tsx"
+    },
+    {
+      "source": "src/components/layout/Navbar.tsx",
+      "target": "src/contexts/CartContext.tsx"
+    },
+    {
+      "source": "src/components/layout/Navbar.tsx",
+      "target": "src/contexts/WishlistContext.tsx"
+    },
+    {
+      "source": "src/components/layout/Navbar.tsx",
+      "target": "src/hooks/useSettings.ts"
+    },
+    {
+      "source": "src/components/layout/Navbar.tsx",
+      "target": "src/components/search/SearchDialog.tsx"
+    },
+    {
+      "source": "src/components/membership/PaymentWall.tsx",
+      "target": "src/contexts/AuthContext.tsx"
+    },
+    {
+      "source": "src/components/membership/PaymentWall.tsx",
+      "target": "src/hooks/useSettings.ts"
+    },
+    {
+      "source": "src/components/membership/PaymentWall.tsx",
+      "target": "src/contexts/CurrencyContext.tsx"
+    },
+    {
+      "source": "src/components/membership/PaymentWall.tsx",
+      "target": "src/hooks/useClubMembership.ts"
+    },
+    {
+      "source": "src/components/membership/PaymentWall.tsx",
+      "target": "src/api/community.ts"
+    },
+    {
+      "source": "src/components/search/SearchDialog.tsx",
+      "target": "src/lib/supabase/client.ts"
+    },
+    {
+      "source": "src/components/search/SearchDialog.tsx",
+      "target": "src/contexts/AuthContext.tsx"
+    },
+    {
+      "source": "src/components/shop/BookCard.tsx",
+      "target": "src/contexts/CartContext.tsx"
+    },
+    {
+      "source": "src/components/shop/BookCard.tsx",
+      "target": "src/contexts/WishlistContext.tsx"
+    },
+    {
+      "source": "src/components/shop/BookCard.tsx",
+      "target": "src/contexts/CurrencyContext.tsx"
+    },
+    {
+      "source": "src/components/shop/BookCard.tsx",
+      "target": "src/hooks/useSettings.ts"
+    },
+    {
+      "source": "src/contexts/AuthContext.tsx",
+      "target": "src/lib/supabase/client.ts"
+    },
+    {
+      "source": "src/contexts/CurrencyContext.tsx",
+      "target": "src/hooks/useSettings.ts"
+    },
+    {
+      "source": "src/hooks/useClubMembership.ts",
+      "target": "src/lib/supabase/client.ts"
+    },
+    {
+      "source": "src/hooks/useClubMembership.ts",
+      "target": "src/contexts/AuthContext.tsx"
+    },
+    {
+      "source": "src/hooks/useSettings.ts",
+      "target": "src/lib/supabase/client.ts"
+    },
+    {
+      "source": "src/hooks/useSettings.ts",
+      "target": "src/lib/retry.ts"
+    },
+    {
+      "source": "src/lib/images.ts",
+      "target": "src/lib/supabase/client.ts"
+    },
+    {
+      "source": "src/lib/utils/api-helpers.ts",
+      "target": "src/lib/supabase/client.ts"
+    },
+    {
+      "source": "src/lib/utils/__tests__/api-helpers.test.ts",
+      "target": "src/lib/utils/api-helpers.ts"
+    },
+    {
+      "source": "src/main.tsx",
+      "target": "src/App.tsx"
+    },
+    {
+      "source": "src/main.tsx",
+      "target": "src/contexts/AuthContext.tsx"
+    },
+    {
+      "source": "src/main.tsx",
+      "target": "src/contexts/CurrencyContext.tsx"
+    },
+    {
+      "source": "src/main.tsx",
+      "target": "src/contexts/CartContext.tsx"
+    },
+    {
+      "source": "src/main.tsx",
+      "target": "src/contexts/WishlistContext.tsx"
+    },
+    {
+      "source": "src/main.tsx",
+      "target": "src/components/ErrorBoundary.tsx"
+    },
+    {
+      "source": "src/pages/auth/AdminLogin.tsx",
+      "target": "src/lib/supabase/client.ts"
+    },
+    {
+      "source": "src/pages/auth/AdminLogin.tsx",
+      "target": "src/contexts/AuthContext.tsx"
+    },
+    {
+      "source": "src/pages/auth/ForgotPassword.tsx",
+      "target": "src/contexts/AuthContext.tsx"
+    },
+    {
+      "source": "src/pages/auth/Login.tsx",
+      "target": "src/lib/supabase/client.ts"
+    },
+    {
+      "source": "src/pages/auth/Login.tsx",
+      "target": "src/api/auth.ts"
+    },
+    {
+      "source": "src/pages/auth/ResetPassword.tsx",
+      "target": "src/contexts/AuthContext.tsx"
+    },
+    {
+      "source": "src/pages/auth/Signup.tsx",
+      "target": "src/lib/supabase/client.ts"
+    },
+    {
+      "source": "src/pages/auth/Signup.tsx",
+      "target": "src/api/auth.ts"
+    },
+    {
+      "source": "src/pages/bookclub/BookClubHub.tsx",
+      "target": "src/api/bookclub.ts"
+    },
+    {
+      "source": "src/pages/bookclub/ClubDetails.tsx",
+      "target": "src/contexts/AuthContext.tsx"
+    },
+    {
+      "source": "src/pages/bookclub/CreateClub.tsx",
+      "target": "src/api/bookclub.ts"
+    },
+    {
+      "source": "src/pages/dashboard/AuthorDashboard.tsx",
+      "target": "src/contexts/CurrencyContext.tsx"
+    },
+    {
+      "source": "src/pages/dashboard/AuthorDashboard.tsx",
+      "target": "src/contexts/AuthContext.tsx"
+    },
+    {
+      "source": "src/pages/dashboard/AuthorDashboard.tsx",
+      "target": "src/api/storage.ts"
+    },
+    {
+      "source": "src/pages/dashboard/AuthorDashboard.tsx",
+      "target": "src/components/dashboard/AgreementsSection.tsx"
+    },
+    {
+      "source": "src/pages/dashboard/FounderDashboard.tsx",
+      "target": "src/lib/supabase/client.ts"
+    },
+    {
+      "source": "src/pages/dashboard/FounderDashboard.tsx",
+      "target": "src/contexts/CurrencyContext.tsx"
+    },
+    {
+      "source": "src/pages/dashboard/FounderDashboard.tsx",
+      "target": "src/api/storage.ts"
+    },
+    {
+      "source": "src/pages/dashboard/FounderDashboard.tsx",
+      "target": "src/api/community.ts"
+    },
+    {
+      "source": "src/pages/dashboard/PartnerDashboard.tsx",
+      "target": "src/contexts/CurrencyContext.tsx"
+    },
+    {
+      "source": "src/pages/dashboard/PartnerDashboard.tsx",
+      "target": "src/contexts/AuthContext.tsx"
+    },
+    {
+      "source": "src/pages/dashboard/PartnerDashboard.tsx",
+      "target": "src/api/dashboards.ts"
+    },
+    {
+      "source": "src/pages/dashboard/PartnerDashboard.tsx",
+      "target": "src/components/dashboard/AgreementsSection.tsx"
+    },
+    {
+      "source": "src/pages/public/About.tsx",
+      "target": "src/lib/supabase/client.ts"
+    },
+    {
+      "source": "src/pages/public/About.tsx",
+      "target": "src/api/newsletter.ts"
+    },
+    {
+      "source": "src/pages/public/About.tsx",
+      "target": "src/components/layout/StoryModal.tsx"
+    },
+    {
+      "source": "src/pages/public/AuthorApply.tsx",
+      "target": "src/lib/supabase/client.ts"
+    },
+    {
+      "source": "src/pages/public/AuthorApply.tsx",
+      "target": "src/contexts/AuthContext.tsx"
+    },
+    {
+      "source": "src/pages/public/AuthorApply.tsx",
+      "target": "src/api/storage.ts"
+    },
+    {
+      "source": "src/pages/public/BookClub.tsx",
+      "target": "src/contexts/AuthContext.tsx"
+    },
+    {
+      "source": "src/pages/public/BookClub.tsx",
+      "target": "src/contexts/CurrencyContext.tsx"
+    },
+    {
+      "source": "src/pages/public/BookClub.tsx",
+      "target": "src/components/membership/PaymentWall.tsx"
+    },
+    {
+      "source": "src/pages/public/BookDetail.tsx",
+      "target": "src/contexts/CartContext.tsx"
+    },
+    {
+      "source": "src/pages/public/BookDetail.tsx",
+      "target": "src/contexts/WishlistContext.tsx"
+    },
+    {
+      "source": "src/pages/public/BookDetail.tsx",
+      "target": "src/contexts/CurrencyContext.tsx"
+    },
+    {
+      "source": "src/pages/public/BookDetail.tsx",
+      "target": "src/hooks/useSettings.ts"
+    },
+    {
+      "source": "src/pages/public/BookDetail.tsx",
+      "target": "src/api/products.ts"
+    },
+    {
+      "source": "src/pages/public/Contact.tsx",
+      "target": "src/hooks/useSettings.ts"
+    },
+    {
+      "source": "src/pages/public/Contact.tsx",
+      "target": "src/lib/supabase/client.ts"
+    },
+    {
+      "source": "src/pages/public/Events.tsx",
+      "target": "src/api/community.ts"
+    },
+    {
+      "source": "src/pages/public/Events.tsx",
+      "target": "src/components/membership/PaymentWall.tsx"
+    },
+    {
+      "source": "src/pages/public/Help.tsx",
+      "target": "src/lib/constants.ts"
+    },
+    {
+      "source": "src/pages/public/Help.tsx",
+      "target": "src/lib/supabase/client.ts"
+    },
+    {
+      "source": "src/pages/public/Help.tsx",
+      "target": "src/hooks/useSettings.ts"
+    },
+    {
+      "source": "src/pages/public/Home.tsx",
+      "target": "src/components/shop/BookCard.tsx"
+    },
+    {
+      "source": "src/pages/public/Home.tsx",
+      "target": "src/api/dashboards.ts"
+    },
+    {
+      "source": "src/pages/public/Home.tsx",
+      "target": "src/lib/supabase/client.ts"
+    },
+    {
+      "source": "src/pages/public/Home.tsx",
+      "target": "src/lib/retry.ts"
+    },
+    {
+      "source": "src/pages/public/Membership.tsx",
+      "target": "src/contexts/AuthContext.tsx"
+    },
+    {
+      "source": "src/pages/public/Membership.tsx",
+      "target": "src/hooks/useSettings.ts"
+    },
+    {
+      "source": "src/pages/public/Membership.tsx",
+      "target": "src/contexts/CurrencyContext.tsx"
+    },
+    {
+      "source": "src/pages/public/Membership.tsx",
+      "target": "src/api/payments.ts"
+    },
+    {
+      "source": "src/pages/public/Membership.tsx",
+      "target": "src/api/community.ts"
+    },
+    {
+      "source": "src/pages/public/Membership.tsx",
+      "target": "src/lib/supabase/client.ts"
+    },
+    {
+      "source": "src/pages/public/PartnershipApply.tsx",
+      "target": "src/lib/supabase/client.ts"
+    },
+    {
+      "source": "src/pages/public/PartnershipApply.tsx",
+      "target": "src/contexts/AuthContext.tsx"
+    },
+    {
+      "source": "src/pages/public/PartnershipApply.tsx",
+      "target": "src/api/storage.ts"
+    },
+    {
+      "source": "src/pages/public/Shop.tsx",
+      "target": "src/components/shop/BookCard.tsx"
+    },
+    {
+      "source": "src/pages/public/Shop.tsx",
+      "target": "src/contexts/CurrencyContext.tsx"
+    },
+    {
+      "source": "src/pages/public/Shop.tsx",
+      "target": "src/api/products.ts"
+    },
+    {
+      "source": "src/pages/public/TrackOrder.tsx",
+      "target": "src/api/orders.ts"
+    },
+    {
+      "source": "src/pages/public/TrackOrder.tsx",
+      "target": "src/contexts/CurrencyContext.tsx"
+    },
+    {
+      "source": "src/pages/user/Account.tsx",
+      "target": "src/contexts/AuthContext.tsx"
+    },
+    {
+      "source": "src/pages/user/Account.tsx",
+      "target": "src/contexts/WishlistContext.tsx"
+    },
+    {
+      "source": "src/pages/user/Account.tsx",
+      "target": "src/contexts/CartContext.tsx"
+    },
+    {
+      "source": "src/pages/user/Account.tsx",
+      "target": "src/contexts/CurrencyContext.tsx"
+    },
+    {
+      "source": "src/pages/user/Account.tsx",
+      "target": "src/lib/supabase/client.ts"
+    },
+    {
+      "source": "src/pages/user/Account.tsx",
+      "target": "src/api/ebooks.ts"
+    },
+    {
+      "source": "src/pages/user/Cart.tsx",
+      "target": "src/contexts/CartContext.tsx"
+    },
+    {
+      "source": "src/pages/user/Cart.tsx",
+      "target": "src/contexts/CurrencyContext.tsx"
+    },
+    {
+      "source": "src/pages/user/Cart.tsx",
+      "target": "src/hooks/useSettings.ts"
+    },
+    {
+      "source": "src/pages/user/Checkout.tsx",
+      "target": "src/contexts/CurrencyContext.tsx"
+    },
+    {
+      "source": "src/pages/user/Checkout.tsx",
+      "target": "src/contexts/CartContext.tsx"
+    },
+    {
+      "source": "src/pages/user/Checkout.tsx",
+      "target": "src/contexts/AuthContext.tsx"
+    },
+    {
+      "source": "src/pages/user/Checkout.tsx",
+      "target": "src/hooks/useSettings.ts"
+    },
+    {
+      "source": "src/pages/user/Checkout.tsx",
+      "target": "src/api/orders.ts"
+    },
+    {
+      "source": "src/pages/user/Checkout.tsx",
+      "target": "src/api/payments.ts"
+    },
+    {
+      "source": "src/pages/user/Checkout.tsx",
+      "target": "src/api/dashboards.ts"
+    },
+    {
+      "source": "src/pages/user/Checkout.tsx",
+      "target": "src/lib/supabase/client.ts"
+    },
+    {
+      "source": "src/pages/user/OrderHistory.tsx",
+      "target": "src/contexts/CurrencyContext.tsx"
+    },
+    {
+      "source": "src/pages/user/OrderHistory.tsx",
+      "target": "src/lib/supabase/client.ts"
+    },
+    {
+      "source": "src/pages/user/OrderHistory.tsx",
+      "target": "src/contexts/AuthContext.tsx"
+    },
+    {
+      "source": "src/pages/user/Wishlist.tsx",
+      "target": "src/contexts/WishlistContext.tsx"
+    },
+    {
+      "source": "src/pages/user/Wishlist.tsx",
+      "target": "src/contexts/CartContext.tsx"
+    },
+    {
+      "source": "src/pages/user/Wishlist.tsx",
+      "target": "src/contexts/CurrencyContext.tsx"
+    }
+  ]
+}

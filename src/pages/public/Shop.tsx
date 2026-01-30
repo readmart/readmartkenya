@@ -32,7 +32,13 @@ export default function Shop() {
       setIsLoading(true);
       try {
         const productsData = await getProducts();
-        setProducts(productsData);
+        // Map metadata to top-level props for BookCard
+        const mappedProducts = productsData.map((p: any) => ({
+          ...p,
+          category: p.category?.name || 'Uncategorized',
+          rating: p.metadata?.rating || 0
+        }));
+        setProducts(mappedProducts);
         
         // Use user requested categories
         const requiredCategories = ['All', 'Books', 'Art', 'Accessories'];
@@ -66,7 +72,7 @@ export default function Shop() {
         const author = book.author || book.metadata?.author || 'Unknown';
         const condition = book.metadata?.condition || 'New';
         const format = book.metadata?.format || 'Physical';
-        const genre = book.category?.name || 'Uncategorized';
+        const genre = book.category || 'Uncategorized';
         
         const matchesSearch = title.toLowerCase().includes(searchQuery.toLowerCase()) || 
                               author.toLowerCase().includes(searchQuery.toLowerCase());

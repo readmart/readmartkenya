@@ -14,13 +14,20 @@ async function testNewsletterFlow() {
   try {
     // 1. Simulate Subscription Request
     console.log('Step 1: Requesting subscription...');
-    const subscribeRes = await fetch('http://localhost:3000/api/newsletter', {
+    const subscribeRes = await fetch('https://readmartke.com/api/newsletter', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: testEmail })
     });
     
-    const subscribeData = await subscribeRes.json();
+    let subscribeData: any;
+    const responseText = await subscribeRes.text();
+    try {
+      subscribeData = JSON.parse(responseText);
+    } catch (e) {
+      console.error('Failed to parse JSON response:', responseText.substring(0, 100));
+      throw new Error(`Invalid response from server: ${subscribeRes.status}`);
+    }
     if (!subscribeRes.ok) throw new Error(`Subscription failed: ${subscribeData.error}`);
     console.log('✅ Subscription request successful:', subscribeData.message);
 
@@ -41,7 +48,7 @@ async function testNewsletterFlow() {
     if (!token) throw new Error('No confirmation token found in metadata');
     console.log(`Step 3: Confirming subscription with token: ${token.substring(0, 10)}...`);
 
-    const confirmRes = await fetch(`http://localhost:3000/api/newsletter?confirm=${token}`);
+    const confirmRes = await fetch(`https://readmartke.com/api/newsletter?confirm=${token}`);
     if (confirmRes.status !== 200 && !confirmRes.url.includes('success')) {
        // Since it's a redirect, we check if it went to success page
        console.warn('⚠️ Confirmation might have redirected. Checking database for status update...');
