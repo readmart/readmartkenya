@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  FileText, Download, Upload, CheckCircle, 
+  FileText, Upload, CheckCircle, 
   Clock, AlertCircle, Loader2, FileCheck,
   Eye, X, Info, ShieldCheck
 } from 'lucide-react';

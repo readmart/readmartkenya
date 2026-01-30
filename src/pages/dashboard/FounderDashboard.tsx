@@ -5458,6 +5458,12 @@ function PromosView({ data, onUpdate }: any) {
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
   const [isMetricsModalOpen, setIsMetricsModalOpen] = useState(false);
   const [selectedMetrics, setSelectedMetrics] = useState<any[]>([]);
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+    return () => setIsMounted(false);
+  }, []);
   
   const [formData, setFormData] = useState({
     code: '',
