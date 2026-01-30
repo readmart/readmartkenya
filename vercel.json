@@ -1,13 +1,13 @@
 { 
   "rewrites": [ 
-    { "source": "/api/auth/(.*)", "destination": "/api/auth" }, 
+    { "source": "/api/auth/(.*)", "destination": "/api/auth?action=$1" }, 
     { "source": "/api/payments/webhook", "destination": "/api/payments?webhook=true" }, 
     { "source": "/api/kopokopo/webhook", "destination": "/api/payments?webhook=true" }, 
-    { "source": "/api/payments/(.*)", "destination": "/api/payments" }, 
-    { "source": "/api/kopokopo/(.*)", "destination": "/api/payments" }, 
-    { "source": "/api/community/(.*)", "destination": "/api/community" },
-    { "source": "/api/orders/(.*)", "destination": "/api/orders" },
-    { "source": "/api/ebooks/(.*)", "destination": "/api/ebooks" },
+    { "source": "/api/payments/(.*)", "destination": "/api/payments?action=$1" }, 
+    { "source": "/api/kopokopo/(.*)", "destination": "/api/payments?action=$1" }, 
+    { "source": "/api/community/(.*)", "destination": "/api/community?action=$1" },
+    { "source": "/api/orders/(.*)", "destination": "/api/orders?action=$1" },
+    { "source": "/api/ebooks/(.*)", "destination": "/api/ebooks?action=$1" },
     { "source": "/api/(.*)", "destination": "/api/$1" }, 
     { "source": "/((?!api/).*)", "destination": "/index.html" } 
   ], 
