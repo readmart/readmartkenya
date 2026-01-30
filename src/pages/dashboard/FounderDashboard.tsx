@@ -560,7 +560,13 @@ function AuthorOfDayView({ settings, authors, inventory, onUpdate }: any) {
 
 function NewsletterView({ data, onUpdate }: any) {
   const [searchTerm, setSearchTerm] = useState('');
+  const [isMounted, setIsMounted] = useState(false);
   const [statusFilter, setStatusFilter] = useState('all');
+
+  useEffect(() => {
+    setIsMounted(true);
+    return () => setIsMounted(false);
+  }, []);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
@@ -759,7 +765,7 @@ function NewsletterView({ data, onUpdate }: any) {
 
       {/* System Manual / Help Section */}
       <AnimatePresence>
-        {showHelp && (
+        {isMounted && showHelp && (
           <motion.div 
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
@@ -853,7 +859,7 @@ function NewsletterView({ data, onUpdate }: any) {
 
       {/* Batch Operations */}
       <AnimatePresence>
-        {selectedIds.length > 0 && (
+        {isMounted && selectedIds.length > 0 && (
           <motion.div 
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
@@ -1169,7 +1175,13 @@ function AnalyticsView({ data, formatPrice, isMounted }: any) {
 function InventoryView({ data, categories, approvedAuthors, onUpdate }: any) {
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
   const [editingItem, setEditingItem] = useState<any>(null);
+
+  useEffect(() => {
+    setIsMounted(true);
+    return () => setIsMounted(false);
+  }, []);
   const [uploadProgress, setUploadProgress] = useState<{ [key: string]: number }>({});
   const [formData, setFormData] = useState({
     title: '',
@@ -1304,7 +1316,7 @@ function InventoryView({ data, categories, approvedAuthors, onUpdate }: any) {
 
     try {
       // Destructure to remove fields that don't belong in the products table
-      const { is_ebook, ebook_url, ...rawFormData } = formData;
+      const { is_ebook, ebook_url, type, ...rawFormData } = formData;
 
       const productPayload = {
         ...rawFormData,
@@ -1315,7 +1327,6 @@ function InventoryView({ data, categories, approvedAuthors, onUpdate }: any) {
         author_id: formData.author_id || null,
         weight: parseFloat(formData.weight.toString()) || 0.5,
         volume: parseFloat(formData.volume.toString()) || 0.001,
-        type: formData.type,
         is_ebook: formData.type === 'ebook',
         ebook_url: formData.ebook_url, 
         ebook_metadata: formData.type === 'ebook' ? {
@@ -1469,7 +1480,7 @@ function InventoryView({ data, categories, approvedAuthors, onUpdate }: any) {
       </div>
 
       <AnimatePresence>
-        {isModalOpen && (
+        {isMounted && isModalOpen && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
             <motion.div 
               initial={{ opacity: 0 }}
@@ -1787,7 +1798,13 @@ function InventoryView({ data, categories, approvedAuthors, onUpdate }: any) {
 
 function OrdersView({ data, formatPrice, onUpdate }: any) {
   const [searchTerm, setSearchTerm] = useState('');
+  const [isMounted, setIsMounted] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
+
+  useEffect(() => {
+    setIsMounted(true);
+    return () => setIsMounted(false);
+  }, []);
   
   const filtered = useMemo(() => {
     return data.filter((order: any) => 
@@ -1911,7 +1928,7 @@ function OrdersView({ data, formatPrice, onUpdate }: any) {
       </div>
 
       <AnimatePresence>
-        {selectedOrder && (
+        {isMounted && selectedOrder && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
             <motion.div 
               initial={{ opacity: 0 }}
@@ -2584,9 +2601,15 @@ function IdentityView({ settings, onUpdate }: any) {
 
 function BannersView({ settings, cmsContent, onUpdate }: any) {
   const [heroFormData, setHeroFormData] = useState(settings);
+  const [isMounted, setIsMounted] = useState(false);
   const [isUploadingHero, setIsUploadingHero] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<{ [key: string]: number }>({});
   
+  useEffect(() => {
+    setIsMounted(true);
+    return () => setIsMounted(false);
+  }, []);
+
   // Promotional Banners State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingBanner, setEditingBanner] = useState<any>(null);
@@ -2692,17 +2715,27 @@ function BannersView({ settings, cmsContent, onUpdate }: any) {
     e.preventDefault();
     const loadingToast = toast.loading(editingBanner ? 'Updating Banner...' : 'Deploying Banner...');
     try {
+      // Ensure we include metadata for consistency with cms_content schema
+      const payload = {
+        ...bannerFormData,
+        metadata: {
+          type: 'banner',
+          updated_at: new Date().toISOString()
+        }
+      };
+
       if (editingBanner) {
-        await updateCMSContent(editingBanner.id, bannerFormData);
+        await updateCMSContent(editingBanner.id, payload);
         toast.success('Banner updated', { id: loadingToast });
       } else {
-        await createCMSContent(bannerFormData);
+        await createCMSContent(payload);
         toast.success('Banner deployed', { id: loadingToast });
       }
       setIsModalOpen(false);
       onUpdate();
-    } catch (error) {
-      toast.error('Operation failed', { id: loadingToast });
+    } catch (error: any) {
+      console.error('Banner error:', error);
+      toast.error(`Operation failed: ${error.message || 'Check connectivity'}`, { id: loadingToast });
     }
   };
 
@@ -2850,7 +2883,7 @@ function BannersView({ settings, cmsContent, onUpdate }: any) {
       </div>
 
       <AnimatePresence>
-        {isModalOpen && (
+        {isMounted && isModalOpen && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
             <motion.div 
               initial={{ opacity: 0 }}
@@ -2978,7 +3011,13 @@ function BannersView({ settings, cmsContent, onUpdate }: any) {
 function ShippingView({ data, onUpdate, formatPrice }: any) {
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
   const [editingZone, setEditingZone] = useState<any>(null);
+
+  useEffect(() => {
+    setIsMounted(true);
+    return () => setIsMounted(false);
+  }, []);
   const [formData, setFormData] = useState({
     name: '',
     price: '',
@@ -3175,7 +3214,7 @@ function ShippingView({ data, onUpdate, formatPrice }: any) {
       </div>
 
       <AnimatePresence>
-        {isModalOpen && (
+        {isMounted && isModalOpen && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
             <motion.div 
               initial={{ opacity: 0 }}
@@ -3340,7 +3379,13 @@ function AreasView({ data, onUpdate, formatPrice }: any) {
   const [searchTerm, setSearchTerm] = useState('');
   const [countyFilter, setCountyFilter] = useState('all');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
   const [editingArea, setEditingArea] = useState<any>(null);
+
+  useEffect(() => {
+    setIsMounted(true);
+    return () => setIsMounted(false);
+  }, []);
   const [formData, setFormData] = useState({
     name: '',
     price: '',
@@ -3653,8 +3698,8 @@ function AreasView({ data, onUpdate, formatPrice }: any) {
       </div>
 
       <AnimatePresence>
-        {isModalOpen && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          {isMounted && isModalOpen && (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
             <motion.div 
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -3820,7 +3865,13 @@ function AreasView({ data, onUpdate, formatPrice }: any) {
 
 function InquiriesView({ data, onUpdate }: any) {
   const [searchTerm, setSearchTerm] = useState('');
+  const [isMounted, setIsMounted] = useState(false);
   const [statusFilter, setStatusFilter] = useState('all');
+
+  useEffect(() => {
+    setIsMounted(true);
+    return () => setIsMounted(false);
+  }, []);
   const [deptFilter, setDeptFilter] = useState('all');
 
   const departments = useMemo(() => {
@@ -4002,7 +4053,13 @@ function InquiriesView({ data, onUpdate }: any) {
 
 function ClubsView({ data, onUpdate }: any) {
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
   const [editingClub, setEditingClub] = useState<any>(null);
+
+  useEffect(() => {
+    setIsMounted(true);
+    return () => setIsMounted(false);
+  }, []);
   const [uploadProgress, setUploadProgress] = useState<{ [key: string]: number }>({});
   const [formData, setFormData] = useState({
     title: '',
@@ -4094,8 +4151,9 @@ function ClubsView({ data, onUpdate }: any) {
       }
       setIsModalOpen(false);
       onUpdate();
-    } catch (error) {
-      toast.error('Operation failed', { id: loadingToast });
+    } catch (error: any) {
+      console.error('Club error:', error);
+      toast.error(`Operation failed: ${error.message || 'Check connectivity'}`, { id: loadingToast });
     }
   };
 
@@ -4189,7 +4247,7 @@ function ClubsView({ data, onUpdate }: any) {
       </div>
 
       <AnimatePresence>
-        {isModalOpen && (
+        {isMounted && isModalOpen && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
             <motion.div 
               initial={{ opacity: 0 }}
@@ -4341,7 +4399,13 @@ function ClubsView({ data, onUpdate }: any) {
 
 function EventsView({ data, onUpdate }: any) {
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
   const [isRSVPModalOpen, setIsRSVPModalOpen] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+    return () => setIsMounted(false);
+  }, []);
   const [selectedEventRSVPs, setSelectedEventRSVPs] = useState<any[]>([]);
   const [editingEvent, setEditingEvent] = useState<any>(null);
   const [uploadProgress, setUploadProgress] = useState<{ [key: string]: number }>({});
@@ -4436,8 +4500,9 @@ function EventsView({ data, onUpdate }: any) {
       }
       setIsModalOpen(false);
       onUpdate();
-    } catch (error) {
-      toast.error('Operation failed', { id: loadingToast });
+    } catch (error: any) {
+      console.error('Event error:', error);
+      toast.error(`Operation failed: ${error.message || 'Check connectivity'}`, { id: loadingToast });
     }
   };
 
@@ -4542,7 +4607,7 @@ function EventsView({ data, onUpdate }: any) {
       </div>
 
       <AnimatePresence>
-        {isModalOpen && (
+        {isMounted && isModalOpen && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
             <motion.div 
               initial={{ opacity: 0 }}
@@ -4753,7 +4818,13 @@ function EventsView({ data, onUpdate }: any) {
 
 function AgreementsView({ partnerships, authors, protocols, onUpdate }: any) {
   const [selectedApp, setSelectedApp] = useState<any>(null);
+  const [isMounted, setIsMounted] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+    return () => setIsMounted(false);
+  }, []);
   const [isProtocolModalOpen, setIsProtocolModalOpen] = useState(false);
   const [editingProtocol, setEditingProtocol] = useState<any>(null);
   const [protocolFormData, setProtocolFormData] = useState({
@@ -5173,7 +5244,7 @@ function AgreementsView({ partnerships, authors, protocols, onUpdate }: any) {
 
       {/* Protocol Modal */}
       <AnimatePresence>
-        {isProtocolModalOpen && (
+        {isMounted && isProtocolModalOpen && (
           <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
             <motion.div 
               initial={{ opacity: 0 }}
@@ -5298,7 +5369,7 @@ function AgreementsView({ partnerships, authors, protocols, onUpdate }: any) {
 
       {/* Detail Modal */}
       <AnimatePresence>
-        {selectedApp && (
+        {isMounted && selectedApp && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
             <motion.div 
               initial={{ opacity: 0 }}
@@ -5752,7 +5823,7 @@ function PromosView({ data, onUpdate }: any) {
 
       {/* Audit Logs Modal */}
       <AnimatePresence>
-        {isAuditModalOpen && (
+        {isMounted && isAuditModalOpen && (
           <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setIsAuditModalOpen(false)} className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" />
             <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} className="relative bg-white w-full max-w-3xl rounded-[40px] shadow-2xl overflow-hidden max-h-[80vh] flex flex-col">
@@ -5787,7 +5858,7 @@ function PromosView({ data, onUpdate }: any) {
 
       {/* Metrics & Performance Modal */}
       <AnimatePresence>
-        {isMetricsModalOpen && (
+        {isMounted && isMetricsModalOpen && (
           <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setIsMetricsModalOpen(false)} className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" />
             <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} className="relative bg-white w-full max-w-4xl rounded-[40px] shadow-2xl overflow-hidden max-h-[80vh] flex flex-col">
@@ -5853,7 +5924,7 @@ function PromosView({ data, onUpdate }: any) {
 
       {/* Campaign Initialization/Edit Modal */}
       <AnimatePresence>
-        {isModalOpen && (
+        {isMounted && isModalOpen && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
             <motion.div 
               initial={{ opacity: 0 }}
