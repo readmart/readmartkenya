@@ -5,6 +5,8 @@ import {
   extractK2WebhookData,
   initiateK2StkPush,
   getK2TransactionStatus,
+  registerK2Webhook,
+  getK2CallbackUrl,
   K2_EVENT_TYPES,
   getK2Token
 } from './_payments.js';
@@ -452,6 +454,55 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           return json(res, 200, { status: 'pending', demo: true });
         }
         throw err;
+      }
+    }
+
+    // --- REGISTER WEBHOOKS (ADMIN ONLY) ---
+    if (action === 'register-webhooks' || url.includes('register-webhooks')) {
+      try {
+        const token = req.headers.authorization?.split(' ')[1] || '';
+        const { data: userData, error: authError } = await supabase.auth.getUser(token);
+        const user = userData?.user;
+        
+        if (!user) return unauthorized(res, 'Authentication required');
+        
+        // Check if admin
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', user.id)
+          .single();
+          
+        if (profile?.role !== 'admin' && profile?.role !== 'founder') {
+          return unauthorized(res, 'Admin access required');
+        }
+
+        const callbackUrl = getK2CallbackUrl();
+        const eventTypes = [
+          'incoming_payment',
+          'buygoods_transaction_received',
+          'buygoods_transaction_reversed',
+          'customer_created',
+          'settlement_transfer_completed'
+        ];
+
+        const results = [];
+        for (const eventType of eventTypes) {
+          try {
+            const result = await registerK2Webhook(eventType, callbackUrl);
+            results.push({ eventType, status: 'success', data: result });
+          } catch (e: any) {
+            results.push({ eventType, status: 'error', error: e.message });
+          }
+        }
+
+        return json(res, 200, { 
+          message: 'Webhook registration process completed',
+          callbackUrl,
+          results 
+        });
+      } catch (err) {
+        return serverError(res, err);
       }
     }
 

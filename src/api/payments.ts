@@ -101,6 +101,33 @@ export async function checkMembershipStatus(userId: string, paymentId?: string, 
 }
 
 /**
+ * Registers K2 webhooks (Admin Only)
+ */
+export async function registerWebhooks() {
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    
+    const response = await fetch('/api/payments?action=register-webhooks', {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${session?.access_token}`
+      }
+    });
+
+    const text = await response.text();
+    
+    if (!response.ok) {
+      throw new Error(`Registration failed: ${text.slice(0, 100)}`);
+    }
+
+    return JSON.parse(text);
+  } catch (error: any) {
+    console.error('Webhook Registration Error:', error);
+    return { error: error.message };
+  }
+}
+
+/**
  * Initiates a Membership payment
  */
 export async function initiateMembershipPayment(phoneNumber: string, amount: number, metadata: any = {}, paymentMethod: string = 'm-pesa') {

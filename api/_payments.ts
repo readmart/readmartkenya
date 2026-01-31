@@ -188,6 +188,54 @@ export const initiateK2StkPush = async (params: K2StkPushRequest) => {
   return { ...result, location };
 };
 
+export const registerK2Webhook = async (eventType: string, callbackUrl: string, scope = 'till', scopeReference?: string) => {
+  const token = await getK2Token();
+  const tillNumber = scopeReference || process.env.KOPOKOPO_TILL_NUMBER;
+
+  if (!tillNumber) {
+    throw new Error('Till Number is required for webhook registration');
+  }
+
+  const payload = {
+    event_type: eventType,
+    url: callbackUrl,
+    scope: scope,
+    scope_reference: tillNumber
+  };
+
+  // K2 uses underscores in their API endpoints
+  const response = await fetchWithBackoff(`${getK2BaseUrl()}/api/v1/webhook_subscriptions`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json',
+      'User-Agent': 'ReadMart/1.0.0 (https://readmartke.com)'
+    },
+    body: JSON.stringify(payload)
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    // Some versions use hyphen, try as fallback if 404
+    if (response.status === 404) {
+      const fallbackResponse = await fetchWithBackoff(`${getK2BaseUrl()}/api/v1/webhook-subscriptions`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          'User-Agent': 'ReadMart/1.0.0 (https://readmartke.com)'
+        },
+        body: JSON.stringify(payload)
+      });
+      
+      if (fallbackResponse.ok) return await fallbackResponse.json();
+    }
+    throw new Error(`K2 Webhook Registration failed (Status ${response.status}): ${errorText}`);
+  }
+
+  return await response.json();
+};
+
 export const K2_EVENT_TYPES = {
   STK_PUSH_SUCCESS: 'incoming_payment',
   BUYGOODS_RECEIVED: 'buygoods_transaction_received',
