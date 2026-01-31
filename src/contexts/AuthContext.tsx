@@ -8,6 +8,8 @@ export interface Profile {
   id: string;
   full_name: string | null;
   avatar_url: string | null;
+  phone: string | null;
+  address: string | null;
   role: UserRole;
   is_member?: boolean;
   membership_expires_at?: string;

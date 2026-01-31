@@ -16,7 +16,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // 1. Submit New Application (POST)
     if (req.method === 'POST') {
-      const { type, full_name, email, bio, organization, service_type } = req.body;
+      const { type, full_name, email, bio, organization, service_type, proof_url } = req.body;
 
       if (!type || !full_name || !email) {
         return badRequest(res, 'Missing required fields');
@@ -32,6 +32,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           bio,
           organization,
           service_type,
+          proof_url,
           status: 'pending'
         }])
         .select()

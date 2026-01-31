@@ -50,6 +50,7 @@ const Shipping = lazy(() => lazyRetry(() => import('@/pages/public/Shipping')));
 const Returns = lazy(() => lazyRetry(() => import('@/pages/public/Returns')));
 const Privacy = lazy(() => lazyRetry(() => import('@/pages/public/Privacy')));
 const Terms = lazy(() => lazyRetry(() => import('@/pages/public/Terms')));
+const NewsletterStatus = lazy(() => lazyRetry(() => import('@/pages/public/NewsletterStatus')));
 
 const LoadingSpinner = () => (
   <div className="min-h-screen flex items-center justify-center">
@@ -146,6 +147,8 @@ function App() {
               <Route path="/returns" element={<Returns />} />
               <Route path="/privacy" element={<Privacy />} />
               <Route path="/terms" element={<Terms />} />
+              <Route path="/newsletter/success" element={<NewsletterStatus />} />
+              <Route path="/newsletter/error" element={<NewsletterStatus />} />
 
               {/* Fallback */}
               <Route path="*" element={<Navigate to="/" replace />} />

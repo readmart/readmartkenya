@@ -164,6 +164,7 @@ export default function AuthorDashboard() {
     const loadingToast = toast.loading('Uploading cover imagery...');
     try {
       const url = await uploadProductImage(file, {
+        path: `authors/${user?.id}`,
         onProgress: (progress) => {
           const percent = Math.round((progress.loaded / progress.total) * 100);
           setUploadProgress(prev => ({ ...prev, cover: percent }));
@@ -192,6 +193,7 @@ export default function AuthorDashboard() {
     try {
       const identifier = editingItem?.id || `temp_${Date.now()}`;
       const path = await uploadEbookFile(file, identifier, {
+        path: `authors/${user?.id}`,
         onProgress: (progress) => {
           const percent = Math.round((progress.loaded / progress.total) * 100);
           setUploadProgress(prev => ({ ...prev, ebook: percent }));

@@ -41,6 +41,36 @@ export default function Account() {
   const tabs = getTabs(isPartner, isAuthor);
 
   const [isUpdatingPreferences, setIsUpdatingPreferences] = useState(false);
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [isUpdatingProfile, setIsUpdatingProfile] = useState(false);
+  const [profileForm, setProfileForm] = useState({
+    full_name: profile?.full_name || '',
+    phone: profile?.phone || '',
+    address: profile?.address || ''
+  });
+
+  useEffect(() => {
+    if (profile) {
+      setProfileForm({
+        full_name: profile.full_name || '',
+        phone: profile.phone || '',
+        address: profile.address || ''
+      });
+    }
+  }, [profile]);
+
+  const handleProfileUpdate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsUpdatingProfile(true);
+    const { error } = await updateProfile(profileForm);
+    if (error) {
+      toast.error('Failed to update profile');
+    } else {
+      toast.success('Profile updated successfully');
+      setIsEditingProfile(false);
+    }
+    setIsUpdatingProfile(false);
+  };
 
   const toggleSMS = async () => {
     if (isUpdatingPreferences) return;
@@ -282,6 +312,70 @@ export default function Account() {
                     <p className="text-muted-foreground font-medium">Manage your personal information and security</p>
                   </header>
 
+                  <AnimatePresence>
+                    {isEditingProfile && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        exit={{ opacity: 0, height: 0 }}
+                        className="overflow-hidden"
+                      >
+                        <form onSubmit={handleProfileUpdate} className="glass p-8 rounded-[2.5rem] border-primary/30 space-y-6">
+                          <h3 className="text-xl font-black uppercase tracking-tight mb-6">Edit Information</h3>
+                          <div className="grid md:grid-cols-2 gap-6">
+                            <div className="space-y-2">
+                              <label className="text-xs font-black uppercase tracking-widest text-muted-foreground ml-1">Full Name</label>
+                              <input 
+                                type="text" 
+                                value={profileForm.full_name}
+                                onChange={(e) => setProfileForm({ ...profileForm, full_name: e.target.value })}
+                                className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 px-6 font-bold focus:border-primary/50 outline-none transition-all"
+                                required
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <label className="text-xs font-black uppercase tracking-widest text-muted-foreground ml-1">Phone Number</label>
+                              <input 
+                                type="tel" 
+                                value={profileForm.phone}
+                                onChange={(e) => setProfileForm({ ...profileForm, phone: e.target.value })}
+                                className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 px-6 font-bold focus:border-primary/50 outline-none transition-all"
+                                placeholder="+254..."
+                              />
+                            </div>
+                            <div className="md:col-span-2 space-y-2">
+                              <label className="text-xs font-black uppercase tracking-widest text-muted-foreground ml-1">Address / Location</label>
+                              <input 
+                                type="text" 
+                                value={profileForm.address}
+                                onChange={(e) => setProfileForm({ ...profileForm, address: e.target.value })}
+                                className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 px-6 font-bold focus:border-primary/50 outline-none transition-all"
+                                placeholder="e.g. Nairobi, Kenya"
+                              />
+                            </div>
+                          </div>
+                          <div className="flex justify-end gap-4">
+                            <button 
+                              type="button"
+                              onClick={() => setIsEditingProfile(false)}
+                              className="px-8 py-4 rounded-2xl font-black uppercase text-xs tracking-widest hover:bg-white/5 transition-all"
+                            >
+                              Cancel
+                            </button>
+                            <button 
+                              type="submit"
+                              disabled={isUpdatingProfile}
+                              className="bg-primary text-white px-10 py-4 rounded-2xl font-black uppercase text-xs tracking-widest hover:scale-105 transition-all shadow-xl shadow-primary/20 flex items-center gap-2"
+                            >
+                              {isUpdatingProfile ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                              Save Changes
+                            </button>
+                          </div>
+                        </form>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+
                   <div className="grid md:grid-cols-2 gap-8">
                     {profile?.is_member && (
                       <div className="md:col-span-2 glass p-8 rounded-[2rem] border-primary/20 bg-primary/5 flex flex-col md:flex-row items-center justify-between gap-6">
@@ -326,16 +420,25 @@ export default function Account() {
                       <label className="text-xs font-black uppercase tracking-widest text-muted-foreground ml-1">Phone Number</label>
                       <div className="glass p-4 rounded-2xl flex items-center gap-4 border-white/5">
                         <Phone className="w-5 h-5 text-primary" />
-                        <span className="font-bold">+254 794 129 958</span>
+                        <span className="font-bold">{profile?.phone || 'Not provided'}</span>
                       </div>
                     </div>
                     <div className="space-y-4">
                       <label className="text-xs font-black uppercase tracking-widest text-muted-foreground ml-1">Location</label>
                       <div className="glass p-4 rounded-2xl flex items-center gap-4 border-white/5">
                         <MapPin className="w-5 h-5 text-primary" />
-                        <span className="font-bold">Nairobi, Kenya</span>
+                        <span className="font-bold">{profile?.address || 'Not provided'}</span>
                       </div>
                     </div>
+                  </div>
+
+                  <div className="flex justify-start">
+                    <button 
+                      onClick={() => setIsEditingProfile(true)}
+                      className="bg-primary/10 text-primary px-8 py-3 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-primary/20 transition-all border border-primary/20"
+                    >
+                      Edit Profile
+                    </button>
                   </div>
 
                   <div className="pt-8 border-t border-white/10">

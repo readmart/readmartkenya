@@ -346,8 +346,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const { orderId, phone, amount, firstName, lastName, email, type, metadata, paymentMethod } = req.body || {};
       
       const isMembership = type === 'membership' || type === 'club_membership' || type === 'site_membership';
-      if (!isMembership && (!orderId || !phone || !amount)) return badRequest(res, 'Missing payment details');
-      if (isMembership && (!phone || !amount)) return badRequest(res, 'Missing phone or amount for membership');
+      
+      // Validation with better error reporting
+      if (!isMembership && (!orderId || !phone || !amount)) {
+        console.error('Missing standard payment details:', { orderId, phone, amount });
+        return badRequest(res, `Missing payment details: ${!orderId ? 'orderId' : ''} ${!phone ? 'phone' : ''} ${!amount ? 'amount' : ''}`.trim());
+      }
+      if (isMembership && (!phone || !amount)) {
+        console.error('Missing membership payment details:', { phone, amount });
+        return badRequest(res, `Missing phone or amount for membership`);
+      }
 
       try {
         const token = req.headers.authorization?.split(' ')[1] || '';
@@ -388,46 +396,62 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           console.log(`Card payment initiated for order ${finalOrderId}. Redirecting to ${k2Result.location}`);
         } else {
           // Default to M-Pesa STK Push
-          k2Result = await initiateK2StkPush({
-            phone,
-            amount,
-            orderId: finalOrderId,
-            firstName,
-            lastName,
-            email,
-          });
+          try {
+            k2Result = await initiateK2StkPush({
+              phone,
+              amount,
+              orderId: finalOrderId,
+              firstName,
+              lastName,
+              email,
+            });
+          } catch (stkError: any) {
+            console.error('K2 STK Push Initiation Failed:', stkError);
+            // Re-throw to be caught by the outer catch block
+            throw stkError;
+          }
         }
 
         // Update appropriate table with payment request location for polling
-        const paymentId = k2Result.location || (k2Result as any).id;
+        const paymentId = k2Result?.location || (k2Result as any)?.id;
         let dbRecordId = null;
         
         if (isMembership && user) {
-          const { data: membRecord } = await supabase.from('membership_payments').insert([{
+          const { data: membRecord, error: insertError } = await supabase.from('membership_payments').insert([{
             user_id: user.id,
             amount,
             status: 'pending',
             payment_id: paymentId,
             metadata: { ...k2Result, type, ...(metadata || {}) }
           }]).select('id').single();
+          
+          if (insertError) {
+            console.error('Failed to insert membership payment record:', insertError);
+            // We don't necessarily want to fail the whole request if the K2 initiation succeeded
+          }
           dbRecordId = membRecord?.id;
         } else if (orderId) {
           const updatePayload: any = { 
             payment_metadata: k2Result 
           };
           if (paymentId) updatePayload.payment_id = paymentId;
-          await supabase.from('orders').update(updatePayload).eq('id', orderId);
+          const { error: updateError } = await supabase.from('orders').update(updatePayload).eq('id', orderId);
+          if (updateError) {
+            console.error('Failed to update order with payment info:', updateError);
+          }
         }
 
         return json(res, 200, { ...k2Result, db_id: dbRecordId });
       } catch (err: any) {
+        console.error('Payment Init Error Handler:', err);
+        
         if (isProduction) {
-          // In production, we don't use demo mode
-          throw err;
+          // In production, we don't use demo mode, return the error
+          return serverError(res, err);
         }
 
-        if (err.message.includes('credentials') || err.message.includes('configured')) {
-          console.warn('Payment credentials missing, using demo response');
+        if (err.message.includes('credentials') || err.message.includes('configured') || err.message.includes('failed') || err.message.includes('Status')) {
+          console.warn('Payment failed or credentials missing, using demo response in development');
           
           // FOR DEMO: Automatically complete the order/membership
           const { orderId, type, metadata } = req.body;

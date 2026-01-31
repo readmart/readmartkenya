@@ -40,8 +40,33 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return json(res, 403, { error: 'Access denied. Purchase required.' });
       }
 
-      // Generate a temporary signed URL or access token for the ebook
-      return json(res, 200, { access: 'granted', ebookId });
+      // Fetch the ebook path from products table
+      const { data: ebook, error: ebookError } = await supabase
+        .from('products')
+        .select('ebook_file_path, title')
+        .eq('id', ebookId)
+        .single();
+
+      if (ebookError || !ebook?.ebook_file_path) {
+        return json(res, 404, { error: 'Ebook file not found' });
+      }
+
+      // Generate a temporary signed URL for the ebook (1 hour)
+      const { data: signedData, error: signedError } = await supabase.storage
+        .from('ebooks')
+        .createSignedUrl(ebook.ebook_file_path, 3600);
+
+      if (signedError) {
+        console.error('Error generating signed URL:', signedError);
+        return serverError(res, signedError);
+      }
+
+      return json(res, 200, { 
+        access: 'granted', 
+        ebookId,
+        title: ebook.title,
+        downloadUrl: signedData.signedUrl 
+      });
     }
 
     return json(res, 404, { error: 'Action not found' });

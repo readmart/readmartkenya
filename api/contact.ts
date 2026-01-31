@@ -15,7 +15,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return json(res, 405, { error: 'Method not allowed' });
   }
 
-  const { name, email, subject, message } = req.body;
+  const { name, email, subject, message, attachment_url } = req.body;
 
   if (!name || !email || !subject || !message) {
     return badRequest(res, 'All fields are required');
@@ -30,6 +30,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         email,
         subject,
         message,
+        attachment_url,
         status: 'New',
         priority: 'Medium'
       }])
@@ -49,7 +50,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       full_name: name,
       email,
       subject,
-      message
+      message,
+      attachment_url
     });
 
     // 3. Send email notification to department (and BCC forwarding email if set)

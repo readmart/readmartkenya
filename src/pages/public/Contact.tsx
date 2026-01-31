@@ -11,6 +11,7 @@ import { toast } from 'sonner';
 import { useSettings } from '@/hooks/useSettings';
 
 import { supabase } from '@/lib/supabase/client';
+import { uploadContactAttachment } from '@/api/storage';
 
 export default function Contact() {
   const { settings } = useSettings();
@@ -68,22 +69,25 @@ export default function Contact() {
     setIsSubmitting(true);
     
     try {
-      const departmentMatch = formData.subject.match(/^(.*?)\s\(/);
-      const department = departmentMatch ? departmentMatch[1] : 'General';
+      let attachment_url = null;
+      if (formData.attachment) {
+        attachment_url = await uploadContactAttachment(formData.attachment);
+      }
 
-      const { error } = await supabase
-        .from('contact_messages')
-        .insert([{
-          full_name: formData.name,
+      const response = await fetch('/api/contact', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: formData.name,
           email: formData.email,
           subject: formData.subject,
           message: formData.message,
-          department: department,
-          status: 'New',
-          priority: 'Medium'
-        }]);
+          attachment_url
+        })
+      });
 
-      if (error) throw error;
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Failed to send message');
       
       toast.success('Thank you! Your message has been sent successfully.');
       handleReset();

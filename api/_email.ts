@@ -105,6 +105,11 @@ export const renderContactNotificationEmail = (data: any) => {
         <p><strong>Subject:</strong> ${data.subject}</p>
         <p><strong>Message:</strong></p>
         <p style="white-space: pre-wrap;">${data.message}</p>
+        ${data.attachment_url ? `
+          <p style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #e5e7eb;">
+            <strong>Attachment:</strong> <a href="${data.attachment_url}" target="_blank">View Attached File</a>
+          </p>
+        ` : ''}
       </div>
       <p style="margin-top: 20px;">
         <a href="https://readmartke.com/dashboard/founder" style="display: inline-block; background: #6366f1; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">View in Dashboard</a>

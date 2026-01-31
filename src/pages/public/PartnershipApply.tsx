@@ -71,23 +71,23 @@ export default function PartnershipApply() {
       // 1. Upload the qualification proof
       const proofPath = await uploadQualificationProof(uploadedFile, user.id);
 
-      // 2. Submit application
-      const { error } = await supabase
-        .from('partnership_applications')
-        .insert([{
-          user_id: user.id,
+      // 2. Submit application via API to trigger email notifications
+      const response = await fetch('/api/applications?type=partner', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'partner',
           full_name: formData.full_name,
           email: formData.email,
           organization: formData.organization,
-          contact_info: formData.contact_info,
-          collaboration_intent: formData.collaboration_intent,
-          proof_url: proofPath,
           service_type: formData.type === 'service_provider' ? 'Logistics' : 'Content',
-          type: formData.type,
-          status: 'pending'
-        }]);
+          description: formData.collaboration_intent,
+          proof_url: proofPath
+        })
+      });
 
-      if (error) throw error;
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Failed to submit application');
 
       setIsSubmitted(true);
       toast.success('Application submitted successfully!');

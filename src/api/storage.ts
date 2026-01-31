@@ -113,6 +113,7 @@ export async function uploadEbookFile(file: File, identifier: string, options: U
 
   const fileExt = file.name.split('.').pop() || 'pdf';
   const fileName = `${identifier}_${Date.now()}.${fileExt}`;
+  const filePath = options.path ? `${options.path}/${fileName}` : fileName;
   
   // Use TUS for files larger than 6MB for better reliability and chunking
   const useTus = options.useTus || file.size > 6 * 1024 * 1024;
@@ -120,10 +121,10 @@ export async function uploadEbookFile(file: File, identifier: string, options: U
   console.log(`[Storage] Starting ${useTus ? 'TUS ' : ''}upload for ${file.name} (${(file.size / 1024 / 1024).toFixed(2)}MB) to ebooks bucket`);
 
   return withRetry(async () => {
-    console.log(`[Storage] Uploading ebook: ${fileName} (${file.size} bytes, useTus: ${useTus})`);
+    console.log(`[Storage] Uploading ebook: ${filePath} (${file.size} bytes, useTus: ${useTus})`);
     const { data, error } = await supabase.storage
       .from('ebooks')
-      .upload(fileName, file, {
+      .upload(filePath, file, {
         cacheControl: '3600',
         upsert: true,
         // @ts-ignore
@@ -141,6 +142,49 @@ export async function uploadEbookFile(file: File, identifier: string, options: U
 
     console.log('[Storage] Ebook upload success:', data);
     return data.path;
+  }, { retries: 2 });
+}
+
+/**
+ * Upload a contact form attachment
+ */
+export async function uploadContactAttachment(file: File, options: UploadOptions = {}) {
+  validateFile(file, { 
+    maxSizeMB: options.maxSizeMB || 10,
+    allowedTypes: options.allowedTypes || [
+      'application/pdf', 
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'image/jpeg', 
+      'image/png',
+      'image/webp'
+    ]
+  });
+
+  const fileExt = file.name.split('.').pop();
+  const fileName = `contact_${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
+  
+  return withRetry(async () => {
+    const { data, error } = await supabase.storage
+      .from('contact_attachments')
+      .upload(fileName, file, {
+        cacheControl: '3600',
+        upsert: false,
+        // @ts-ignore
+        onUploadProgress: options.onProgress
+      });
+
+    if (error) {
+      if (error.message.includes('bucket not found')) {
+        throw new Error('Contact attachments bucket not initialized.');
+      }
+      throw error;
+    }
+
+    const { data: { publicUrl } } = supabase.storage
+      .from('contact_attachments')
+      .getPublicUrl(data.path);
+
+    return publicUrl;
   }, { retries: 2 });
 }
 

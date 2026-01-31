@@ -72,24 +72,26 @@ export default function AuthorApply() {
       // 1. Upload qualification proof
       const proofPath = await uploadQualificationProof(uploadedFile, user.id);
 
-      // 2. Submit application
-      const { error } = await supabase
-        .from('author_applications')
-        .insert([{
-          user_id: user.id,
+      // 2. Submit application via API to trigger email notifications
+      const response = await fetch('/api/applications?type=author', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'author',
           full_name: formData.full_name,
           email: formData.email,
-          contact_info: formData.contact_info,
-          collaboration_intent: formData.collaboration_intent,
+          bio: formData.collaboration_intent, // Use collaboration_intent as bio for authors
+          service_type: formData.genre, // Use genre as service_type for authors
           proof_url: proofPath,
           metadata: {
             genre: formData.genre,
             experience: formData.experience
-          },
-          status: 'pending'
-        }]);
+          }
+        })
+      });
 
-      if (error) throw error;
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Failed to submit application');
 
       setIsSubmitted(true);
       toast.success('Author application submitted successfully!');

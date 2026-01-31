@@ -85,6 +85,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // Handle subscription confirmation
       if (confirm) {
         const token = confirm as string;
+        const publicDomain = process.env.PUBLIC_DOMAIN || 'readmartke.com';
+        const protocol = publicDomain.includes('localhost') ? 'http' : 'https';
+        const baseUrl = `${protocol}://${publicDomain}`;
         
         // Find subscription by token in metadata
         const { data: sub, error: findError } = await supabase
@@ -94,12 +97,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           .single();
 
         if (findError || !sub) {
-          return res.redirect('https://readmartke.com/newsletter/error?reason=invalid_token');
+          return res.redirect(`${baseUrl}/newsletter/error?reason=invalid_token`);
         }
 
         const expires = sub.metadata?.token_expires;
         if (expires && new Date(expires) < new Date()) {
-          return res.redirect('https://readmartke.com/newsletter/error?reason=expired');
+          return res.redirect(`${baseUrl}/newsletter/error?reason=expired`);
         }
 
         // Confirm subscription
@@ -120,7 +123,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           metadata: { method: 'email_link' }
         }]);
 
-        return res.redirect('https://readmartke.com/newsletter/success');
+        return res.redirect(`${baseUrl}/newsletter/success`);
       }
 
       // Admin fetch logic
