@@ -151,7 +151,7 @@ export default function Account() {
         .insert({
           user_id: user.id,
           type: 'mpesa',
-          provider: 'Safaricom',
+          provider: 'M-Pesa',
           identifier: newPaymentPhone,
           is_default: paymentMethods.length === 0
         });
@@ -765,8 +765,8 @@ export default function Account() {
                             onClick={() => setIsAddingPayment(true)}
                             className="w-full glass p-6 rounded-3xl border-dashed border-white/20 flex items-center justify-center gap-3 text-muted-foreground hover:text-primary hover:border-primary/50 transition-all"
                           >
-                            <CreditCard className="w-5 h-5" />
-                            <span className="font-black text-sm uppercase tracking-widest">Add New Payment Method</span>
+                            <Phone className="w-5 h-5" />
+                            <span className="font-black text-sm uppercase tracking-widest">Add New M-Pesa Number</span>
                           </button>
                         ) : isAddingPayment ? (
                           <form onSubmit={handleAddPayment} className="glass p-8 rounded-3xl border-primary/30 space-y-6">

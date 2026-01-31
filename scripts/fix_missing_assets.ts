@@ -108,14 +108,6 @@ async function fixAssets() {
       image_url: 'https://images.unsplash.com/photo-1524995997946-a1c2e315a42f',
       link_url: '/shop',
       is_active: true
-    },
-    {
-      type: 'banner',
-      title: 'ARTISAN COLLECTION',
-      content: 'Beautifully crafted bookmarks and book accessories.',
-      image_url: 'https://images.unsplash.com/photo-1589998059171-988d887df646',
-      link_url: '/shop?category=Accessories',
-      is_active: true
     }
   ];
 

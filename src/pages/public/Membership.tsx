@@ -87,30 +87,20 @@ export default function Membership() {
       const amount = club ? club.membership_price : (settings?.membership_price || 1000);
       const metadata = club ? { club_id: club.id, type: 'club_membership' } : { type: 'site_membership' };
       
-      const response = await initiateMembershipPayment(phone, amount, metadata, paymentMethod);
+      const response = await initiateMembershipPayment(phone, amount, metadata, 'm-pesa');
       
       if (response.error) {
-        toast.error(response.error);
-        setIsSubmitting(false);
-        return;
-      }
+      toast.error(response.error);
+      setIsSubmitting(false);
+      return;
+    }
 
-      if (paymentMethod === 'card' && response.location) {
-        window.location.href = response.location;
-        return;
-      }
+    toast.success('M-Pesa request sent! Please enter your PIN.');
 
-      if (response.success || response.location || response.id || response.db_id) {
-        const paymentId = response.location || response.id;
-        const dbRecordId = response.db_id;
-        
-        if (paymentMethod === 'm-pesa') {
-          toast.success('M-Pesa request sent! Please enter your PIN.');
-        } else {
-          toast.success('Redirecting to secure payment...');
-        }
+    const paymentId = response.location || response.id;
+    const dbRecordId = response.db_id;
 
-        if (response.demo) {
+    if (response.demo) {
           setTimeout(() => {
             setIsSubmitting(false);
             toast.success('Membership activated! Redirecting...');
@@ -303,37 +293,20 @@ export default function Membership() {
                 </div>
 
                 <form onSubmit={handleJoin} className="space-y-6">
-                  {/* Payment Method Selection */}
-                  <div className="grid grid-cols-2 gap-4 p-2 bg-slate-50 rounded-2xl border-2 border-slate-100" role="radiogroup" aria-label="Select payment method">
-                    <button
-                      type="button"
-                      onClick={() => setPaymentMethod('m-pesa')}
-                      role="radio"
-                      aria-checked={paymentMethod === 'm-pesa'}
-                      className={`flex flex-col items-center gap-2 py-4 rounded-xl transition-all ${paymentMethod === 'm-pesa' ? 'bg-white shadow-lg shadow-slate-200/50 text-primary border-white' : 'text-slate-400 hover:text-slate-600'}`}
-                    >
-                      <div className={`p-2 rounded-lg ${paymentMethod === 'm-pesa' ? 'bg-primary/10' : 'bg-slate-100'}`}>
-                        <Phone className="w-5 h-5" />
-                      </div>
-                      <span className="text-[10px] font-black uppercase tracking-widest">M-Pesa</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setPaymentMethod('card')}
-                      role="radio"
-                      aria-checked={paymentMethod === 'card'}
-                      className={`flex flex-col items-center gap-2 py-4 rounded-xl transition-all ${paymentMethod === 'card' ? 'bg-white shadow-lg shadow-slate-200/50 text-primary border-white' : 'text-slate-400 hover:text-slate-600'}`}
-                    >
-                      <div className={`p-2 rounded-lg ${paymentMethod === 'card' ? 'bg-primary/10' : 'bg-slate-100'}`}>
-                        <ShieldCheck className="w-5 h-5" />
-                      </div>
-                      <span className="text-[10px] font-black uppercase tracking-widest">Card / Bank</span>
-                    </button>
+                  {/* Payment Method - M-Pesa Only */}
+                  <div className="p-4 bg-primary/5 rounded-2xl border-2 border-primary/20 flex items-center gap-4">
+                    <div className="p-3 rounded-xl bg-primary/10 text-primary">
+                      <Phone className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <p className="font-black text-sm uppercase tracking-widest">M-Pesa Express</p>
+                      <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider">Instant STK Push</p>
+                    </div>
                   </div>
 
                   <div className="space-y-3">
                     <label htmlFor="membership_phone" className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground ml-2">
-                      {paymentMethod === 'm-pesa' ? 'M-Pesa Phone Number' : 'Phone Number for Confirmation'}
+                      M-Pesa Phone Number
                     </label>
                     <div className="relative group">
                       <div className="absolute left-6 top-1/2 -translate-y-1/2 text-muted-foreground group-focus-within:text-primary transition-colors">
@@ -367,10 +340,6 @@ export default function Membership() {
                 </form>
 
                 <div className="mt-8 space-y-4">
-                  <div className="flex items-center gap-3 text-[10px] font-black uppercase tracking-widest text-muted-foreground">
-                    <ShieldCheck className="w-4 h-4 text-green-500" />
-                    Secure Transaction via Kopo Kopo
-                  </div>
                   <div className="flex items-center gap-3 text-[10px] font-black uppercase tracking-widest text-muted-foreground">
                     <Lock className="w-4 h-4 text-primary" />
                     Encrypted M-Pesa Checkout

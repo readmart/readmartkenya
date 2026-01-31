@@ -54,7 +54,7 @@ const FAQS = [
   {
     category: 'payments',
     question: 'What payment methods do you accept?',
-    answer: 'We accept M-Pesa, Credit/Debit Cards (Visa, Mastercard), and Direct Bank Transfers. Cash on delivery is available for select Nairobi locations.'
+    answer: 'We accept M-Pesa. Cash on delivery is available for select Nairobi locations.'
   },
   {
     category: 'account',
@@ -97,7 +97,7 @@ const TUTORIALS = [
 const TROUBLESHOOTING = [
   {
     issue: 'Payment Failed',
-    solution: 'Ensure you have sufficient funds and your M-Pesa/Card details are correct. If the issue persists, try an alternative payment method.',
+    solution: 'Ensure you have sufficient funds and your M-Pesa details are correct. If the issue persists, please contact our support.',
     icon: <AlertTriangle className="w-5 h-5 text-amber-500" />
   },
   {

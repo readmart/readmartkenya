@@ -273,11 +273,6 @@ export default function Checkout() {
         return;
       }
 
-      if (paymentMethod === 'card' && result.location) {
-        window.location.href = result.location;
-        return;
-      }
-
       if (result.demo) {
         toast.info('Demo Mode: Payment simulated');
         setTimeout(() => {
@@ -536,10 +531,7 @@ export default function Checkout() {
                 </div>
 
                 <div className="grid gap-4">
-                  <button 
-                    onClick={() => setPaymentMethod('m-pesa')}
-                    className={`p-6 glass border-2 rounded-2xl flex items-center justify-between transition-all ${paymentMethod === 'm-pesa' ? 'border-primary bg-primary/5' : 'border-transparent hover:bg-white/5'}`}
-                  >
+                  <div className="p-6 glass border-2 border-primary bg-primary/5 rounded-2xl flex items-center justify-between">
                     <div className="flex items-center gap-4">
                       <div className="w-12 h-12 bg-green-500 rounded-xl flex items-center justify-center text-white font-black text-xl italic shadow-lg shadow-green-500/20">
                         M
@@ -549,24 +541,8 @@ export default function Checkout() {
                         <p className="text-sm text-muted-foreground font-medium">Instant STK Push</p>
                       </div>
                     </div>
-                    <div className={`w-6 h-6 rounded-full border-4 ${paymentMethod === 'm-pesa' ? 'border-primary bg-primary shadow-[0_0_10px_rgba(var(--primary),0.5)]' : 'border-slate-700'}`} />
-                  </button>
-
-                  <button 
-                    onClick={() => setPaymentMethod('card')}
-                    className={`p-6 glass border-2 rounded-2xl flex items-center justify-between transition-all ${paymentMethod === 'card' ? 'border-primary bg-primary/5' : 'border-transparent hover:bg-white/5'}`}
-                  >
-                    <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 bg-blue-500 rounded-xl flex items-center justify-center text-white font-black text-xl shadow-lg shadow-blue-500/20">
-                        <CreditCard className="w-6 h-6" />
-                      </div>
-                      <div className="text-left">
-                        <p className="font-bold text-lg">Card Payment</p>
-                        <p className="text-sm text-muted-foreground font-medium">Visa, Mastercard, Amex</p>
-                      </div>
-                    </div>
-                    <div className={`w-6 h-6 rounded-full border-4 ${paymentMethod === 'card' ? 'border-primary bg-primary shadow-[0_0_10px_rgba(var(--primary),0.5)]' : 'border-slate-700'}`} />
-                  </button>
+                    <div className="w-6 h-6 rounded-full border-4 border-primary bg-primary shadow-[0_0_10px_rgba(var(--primary),0.5)]" />
+                  </div>
 
                   {/* Trust Badges */}
                   <div className="grid grid-cols-2 gap-3">
@@ -588,19 +564,11 @@ export default function Checkout() {
                     </div>
                     <div className="space-y-1">
                       <p className="text-sm font-bold">How it works:</p>
-                      {paymentMethod === 'm-pesa' ? (
-                        <p className="text-xs text-muted-foreground leading-relaxed">
-                          1. Click "Authorize Payment" below.<br/>
-                          2. Check your phone <strong>{formData.phone}</strong> for a prompt.<br/>
-                          3. Enter your M-Pesa PIN to confirm.
-                        </p>
-                      ) : (
-                        <p className="text-xs text-muted-foreground leading-relaxed">
-                          1. Click "Authorize Payment" below.<br/>
-                          2. You will be redirected to our secure payment partner.<br/>
-                          3. Enter your card details and confirm.
-                        </p>
-                      )}
+                      <p className="text-xs text-muted-foreground leading-relaxed">
+                        1. Click "Authorize Payment" below.<br/>
+                        2. Check your phone <strong>{formData.phone}</strong> for a prompt.<br/>
+                        3. Enter your M-Pesa PIN to confirm.
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -613,7 +581,7 @@ export default function Checkout() {
                   {isProcessing ? (
                     <>
                       <Loader2 className="w-5 h-5 animate-spin" />
-                      {paymentMethod === 'm-pesa' ? 'Waiting for PIN...' : 'Redirecting...'}
+                      Waiting for PIN...
                     </>
                   ) : (
                     <>
