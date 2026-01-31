@@ -44,8 +44,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
 
       const webhookData = extractK2WebhookData(payload);
-      const { transactionId, amount, phone, eventType, senderName, status, currency } = webhookData;
+      const { webhookEventId, transactionId, amount, phone, eventType, senderName, status, currency } = webhookData;
+      
+      // The orderId can come from metadata OR from the query parameter in the callback URL
       const orderId = webhookData.orderId || queryOrderId;
+      
+      if (queryOrderId) console.log(`Found OrderId ${queryOrderId} in query parameters`);
+      if (webhookData.orderId) console.log(`Found OrderId ${webhookData.orderId} in webhook metadata`);
 
       // Determine if this is a transaction event or a reversal
       const isTransactionEvent = [
@@ -59,7 +64,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         'buygoods_transaction_received',
         'card_transaction_received',
         'paybill_transaction_received',
-        'm-pesa_payment_received'
+        'm-pesa_payment_received',
+        'Buygoods Transaction' // From user sample event.type
       ].includes(eventType) || 
       eventType?.includes('payment_received') || 
       eventType?.includes('transaction_received');
@@ -75,10 +81,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       eventType?.includes('reversed') || 
       eventType?.includes('voided');
 
-      console.log(`Processing ${eventType}: OrderId=${orderId}, Success=${webhookData.isSuccess}, Status=${status}, Transaction=${transactionId}`);
+      console.log(`Processing ${eventType}: OrderId=${orderId}, Success=${webhookData.isSuccess}, Status=${status}, Transaction=${transactionId}, WebhookEventId=${webhookEventId}`);
       
       if (orderId && (isTransactionEvent || isReversalEvent)) {
         // --- IDEMPOTENCY CHECK ---
+        // 1. Check if this specific webhook event has been processed
+        const { data: existingProcessedEvent } = await supabase
+          .from('transactions')
+          .select('id')
+          .contains('metadata', { webhook_event_id: webhookEventId })
+          .maybeSingle();
+
+        if (existingProcessedEvent) {
+          console.log(`Webhook event ${webhookEventId} already processed. Skipping.`);
+          return json(res, 200, { received: true, already_processed: true });
+        }
+
+        // 2. Check if the order is already paid (for non-reversal events)
         const { data: existingOrder } = await supabase
           .from('orders')
           .select('payment_status, is_paid, payment_id')
@@ -117,7 +136,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               .update({ 
                 status: isReversalEvent ? 'reversed' : (actuallyPaid ? 'completed' : 'failed'),
                 payment_id: transactionId,
-                metadata: { ...payload, updated_at: new Date().toISOString() }
+                metadata: { ...payload, webhook_event_id: webhookEventId, updated_at: new Date().toISOString() }
               })
               .or(`payment_id.eq.${transactionId},payment_id.ilike.%${transactionId}%,metadata->>order_id.eq.${orderId}`)
               .select();
@@ -127,6 +146,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             if (actuallyPaid && (membershipPayments?.length || 0) > 0) {
               const payment = membershipPayments![0];
               const userId = payment.user_id;
+
+              // Send SMS notification if webhookEventId exists
+              if (webhookEventId) {
+                const smsMessage = `Confirmed. Your membership payment of ${currency} ${amount || payment.amount} has been received. Your ReadMart account is now active!`;
+                await sendK2SmsNotification(webhookEventId, smsMessage);
+              }
+
               const metadata = payment.metadata || {};
               const isClubMembership = metadata.type === 'club_membership';
               const clubId = metadata.club_id;
@@ -207,10 +233,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 amount: amount || order.total_amount,
                 status: actuallyPaid ? 'completed' : (isReversalEvent ? 'reversed' : 'failed'),
                 provider_reference: transactionId,
-                metadata: payload
+                metadata: { ...payload, webhook_event_id: webhookEventId }
               }]);
 
               if (actuallyPaid) {
+                // Send SMS notification if webhookEventId exists (as per K2 docs)
+                if (webhookEventId) {
+                  const smsMessage = `Confirmed. We have received your payment of ${currency} ${amount || order.total_amount} for Order #${order.id.slice(0, 8)}. Thank you for shopping with ReadMart!`;
+                  await sendK2SmsNotification(webhookEventId, smsMessage);
+                }
+
                 // The database trigger public.tr_order_paid_commissions will handle 
                 // calculateOrderCommissions(order.id) automatically when is_paid = true.
                 

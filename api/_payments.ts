@@ -190,6 +190,7 @@ export const initiateK2StkPush = async (params: K2StkPushRequest) => {
 
 export const registerK2Webhook = async (eventType: string, callbackUrl: string, scope = 'till', scopeReference?: string) => {
   const token = await getK2Token();
+  const apiKey = process.env.KOPOKOPO_API_KEY;
   const tillNumber = scopeReference || process.env.KOPOKOPO_TILL_NUMBER;
 
   if (!tillNumber) {
@@ -203,32 +204,47 @@ export const registerK2Webhook = async (eventType: string, callbackUrl: string, 
     scope_reference: tillNumber
   };
 
+  const baseUrl = getK2BaseUrl();
+  console.log(`Registering webhook: ${eventType} at ${callbackUrl} using base URL ${baseUrl}`);
+
+  const commonHeaders: Record<string, string> = {
+    'Authorization': `Bearer ${token}`,
+    'Content-Type': 'application/json',
+    'Accept': 'application/json',
+    'User-Agent': 'ReadMart/1.0.0 (https://readmartke.com)'
+  };
+
+  if (apiKey) {
+    commonHeaders['X-Api-Key'] = apiKey;
+  }
+
   // K2 uses underscores in their API endpoints
-  const response = await fetchWithBackoff(`${getK2BaseUrl()}/api/v1/webhook_subscriptions`, {
+  const response = await fetchWithBackoff(`${baseUrl}/api/v1/webhook_subscriptions`, {
     method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json',
-      'User-Agent': 'ReadMart/1.0.0 (https://readmartke.com)'
-    },
+    headers: commonHeaders,
     body: JSON.stringify(payload)
   });
 
   if (!response.ok) {
     const errorText = await response.text();
+    console.warn(`K2 Webhook Registration initial attempt failed (Status ${response.status}): ${errorText}`);
+
     // Some versions use hyphen, try as fallback if 404
     if (response.status === 404) {
-      const fallbackResponse = await fetchWithBackoff(`${getK2BaseUrl()}/api/v1/webhook-subscriptions`, {
+      console.log('Attempting fallback hyphenated endpoint: /api/v1/webhook-subscriptions');
+      const fallbackResponse = await fetchWithBackoff(`${baseUrl}/api/v1/webhook-subscriptions`, {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-          'User-Agent': 'ReadMart/1.0.0 (https://readmartke.com)'
-        },
+        headers: commonHeaders,
         body: JSON.stringify(payload)
       });
       
-      if (fallbackResponse.ok) return await fallbackResponse.json();
+      if (fallbackResponse.ok) {
+        console.log('Hyphenated endpoint succeeded.');
+        return await fallbackResponse.json();
+      }
+      
+      const fallbackError = await fallbackResponse.text();
+      throw new Error(`K2 Webhook Registration failed both endpoints. Original: ${errorText}. Fallback: ${fallbackError}`);
     }
     throw new Error(`K2 Webhook Registration failed (Status ${response.status}): ${errorText}`);
   }
@@ -279,28 +295,31 @@ export const getK2TransactionStatus = async (transactionId: string) => {
 };
 
 export const verifyK2Signature = (payload: any, signature: string) => {
-  const apiKey = (process.env.KOPOKOPO_API_KEY || '').trim();
+  // Try Webhook Secret first, then Client Secret, then API Key
+  const secret = (
+    process.env.KOPOKOPO_WEBHOOK_SECRET || 
+    process.env.KOPOKOPO_CLIENT_SECRET || 
+    process.env.KOPOKOPO_API_KEY || 
+    ''
+  ).trim();
   
-  if (!apiKey) {
-    console.warn('KOPOKOPO_API_KEY is not set. Signature verification skipped.');
-    return true; // Default to true in development, but production will have the key
+  if (!secret || !signature) {
+    console.warn('Missing KOPOKOPO_CLIENT_SECRET/API_KEY or signature for verification');
+    return false;
   }
-  
-  if (!signature) return false;
-
-  // KopoKopo signature is SHA256 HMAC hash of the request body
-  // If payload is already an object, we stringify it.
-  // We use a deterministic stringify to match KopoKopo's hash.
-  const bodyString = typeof payload === 'string' ? payload : JSON.stringify(payload);
-  const hash = crypto.createHmac('sha256', apiKey).update(bodyString).digest('hex');
 
   try {
-    const signatureBuffer = Buffer.from(signature, 'hex');
-    const hashBuffer = Buffer.from(hash, 'hex');
-    if (signatureBuffer.length !== hashBuffer.length) return false;
-    return crypto.timingSafeEqual(signatureBuffer, hashBuffer);
-  } catch (e) {
-    return hash.toLowerCase() === signature.toLowerCase();
+    const bodyString = typeof payload === 'string' ? payload : JSON.stringify(payload);
+    const hash = crypto.createHmac('sha256', secret).update(bodyString).digest('hex');
+    
+    // Some versions use hex, some might use base64
+    if (hash === signature) return true;
+    
+    const hashBase64 = crypto.createHmac('sha256', secret).update(bodyString).digest('base64');
+    return hashBase64 === signature;
+  } catch (err) {
+    console.error('Signature verification error:', err);
+    return false;
   }
 };
 
@@ -308,15 +327,15 @@ export const extractK2WebhookData = (payload: any) => {
   // 1. Identify the core data structure
   // KopoKopo webhooks often have a 'data' wrapper or are top-level
   const data = payload.data?.attributes || payload.attributes || payload;
-  const event = data.event || payload.event || {};
+  const event = payload.event || data.event || {};
   const resource = event.resource || data.resource || payload.resource || {};
   const metadata = data.metadata || payload.metadata || resource.metadata || {};
 
   // 2. Resolve Event Type
   const eventType = (
-    payload.topic ||              // Top level (Buygoods, etc.)
+    payload.topic ||              // Top level (buygoods_transaction_received, etc.)
     payload.data?.type ||         // JSON:API style
-    event.type ||                 // Inside event object
+    event.type ||                 // Inside event object (Buygoods Transaction)
     data.type || 
     payload.type
   );
@@ -334,11 +353,11 @@ export const extractK2WebhookData = (payload: any) => {
     'Success', 'Completed', 'Received', 'success', 'Transferred', 'Processed'
   ].includes(status);
 
-  // 5. Extract Amount (can be object {value, currency} or direct)
+  // 5. Extract Amount (can be object {value, currency} or direct string)
   const amountObj = resource.amount || data.amount || payload.amount || {};
   let amount = typeof amountObj === 'object' ? (amountObj.value || amountObj.amount) : amountObj;
   
-  // K2 sometimes sends amount as a string at the top level of resource
+  // Handle string amounts directly (as in the sample payload)
   if (!amount && typeof resource.amount === 'string') {
     amount = resource.amount;
   }
@@ -355,14 +374,17 @@ export const extractK2WebhookData = (payload: any) => {
     resource.sender_msisdn
   );
 
-  // 7. Extract Transaction ID / Reference
+  // 7. Extract Transaction ID (M-Pesa Receipt Number or K2 Reference)
+  // The 'id' at the top level is the Webhook Event ID
+  // The 'resource.id' or 'resource.reference' is the Transaction Reference
+  const webhookEventId = payload.id || data.id;
   const transactionId = (
     resource.reference || 
-    resource.transaction_reference ||
+    resource.transaction_reference || 
+    resource.mpesa_receipt_number ||
     resource.system_reference ||
     resource.id || 
-    data.id || 
-    payload.id
+    data.id
   );
 
   // 8. Extract Sender Name
@@ -379,6 +401,7 @@ export const extractK2WebhookData = (payload: any) => {
   );
 
   return {
+    webhookEventId,
     transactionId,
     amount: parseFloat(String(amount || 0)),
     currency,
@@ -390,4 +413,44 @@ export const extractK2WebhookData = (payload: any) => {
     orderId,
     raw: payload
   };
+};
+
+/**
+ * Sends an SMS notification to the customer after a successful transaction
+ * as per Kopo Kopo API documentation.
+ */
+export const sendK2SmsNotification = async (webhookEventReference: string, message: string) => {
+  try {
+    const token = await getK2Token();
+    const isSandbox = (process.env.KOPOKOPO_BASE_URL || '').includes('sandbox');
+    const baseUrl = process.env.KOPOKOPO_BASE_URL || 'https://sandbox.kopokopo.com';
+    
+    const response = await fetch(`${baseUrl}/api/v1/transaction_sms_notifications`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({
+        webhook_event_reference: webhookEventReference,
+        message: message,
+        _links: {
+          callback_url: getK2CallbackUrl()
+        }
+      })
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('K2 SMS Notification Error:', errorText);
+      return { success: false, error: errorText };
+    }
+
+    const data = await response.json();
+    return { success: true, data };
+  } catch (err: any) {
+    console.error('K2 SMS Notification Exception:', err);
+    return { success: false, error: err.message };
+  }
 };
