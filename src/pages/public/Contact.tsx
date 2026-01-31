@@ -9,8 +9,6 @@ import {
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useSettings } from '@/hooks/useSettings';
-
-import { supabase } from '@/lib/supabase/client';
 import { uploadContactAttachment } from '@/api/storage';
 
 export default function Contact() {

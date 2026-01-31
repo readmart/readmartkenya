@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { supabase, json, badRequest, serverError, createNotification, calculateOrderCommissions, logAction } from './_utils.js';
+import { supabase, json, badRequest, unauthorized, serverError, createNotification, calculateOrderCommissions, logAction } from './_utils.js';
 import {
   verifyK2Signature,
   extractK2WebhookData,
@@ -10,7 +10,8 @@ import {
   K2_EVENT_TYPES,
   getK2Token,
   createK2PayRecipient,
-  initiateK2Payment
+  initiateK2Payment,
+  sendK2SmsNotification
 } from './_payments.js';
 import { sendEmail, renderOrderConfirmationEmail, renderFailedPaymentEmail } from './_email.js';
 
@@ -335,10 +336,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             }
           }
         }
+        console.log(`Webhook processing complete for order ${orderId || 'unknown'}`);
+        return json(res, 200, { received: true });
       }
-      
-      return json(res, 200, { received: true });
-    }
 
     // --- INIT PAYMENT ---
     if (action === 'init' || url.includes('init')) {

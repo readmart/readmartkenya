@@ -87,6 +87,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         id: userId,
         full_name: 'Dev User',
         avatar_url: null,
+        phone: null,
+        address: null,
         role: devRole
       });
       setLoading(false);

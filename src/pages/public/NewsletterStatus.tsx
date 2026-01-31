@@ -1,12 +1,11 @@
 import { useEffect } from 'react';
-import { useSearchParams, useNavigate, Link } from 'react-router-dom';
+import { useSearchParams, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { CheckCircle, XCircle, ArrowRight, Mail } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function NewsletterStatus() {
   const [searchParams] = useSearchParams();
-  const navigate = useNavigate();
   const success = !window.location.pathname.includes('error');
   const reason = searchParams.get('reason');
 

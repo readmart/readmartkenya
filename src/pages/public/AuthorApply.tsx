@@ -3,10 +3,10 @@ import { motion } from 'framer-motion';
 import { 
   PenTool, Mail, User, FileText, Send, 
   Loader2, CheckCircle2, Lock, ArrowRight,
-  Upload, X, Phone, MessageSquare
+  Upload, X, Phone, MessageSquare,
+  BookOpen, CheckCircle, Link as LinkIcon, Globe, Instagram, Twitter, Linkedin, Github
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { supabase } from '@/lib/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { Link, useNavigate } from 'react-router-dom';
 import { uploadQualificationProof } from '@/api/storage';
