@@ -15,11 +15,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     
     if (req.method === 'POST') {
       if (!token) return unauthorized(res);
-      const { data: userData, error: authError } = await supabase.auth.getUser(token);
-      const user = userData?.user;
-      if (authError || !user) return unauthorized(res);
+      let user = null;
+      try {
+        const { data: userData, error: authError } = await supabase.auth.getUser(token);
+        user = userData?.user;
+        if (authError || !user) return unauthorized(res);
+      } catch (e) {
+        console.error('Auth verification failed in orders API:', e);
+        return unauthorized(res);
+      }
 
-      const orderData = req.body;
+      const orderData = req.body || {};
       
       // 1. Create the order
       const orderInsertData: any = {

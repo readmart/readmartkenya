@@ -300,7 +300,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // --- INIT PAYMENT ---
     if (action === 'init' || url.includes('init')) {
       if (method !== 'POST') return json(res, 405, { error: 'Method not allowed' });
-      const { orderId, phone, amount, firstName, lastName, email, type, metadata, paymentMethod } = req.body;
+      const { orderId, phone, amount, firstName, lastName, email, type, metadata, paymentMethod } = req.body || {};
       
       const isMembership = type === 'membership' || type === 'club_membership' || type === 'site_membership';
       if (!isMembership && (!orderId || !phone || !amount)) return badRequest(res, 'Missing payment details');
@@ -308,8 +308,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       try {
         const token = req.headers.authorization?.split(' ')[1] || '';
-        const { data: userData, error: userError } = await supabase.auth.getUser(token);
-        const user = userData?.user;
+        let user = null;
+        if (token) {
+          try {
+            const { data: userData, error: userError } = await supabase.auth.getUser(token);
+            if (!userError && userData?.user) {
+              user = userData.user;
+            }
+          } catch (e) {
+            console.warn('Auth check failed, continuing as guest:', e);
+          }
+        }
         
         const finalOrderId = orderId || `MEMB-${user?.id?.slice(0, 8) || 'GUEST'}-${Date.now()}`;
 
