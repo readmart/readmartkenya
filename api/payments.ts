@@ -8,7 +8,9 @@ import {
   registerK2Webhook,
   getK2CallbackUrl,
   K2_EVENT_TYPES,
-  getK2Token
+  getK2Token,
+  createK2PayRecipient,
+  initiateK2Payment
 } from './_payments.js';
 import { sendEmail, renderOrderConfirmationEmail, renderFailedPaymentEmail } from './_email.js';
 
@@ -522,7 +524,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           'buygoods_transaction_received',
           'buygoods_transaction_reversed',
           'customer_created',
-          'settlement_transfer_completed'
+          'settlement_transfer_completed',
+          'transaction_sms_notification'
         ];
 
         const results = [];
@@ -540,6 +543,42 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           callbackUrl,
           results 
         });
+      } catch (err) {
+        return serverError(res, err);
+      }
+    }
+
+    // --- CREATE PAY RECIPIENT (ADMIN ONLY) ---
+    if (action === 'create-recipient') {
+      try {
+        const token = req.headers.authorization?.split(' ')[1] || '';
+        const { data: userData } = await supabase.auth.getUser(token);
+        const user = userData?.user;
+        if (!user) return unauthorized(res);
+
+        const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single();
+        if (profile?.role !== 'admin' && profile?.role !== 'founder') return unauthorized(res);
+
+        const result = await createK2PayRecipient(req.body);
+        return json(res, result.success ? 201 : 400, result);
+      } catch (err) {
+        return serverError(res, err);
+      }
+    }
+
+    // --- INITIATE OUTGOING PAYMENT (ADMIN ONLY) ---
+    if (action === 'send-money') {
+      try {
+        const token = req.headers.authorization?.split(' ')[1] || '';
+        const { data: userData } = await supabase.auth.getUser(token);
+        const user = userData?.user;
+        if (!user) return unauthorized(res);
+
+        const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single();
+        if (profile?.role !== 'admin' && profile?.role !== 'founder') return unauthorized(res);
+
+        const result = await initiateK2Payment(req.body);
+        return json(res, result.success ? 201 : 400, result);
       } catch (err) {
         return serverError(res, err);
       }

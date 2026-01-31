@@ -264,6 +264,95 @@ export const K2_EVENT_TYPES = {
   CUSTOMER_CREATED: 'customer_created',
   SETTLEMENT_COMPLETED: 'settlement_transfer_completed',
   M_PESA_PAYMENT_RECEIVED: 'm-pesa_payment_received',
+  TRANSACTION_SMS_NOTIFICATION: 'transaction_sms_notification',
+};
+
+/**
+ * Adds a PAY recipient as per Kopo Kopo documentation.
+ * Supported types: mobile_wallet, bank_account, till, paybill
+ */
+export const createK2PayRecipient = async (params: {
+  type: 'mobile_wallet' | 'bank_account' | 'till' | 'paybill';
+  pay_recipient: any;
+}) => {
+  try {
+    const token = await getK2Token();
+    const baseUrl = getK2BaseUrl();
+
+    const response = await fetch(`${baseUrl}/api/v1/pay_recipients`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'Authorization': `Bearer ${token}`,
+        'User-Agent': 'ReadMart/1.0.0 (https://readmartke.com)'
+      },
+      body: JSON.stringify(params)
+    });
+
+    if (response.status === 201) {
+      const location = response.headers.get('location');
+      return { success: true, location };
+    }
+
+    const errorText = await response.text();
+    console.error(`K2 Create Pay Recipient Error (Status ${response.status}):`, errorText);
+    return { success: false, status: response.status, error: errorText };
+  } catch (err: any) {
+    console.error('K2 Create Pay Recipient Exception:', err);
+    return { success: false, error: err.message };
+  }
+};
+
+/**
+ * Initiates an outgoing payment (PAY) as per Kopo Kopo documentation.
+ */
+export const initiateK2Payment = async (params: {
+  destination_type: 'mobile_wallet' | 'bank_account' | 'till' | 'paybill';
+  destination_reference: string;
+  amount: { currency: string; value: number };
+  description: string;
+  category?: string;
+  tags?: string[];
+  metadata?: Record<string, string>;
+  callbackUrl?: string;
+}) => {
+  try {
+    const token = await getK2Token();
+    const baseUrl = getK2BaseUrl();
+
+    const payload = {
+      ...params,
+      _links: {
+        callback_url: params.callbackUrl || getK2CallbackUrl()
+      }
+    };
+    // Remove callbackUrl from top level as it's now in _links
+    delete (payload as any).callbackUrl;
+
+    const response = await fetch(`${baseUrl}/api/v1/payments`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'Authorization': `Bearer ${token}`,
+        'User-Agent': 'ReadMart/1.0.0 (https://readmartke.com)'
+      },
+      body: JSON.stringify(payload)
+    });
+
+    if (response.status === 201) {
+      const location = response.headers.get('location');
+      return { success: true, location };
+    }
+
+    const errorText = await response.text();
+    console.error(`K2 Initiate Payment Error (Status ${response.status}):`, errorText);
+    return { success: false, status: response.status, error: errorText };
+  } catch (err: any) {
+    console.error('K2 Initiate Payment Exception:', err);
+    return { success: false, error: err.message };
+  }
 };
 
 export const getK2TransactionStatus = async (transactionId: string) => {
