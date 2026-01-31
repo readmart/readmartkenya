@@ -61,6 +61,7 @@ export async function createOrder(orderData: OrderData) {
     order_id: order.id,
     product_id: item.product_id,
     quantity: item.quantity,
+    price: item.price,
     price_at_purchase: item.price,
     product_snapshot: item.product_snapshot
   }));
