@@ -11,10 +11,7 @@ import {
 import { sendEmail, renderOrderConfirmationEmail, renderFailedPaymentEmail } from './_email.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  // Set CORS headers manually if needed, or rely on vercel.json
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-kopokopo-signature, x-k2-signature');
+  // CORS headers are handled by vercel.json
 
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
@@ -22,12 +19,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const url = req.url || '';
+    const query = req.query || {};
+    const action = query.action as string || (url.includes('init') ? 'init' : url.includes('webhook') ? 'webhook' : url.includes('status') ? 'status' : '');
     const method = req.method;
 
     const isProduction = process.env.VERCEL_ENV === 'production' || process.env.NODE_ENV === 'production';
 
     // --- WEBHOOK ENDPOINT ---
-    if (url.includes('webhook')) {
+    if (action === 'webhook' || query.webhook === 'true' || url.includes('webhook')) {
       if (method !== 'POST') return json(res, 405, { error: 'Method not allowed' });
       
       const signature = (req.headers['x-kopokopo-signature'] || req.headers['x-k2-signature']) as string;
@@ -299,7 +298,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     // --- INIT PAYMENT ---
-    if (url.includes('init')) {
+    if (action === 'init' || url.includes('init')) {
       if (method !== 'POST') return json(res, 405, { error: 'Method not allowed' });
       const { orderId, phone, amount, firstName, lastName, email, type, metadata, paymentMethod } = req.body;
       
@@ -308,8 +307,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (isMembership && (!phone || !amount)) return badRequest(res, 'Missing phone or amount for membership');
 
       try {
-        const { data: { user } } = await supabase.auth.getUser(req.headers.authorization?.split(' ')[1] || '');
-        const finalOrderId = orderId || `MEMB-${user?.id?.slice(0, 8)}-${Date.now()}`;
+        const token = req.headers.authorization?.split(' ')[1] || '';
+        const { data: userData, error: userError } = await supabase.auth.getUser(token);
+        const user = userData?.user;
+        
+        const finalOrderId = orderId || `MEMB-${user?.id?.slice(0, 8) || 'GUEST'}-${Date.now()}`;
 
         let k2Result;
         
@@ -391,8 +393,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             // but we call it explicitly here for immediate effect in demo)
             await calculateOrderCommissions(orderId);
           } else if (isMembership) {
-            const { data: { user } } = await supabase.auth.getUser(req.headers.authorization?.split(' ')[1] || '');
-            if (user) {
+            const token = req.headers.authorization?.split(' ')[1] || '';
+          const { data: userData } = await supabase.auth.getUser(token);
+          const user = userData?.user;
+          if (user) {
               if (type === 'club_membership' && metadata?.club_id) {
                 console.log(`Demo mode: Activating club membership for user ${user.id} in club ${metadata.club_id}`);
                 await supabase.from('club_members').upsert({
@@ -425,7 +429,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     // --- STATUS CHECK ---
-    if (url.includes('status')) {
+    if (action === 'status' || url.includes('status')) {
       const { id } = req.query;
       if (!id) return badRequest(res, 'Missing transaction ID');
       try {

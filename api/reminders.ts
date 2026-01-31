@@ -11,7 +11,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const token = authHeader.split(' ')[1];
     if (!token) return json(res, 401, { error: 'Unauthorized' });
 
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    const { data: userData, error: authError } = await supabase.auth.getUser(token);
+    const user = userData?.user;
     if (authError || !user) return json(res, 401, { error: 'Unauthorized' });
 
     const { data: profile } = await supabase

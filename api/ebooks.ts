@@ -18,7 +18,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const token = authHeader?.split(' ')[1];
       if (!token) return unauthorized(res);
 
-      const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+      const { data: userData, error: authError } = await supabase.auth.getUser(token);
+      const user = userData?.user;
       if (authError || !user) return unauthorized(res);
 
       // Check if user has purchased the ebook or has a membership

@@ -22,11 +22,27 @@ export async function initiatePayment(orderId: string, phoneNumber: string, amou
     });
 
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.error || 'Failed to initiate payment');
+      let errorMessage = 'Failed to initiate payment';
+      try {
+        const error = await response.json();
+        errorMessage = error.error || error.message || errorMessage;
+      } catch (e) {
+        // Not a JSON error, maybe HTML?
+        const text = await response.text();
+        if (text.includes('A server error occurred')) {
+          errorMessage = 'Server error (500) occurred while initiating payment. Please try again later.';
+        } else {
+          errorMessage = `HTTP Error ${response.status}: ${text.slice(0, 100)}`;
+        }
+      }
+      throw new Error(errorMessage);
     }
 
-    return await response.json();
+    try {
+      return await response.json();
+    } catch (e) {
+      throw new Error('Received invalid JSON response from server');
+    }
   } catch (error: any) {
     console.error('Payment Error:', error);
     return { error: error.message || 'Failed to initiate payment' };
@@ -106,11 +122,26 @@ export async function initiateMembershipPayment(phoneNumber: string, amount: num
     });
 
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.error || 'Failed to initiate membership payment');
+      let errorMessage = 'Failed to initiate membership payment';
+      try {
+        const error = await response.json();
+        errorMessage = error.error || error.message || errorMessage;
+      } catch (e) {
+        const text = await response.text();
+        if (text.includes('A server error occurred')) {
+          errorMessage = 'Server error (500) occurred. Please try again later.';
+        } else {
+          errorMessage = `HTTP Error ${response.status}: ${text.slice(0, 100)}`;
+        }
+      }
+      throw new Error(errorMessage);
     }
 
-    return await response.json();
+    try {
+      return await response.json();
+    } catch (e) {
+      throw new Error('Received invalid JSON response from server');
+    }
   } catch (error: any) {
     console.error('Membership Payment Error:', error);
     return { error: error.message || 'Failed to initiate membership payment' };

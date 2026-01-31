@@ -2,9 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { supabase, json, badRequest, serverError, unauthorized, logAction } from './_utils.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, GET, PUT, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  // CORS headers are handled by vercel.json
 
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
@@ -17,7 +15,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     
     if (req.method === 'POST') {
       if (!token) return unauthorized(res);
-      const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+      const { data: userData, error: authError } = await supabase.auth.getUser(token);
+      const user = userData?.user;
       if (authError || !user) return unauthorized(res);
 
       const orderData = req.body;
