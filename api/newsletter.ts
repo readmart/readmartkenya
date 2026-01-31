@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { supabase, json, badRequest, serverError } from './_utils.js';
+import { supabase, json, badRequest, serverError, unauthorized } from './_utils.js';
 import { sendEmail, renderNewsletterConfirmationEmail } from './_email.js';
 import crypto from 'crypto';
 

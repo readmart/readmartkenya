@@ -23,7 +23,7 @@ async function checkPublicAccess() {
   } else {
     console.log(`Successfully fetched ${data?.length || 0} products as public user.`);
     data?.forEach(p => {
-      console.log(`- ${p.title} (ID: ${p.id}) | Image: ${p.image_url || p.image || 'NONE'}`);
+      console.log(`- ${p.title} (ID: ${p.id}) | Image: ${p.image_url || 'NONE'}`);
     });
   }
 
