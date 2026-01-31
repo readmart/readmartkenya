@@ -424,6 +424,11 @@ export const sendK2SmsNotification = async (webhookEventReference: string, messa
     const token = await getK2Token();
     const baseUrl = getK2BaseUrl();
     
+    // K2 docs require a callback URL for the result
+    const callbackUrl = getK2CallbackUrl();
+
+    console.log(`Sending K2 SMS Notification for event ${webhookEventReference} to ${baseUrl}`);
+
     const response = await fetch(`${baseUrl}/api/v1/transaction_sms_notifications`, {
       method: 'POST',
       headers: {
@@ -436,15 +441,37 @@ export const sendK2SmsNotification = async (webhookEventReference: string, messa
         webhook_event_reference: webhookEventReference,
         message: message,
         _links: {
-          callback_url: getK2CallbackUrl()
+          callback_url: callbackUrl
         }
       })
     });
 
+    if (response.status === 201) {
+      const location = response.headers.get('location');
+      let data = {};
+      try {
+        const text = await response.text();
+        if (text) data = JSON.parse(text);
+      } catch (e) {
+        // Body might be empty, which is fine for 201
+      }
+      return { success: true, location, data };
+    }
+
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('K2 SMS Notification Error:', errorText);
-      return { success: false, error: errorText };
+      console.error(`K2 SMS Notification Error (Status ${response.status}):`, errorText);
+      
+      let errorData = { error_message: errorText };
+      try {
+        errorData = JSON.parse(errorText);
+      } catch (e) {}
+      
+      return { 
+        success: false, 
+        status: response.status,
+        error: errorData.error_message || errorText 
+      };
     }
 
     const data = await response.json();

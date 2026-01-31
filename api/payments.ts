@@ -83,6 +83,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       console.log(`Processing ${eventType}: OrderId=${orderId}, Success=${webhookData.isSuccess}, Status=${status}, Transaction=${transactionId}, WebhookEventId=${webhookEventId}`);
       
+      // Handle SMS Notification Result (Asynchronous result of sendK2SmsNotification)
+      if (eventType === 'transaction_sms_notification') {
+        console.log(`K2 SMS Notification Result: ${status} for event ${webhookData.webhookEventId}`);
+        // We could log this to a table if we want to track SMS delivery
+        return json(res, 200, { received: true });
+      }
+
       if (orderId && (isTransactionEvent || isReversalEvent)) {
         // --- IDEMPOTENCY CHECK ---
         // 1. Check if this specific webhook event has been processed
