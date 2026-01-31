@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   User, Package, Heart, Settings, LogOut, 
-  ChevronRight, MapPin, Phone, Mail, CreditCard,
+  ChevronRight, MapPin, Phone, Mail,
   Shield, Bell, Clock, Star, Trash2, ShoppingCart,
   Loader2, Briefcase, PenTool, ExternalLink, ShieldCheck
 } from 'lucide-react';

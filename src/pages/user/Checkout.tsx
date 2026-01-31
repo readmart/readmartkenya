@@ -26,7 +26,7 @@ export default function Checkout() {
   const { settings } = useSettings();
   const [isProcessing, setIsProcessing] = useState(false);
   const [orderNumber, setOrderNumber] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState<'m-pesa' | 'card'>('m-pesa');
+  const [paymentMethod] = useState<'m-pesa' | 'card'>('m-pesa');
   const [shippingZones, setShippingZones] = useState<any[]>([]);
   const [selectedZoneId, setSelectedZoneId] = useState<string>('');
   const [sessionId, setSessionId] = useState<string | null>(null);

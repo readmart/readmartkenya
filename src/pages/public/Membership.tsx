@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { 
-  ShieldCheck, Zap, Star, 
+  Zap, Star, 
   ArrowRight, Phone, Lock, Sparkles,
   BookOpen, Calendar, Users, Gift,
   Loader2
@@ -24,7 +24,7 @@ export default function Membership() {
   const clubId = searchParams.get('club');
   
   const [phone, setPhone] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState<'m-pesa' | 'card'>('m-pesa');
+  const [paymentMethod] = useState<'m-pesa' | 'card'>('m-pesa');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [club, setClub] = useState<BookClub | null>(null);
   const [isClubLoading, setIsClubLoading] = useState(!!clubId);
@@ -175,10 +175,6 @@ export default function Membership() {
 
         poll();
 
-      } else {
-        toast.error(response.error || 'Failed to initiate payment');
-        setIsSubmitting(false);
-      }
     } catch (error) {
       toast.error('Something went wrong. Please try again.');
       setIsSubmitting(false);
