@@ -258,12 +258,24 @@ export async function sendAbandonedCartReminders() {
     }
   });
 
+  const text = await response.text();
+  
   if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || 'Failed to send reminders');
+    let errorMsg = 'Failed to send reminders';
+    try {
+      const error = JSON.parse(text);
+      errorMsg = error.error || errorMsg;
+    } catch (e) {
+      errorMsg = `HTTP ${response.status}: ${text.slice(0, 100)}`;
+    }
+    throw new Error(errorMsg);
   }
 
-  return await response.json();
+  try {
+    return JSON.parse(text);
+  } catch (e) {
+    return { success: true }; // Fallback for empty/non-json success
+  }
 }
 
 /**

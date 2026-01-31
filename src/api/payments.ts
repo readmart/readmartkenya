@@ -21,14 +21,15 @@ export async function initiatePayment(orderId: string, phoneNumber: string, amou
       })
     });
 
+    const text = await response.text();
+    
     if (!response.ok) {
       let errorMessage = 'Failed to initiate payment';
       try {
-        const error = await response.json();
+        const error = JSON.parse(text);
         errorMessage = error.error || error.message || errorMessage;
       } catch (e) {
         // Not a JSON error, maybe HTML?
-        const text = await response.text();
         if (text.includes('A server error occurred')) {
           errorMessage = 'Server error (500) occurred while initiating payment. Please try again later.';
         } else {
@@ -39,7 +40,7 @@ export async function initiatePayment(orderId: string, phoneNumber: string, amou
     }
 
     try {
-      return await response.json();
+      return JSON.parse(text);
     } catch (e) {
       throw new Error('Received invalid JSON response from server');
     }
