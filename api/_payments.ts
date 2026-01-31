@@ -422,15 +422,15 @@ export const extractK2WebhookData = (payload: any) => {
 export const sendK2SmsNotification = async (webhookEventReference: string, message: string) => {
   try {
     const token = await getK2Token();
-    const isSandbox = (process.env.KOPOKOPO_BASE_URL || '').includes('sandbox');
-    const baseUrl = process.env.KOPOKOPO_BASE_URL || 'https://sandbox.kopokopo.com';
+    const baseUrl = getK2BaseUrl();
     
     const response = await fetch(`${baseUrl}/api/v1/transaction_sms_notifications`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
-        'Authorization': `Bearer ${token}`
+        'Authorization': `Bearer ${token}`,
+        'User-Agent': 'ReadMart/1.0.0 (https://readmartke.com)'
       },
       body: JSON.stringify({
         webhook_event_reference: webhookEventReference,

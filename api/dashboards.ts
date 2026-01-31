@@ -30,12 +30,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (profile.role === 'founder') {
       // Aggregate stats for founder
       const [orders, products, users] = await Promise.all([
-        supabase.from('orders').select('subtotal_amount, status'),
+        supabase.from('orders').select('total_amount, status'),
         supabase.from('products').select('count', { count: 'exact', head: true }),
         supabase.from('profiles').select('count', { count: 'exact', head: true })
       ]);
 
-      const totalRevenue = orders.data?.reduce((sum, o) => sum + (o.subtotal_amount || 0), 0) || 0;
+      const totalRevenue = orders.data?.reduce((sum, o) => sum + (o.total_amount || 0), 0) || 0;
       
       return json(res, 200, {
         revenue: totalRevenue,
