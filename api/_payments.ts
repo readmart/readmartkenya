@@ -31,14 +31,16 @@ export const getK2CallbackUrl = (orderId?: string) => {
 };
 
 export interface K2StkPushRequest {
-  amount: number;
-  currency?: string;
-  phone: string;
   orderId: string;
+  phone: string;
+  amount: number;
+  email?: string;
   firstName?: string;
   lastName?: string;
-  email?: string;
+  currency?: string;
   callbackUrl?: string;
+  customerId?: string;
+  notes?: string;
 }
 
 export interface K2CardPaymentRequest {
@@ -149,13 +151,13 @@ export const initiateK2StkPush = async (params: K2StkPushRequest) => {
     },
     amount: {
       currency: params.currency || 'KES',
-      value: Math.round(params.amount), // Ensure it's an integer for K2
+      value: params.amount, // K2 docs show it can be a number/float
     },
     metadata: {
       order_id: params.orderId,
-      customer_id: params.email || params.orderId,
+      customer_id: params.customerId || params.email || params.orderId,
       reference: params.orderId,
-      notes: `Order #${params.orderId.slice(0, 8).toUpperCase()}`
+      notes: params.notes || `Order #${params.orderId.slice(0, 8).toUpperCase()}`
     },
     _links: {
       callback_url: params.callbackUrl || getK2CallbackUrl(params.orderId),
@@ -439,7 +441,7 @@ export const extractK2WebhookData = (payload: any) => {
 
   // 4. Determine Success
   const isSuccess = [
-    'Success', 'Completed', 'Received', 'success', 'Transferred', 'Processed'
+    'Success', 'Completed', 'Received', 'success', 'Transferred', 'Processed', 'Incoming Payment Request'
   ].includes(status);
 
   // 5. Extract Amount (can be object {value, currency} or direct string)
