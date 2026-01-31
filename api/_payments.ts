@@ -337,6 +337,12 @@ export const extractK2WebhookData = (payload: any) => {
   // 5. Extract Amount (can be object {value, currency} or direct)
   const amountObj = resource.amount || data.amount || payload.amount || {};
   let amount = typeof amountObj === 'object' ? (amountObj.value || amountObj.amount) : amountObj;
+  
+  // K2 sometimes sends amount as a string at the top level of resource
+  if (!amount && typeof resource.amount === 'string') {
+    amount = resource.amount;
+  }
+  
   const currency = typeof amountObj === 'object' ? (amountObj.currency) : (resource.currency || data.currency || 'KES');
   
   // 6. Extract Phone Number or Card Number
@@ -345,53 +351,43 @@ export const extractK2WebhookData = (payload: any) => {
     resource.phone_number || 
     resource.subscriber?.phone_number || 
     metadata.phone ||
-    metadata.phone_number ||
-    (resource.destination?.type === 'Mobile Wallet' ? resource.destination.resource?.phone_number : null) ||
-    resource.customer_cc_number // For card payments
+    metadata.phoneNumber ||
+    resource.sender_msisdn
   );
 
-  // 7. Extract Transaction ID
+  // 7. Extract Transaction ID / Reference
   const transactionId = (
-    resource.transaction_id || 
+    resource.reference || 
+    resource.transaction_reference ||
+    resource.system_reference ||
     resource.id || 
-    payload.id || 
-    resource.system_id ||
-    data.id
+    data.id || 
+    payload.id
   );
 
-  // 8. Extract Order/Reference ID
+  // 8. Extract Sender Name
+  const firstName = resource.sender_first_name || resource.first_name || resource.subscriber?.first_name || metadata.firstName || '';
+  const lastName = resource.sender_last_name || resource.last_name || resource.subscriber?.last_name || metadata.lastName || '';
+  const senderName = `${firstName} ${lastName}`.trim();
+
+  // 9. Extract Order ID from metadata
   const orderId = (
     metadata.order_id || 
-    metadata.customer_reference || 
+    metadata.orderId || 
     metadata.reference ||
-    resource.reference ||
-    resource.external_reference ||
-    resource.system_reference ||
-    (resource.metadata ? (resource.metadata.order_id || resource.metadata.reference) : null) ||
-    data.reference ||
-    (resource.system_reference?.includes('MEMB-') ? resource.system_reference : null) ||
-    (resource.external_reference?.includes('MEMB-') ? resource.external_reference : null)
-  );
-
-  // 9. Extract Sender Name
-  const senderName = (
-    resource.sender_first_name 
-      ? `${resource.sender_first_name} ${resource.sender_middle_name || ''} ${resource.sender_last_name || ''}`.replace(/\s+/g, ' ').trim() 
-      : (resource.first_name ? `${resource.first_name} ${resource.last_name || ''}`.trim() : null)
+    resource.external_reference
   );
 
   return {
     transactionId,
-    orderId,
-    isSuccess,
-    amount,
+    amount: parseFloat(String(amount || 0)),
     currency,
     phone,
-    eventType,
     senderName,
+    eventType,
     status,
-    rawResource: resource,
-    metadata,
-    system: resource.system || data.system
+    isSuccess,
+    orderId,
+    raw: payload
   };
 };

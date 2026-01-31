@@ -172,12 +172,15 @@ export const calculateOrderCommissions = async (orderId: string) => {
     const defaultAuthorRate = settings?.author_commission_rate || 70;
 
     for (const item of items) {
-      const price = item.price_at_purchase || item.price || 0;
-      const amount = Number(price) * Number(item.quantity);
+      const price = Number(item.price_at_purchase || item.price || 0);
+      const quantity = Number(item.quantity || 0);
+      const amount = price * quantity;
       
+      if (amount <= 0) continue;
+
       // 1. Calculate platform commission
-      const commissionRate = platformService?.commission_rate || 10;
-      const commissionAmount = (amount * (Number(commissionRate) / 100));
+      const commissionRate = Number(platformService?.commission_rate || 10);
+      const commissionAmount = (amount * (commissionRate / 100));
 
       ledgerEntries.push({
         order_id: orderId,
@@ -196,7 +199,8 @@ export const calculateOrderCommissions = async (orderId: string) => {
       const authorId = productSnapshot.author_id || item.author_id;
 
       if (authorId) {
-        const authorAmount = (amount * (Number(defaultAuthorRate) / 100));
+        const authorRate = Number(defaultAuthorRate);
+        const authorAmount = (amount * (authorRate / 100));
 
         ledgerEntries.push({
           order_id: orderId,
@@ -204,10 +208,10 @@ export const calculateOrderCommissions = async (orderId: string) => {
           partner_service_id: authorService?.id,
           amount: authorAmount,
           payout_status: 'pending',
-          metadata: {
+          metadata: { 
             item_id: item.product_id,
             type: 'author_royalty',
-            rate: defaultAuthorRate
+            rate: authorRate 
           }
         });
       }
