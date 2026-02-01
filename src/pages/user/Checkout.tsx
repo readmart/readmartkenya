@@ -72,7 +72,16 @@ export default function Checkout() {
           }
           
           if (sessionError) {
-            if (sessionError.code === 'PGRST204' || sessionError.message?.includes('column') || sessionError.message?.includes('cache')) {
+            const isSchemaError = 
+              sessionError.code === 'PGRST204' || 
+              sessionError.code === 'PGRST205' || 
+              sessionError.code === 'PGRST100' ||
+              sessionError.message?.includes('column') || 
+              sessionError.message?.includes('cache') ||
+              (sessionError as any).status === 404 ||
+              (sessionError as any).status === 400;
+
+            if (isSchemaError) {
               console.warn('Schema cache issue on checkout session creation, retrying with minimal select');
               const { data: retryData, error: retryError } = await supabase
                 .from('checkout_sessions')

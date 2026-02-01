@@ -1330,7 +1330,7 @@ export async function getSiteSettings() {
       .maybeSingle();
 
     if (siteError) {
-      if (siteError.code === 'PGRST204' || siteError.code === 'PGRST100' || siteError.message?.includes('column') || siteError.message?.includes('cache') || siteError.status === 400) {
+      if (siteError.code === 'PGRST204' || siteError.code === 'PGRST100' || siteError.message?.includes('column') || siteError.message?.includes('cache') || (siteError as any).status === 400) {
         console.warn('Advanced site settings columns missing, falling back to core');
         const { data: fallbackData, error: fallbackError } = await supabase
           .from('site_settings')

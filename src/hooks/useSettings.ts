@@ -79,8 +79,17 @@ export function useSettings() {
             .maybeSingle();
 
           if (error) {
-            // Handle 400 Bad Request specifically for missing columns
-            if (error.code === 'PGRST204' || error.code === 'PGRST100' || error.message?.includes('column') || error.message?.includes('cache') || error.status === 400) {
+            // Handle 400 Bad Request or Schema Cache issues specifically for missing columns
+            const isSchemaError = 
+              error.code === 'PGRST204' || 
+              error.code === 'PGRST205' || 
+              error.code === 'PGRST100' || 
+              error.message?.includes('column') || 
+              error.message?.includes('cache') || 
+              (error as any).status === 404 ||
+              (error as any).status === 400;
+
+            if (isSchemaError) {
               console.warn('Advanced site_settings columns missing, falling back to core columns');
               const { data: fallbackData, error: fallbackError } = await supabase
                 .from('site_settings')
