@@ -93,27 +93,32 @@ export async function getProducts(options: {
  * Fetch a single product by ID with hardening
  */
 export async function getProductById(id: string) {
-  let { data, error } = await supabase
-    .from('products')
-    .select(`${PRODUCT_COLUMNS}, category:categories(name)`)
-    .eq('id', id)
-    .single();
+  try {
+    let { data, error } = await supabase
+      .from('products')
+      .select(`${PRODUCT_COLUMNS}, category:categories(name)`)
+      .eq('id', id)
+      .maybeSingle();
 
-  if (error) {
-    if (error.code === 'PGRST204' || error.message?.includes('column') || error.message?.includes('cache')) {
-      console.warn('Single product fetch schema cache issue, falling back to core columns');
-      const { data: fallbackData, error: fallbackError } = await supabase
-        .from('products')
-        .select(CORE_PRODUCT_COLUMNS)
-        .eq('id', id)
-        .single();
-      
-      if (fallbackError) throw fallbackError;
-      return fallbackData;
+    if (error) {
+      if (error.code === 'PGRST204' || error.message?.includes('column') || error.message?.includes('cache')) {
+        console.warn('Product fetch schema cache issue, falling back to core columns');
+        const { data: fallbackData, error: fallbackError } = await supabase
+          .from('products')
+          .select(CORE_PRODUCT_COLUMNS)
+          .eq('id', id)
+          .maybeSingle();
+        
+        if (fallbackError) throw fallbackError;
+        return fallbackData;
+      }
+      throw error;
     }
-    throw error;
+    return data;
+  } catch (err) {
+    console.error(`Failed to fetch product ${id}:`, err);
+    return null;
   }
-  return data;
 }
 
 /**

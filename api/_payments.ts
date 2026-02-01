@@ -88,10 +88,12 @@ export const getK2Token = async () => {
   const clientSecret = (process.env.KOPOKOPO_CLIENT_SECRET || '').trim();
 
   if (!clientId || !clientSecret) {
-    throw new Error('ReadMart Payments credentials (CLIENT_ID, CLIENT_SECRET) are not configured');
+    console.error('K2 Configuration Error: Missing KOPOKOPO_CLIENT_ID or KOPOKOPO_CLIENT_SECRET');
+    throw new Error('ReadMart Payments credentials (CLIENT_ID, CLIENT_SECRET) are not configured in environment variables');
   }
 
   const authUrl = `${getK2AuthUrl()}/oauth/token`;
+  console.log(`Fetching K2 token from ${authUrl}`);
   
   const response = await fetchWithBackoff(authUrl, {
     method: 'POST',
@@ -108,7 +110,8 @@ export const getK2Token = async () => {
 
   if (!response.ok) {
     const errorText = await response.text();
-    throw new Error(`Failed to get K2 token (Status ${response.status}): ${errorText}`);
+    console.error(`K2 Token Error (Status ${response.status}):`, errorText);
+    throw new Error(`Failed to get K2 token (Status ${response.status}). Please check your credentials.`);
   }
 
   const data = (await response.json()) as { expires_in?: number; access_token: string };
@@ -124,11 +127,12 @@ export const getK2Token = async () => {
 
 export const initiateK2StkPush = async (params: K2StkPushRequest) => {
   const token = await getK2Token();
-  const apiKey = process.env.KOPOKOPO_API_KEY;
-  const tillNumber = process.env.KOPOKOPO_TILL_NUMBER;
+  const apiKey = (process.env.KOPOKOPO_API_KEY || '').trim();
+  const tillNumber = (process.env.KOPOKOPO_TILL_NUMBER || '').trim();
 
   if (!apiKey || !tillNumber) {
-    throw new Error('ReadMart Payments (K2) API key or Till Number is not configured');
+    console.error('K2 Configuration Error: Missing KOPOKOPO_API_KEY or KOPOKOPO_TILL_NUMBER');
+    throw new Error('ReadMart Payments (K2) API key or Till Number is not configured in environment variables');
   }
 
   // Ensure phone number is in format +254...
@@ -177,7 +181,8 @@ export const initiateK2StkPush = async (params: K2StkPushRequest) => {
 
   if (!response.ok) {
     const errorText = await response.text();
-    throw new Error(`K2 STK Push failed (Status ${response.status}): ${errorText}`);
+    console.error(`K2 STK Push API Error (Status ${response.status}):`, errorText);
+    throw new Error(`K2 STK Push failed (Status ${response.status}). This could be due to invalid phone number or API issues.`);
   }
 
   const location = response.headers.get('location');

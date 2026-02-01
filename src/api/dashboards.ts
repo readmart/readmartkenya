@@ -289,7 +289,7 @@ export async function getShippingZones() {
       // PostgREST will return 400.
       const { data, error } = await supabase
         .from('shipping_zones')
-        .select('id, name, price, rate, base_rate, estimated_days, is_active, country_code, region, postal_codes, shipping_method, weight_surcharge, volume_surcharge, county')
+        .select('id, name, price, estimated_days, is_active, country_code, region, postal_codes, shipping_method, weight_surcharge, volume_surcharge, county')
         .order('name');
 
       if (error) {
@@ -315,7 +315,7 @@ export async function getShippingZones() {
           
           return (fallbackData || []).map(zone => ({
             ...zone,
-            price: (zone as any).price ?? (zone as any).rate ?? (zone as any).base_rate ?? 0,
+            price: (zone as any).price ?? 0,
             country_code: 'KE',
             estimated_days: 3,
             shipping_method: 'Standard',
@@ -331,7 +331,7 @@ export async function getShippingZones() {
       
       // Normalize the data to ensure 'price' is always present and other fields have defaults
       const normalizedData = (data || []).map(zone => {
-        const price = zone.price ?? (zone as any).rate ?? (zone as any).base_rate ?? 0;
+        const price = zone.price ?? 0;
         return {
           ...zone,
           country_code: zone.country_code || 'KE',
@@ -382,11 +382,11 @@ async function getAllRecords(table: string, orderBy: string = 'created_at') {
       } else if (table === 'partnership_applications') {
         query = supabase
           .from(table)
-          .select('id, full_name, email, company_name, status, created_at');
+          .select('id, contact_person, email, business_name, status, created_at');
       } else if (table === 'author_applications') {
         query = supabase
           .from(table)
-          .select('id, full_name, email, pen_name, status, created_at');
+          .select('id, full_name, email, status, created_at');
       } else if (table === 'contact_messages') {
         query = supabase
           .from(table)
@@ -394,7 +394,7 @@ async function getAllRecords(table: string, orderBy: string = 'created_at') {
       } else if (table === 'audit_logs') {
         query = supabase
           .from(table)
-          .select('id, actor_id, action, table_name, record_id, created_at');
+          .select('id, user_id, action, entity_type, entity_id, created_at');
       } else {
         query = supabase
           .from(table)
@@ -473,7 +473,6 @@ export async function getInventory(authorId?: string) {
         .select(`
           id, 
           title, 
-          author, 
           author_id, 
           price, 
           sale_price, 
@@ -927,7 +926,7 @@ export async function getPromos() {
   try {
     await verifyAdmin();
     // Fetch from promos table with explicit columns
-    const columns = 'id, title, description, code, type, value, status, start_date, end_date, created_at, creator_id, promo_signature';
+    const columns = 'id, code, discount_type, discount_value, min_order_amount, usage_count, usage_limit, is_active, expires_at, created_at';
     let { data, error } = await supabase
       .from('promos')
       .select(columns)
@@ -938,14 +937,30 @@ export async function getPromos() {
         console.warn('Advanced promo columns missing, falling back to core');
         const { data: fallbackData, error: fallbackError } = await supabase
           .from('promos')
-          .select('id, title, code, status')
+          .select('id, code, is_active')
           .order('created_at', { ascending: false });
         if (fallbackError) throw fallbackError;
-        return fallbackData || [];
+        return (fallbackData || []).map(p => ({
+          ...p,
+          discount_type: 'percentage',
+          discount_value: 0,
+          is_active: (p as any).is_active ?? true
+        }));
       }
       throw error;
     }
-    return data || [];
+    
+    // Normalize data for UI if needed
+    const normalizedData = (data || []).map(p => ({
+      ...p,
+      title: p.code, // Use code as title if title is missing
+      status: p.is_active ? 'active' : 'inactive',
+      type: p.discount_type,
+      value: p.discount_value,
+      end_date: p.expires_at
+    }));
+
+    return normalizedData;
   } catch (err) {
     console.error('Promos fetch failed:', err);
     return [];
@@ -1193,7 +1208,7 @@ export async function getAuthors() {
 export async function getProtocolAgreements() {
   try {
     await verifyAdmin();
-    const columns = 'id, name, content, metadata, is_active, created_at, updated_at';
+    const columns = 'id, title, content, is_active, created_at';
     let { data, error, status } = await supabase
       .from('partnership_agreements')
       .select(columns)
@@ -1204,7 +1219,7 @@ export async function getProtocolAgreements() {
         console.warn('Advanced protocol agreements columns missing, falling back to core');
         const { data: fallbackData, error: fallbackError } = await supabase
           .from('partnership_agreements')
-          .select('id, name, created_at')
+          .select('id, title, created_at')
           .order('created_at', { ascending: false });
         if (fallbackError) throw fallbackError;
         data = fallbackData as any;
@@ -1213,7 +1228,14 @@ export async function getProtocolAgreements() {
         throw error;
       }
     }
-    return data || [];
+    
+    // Normalize for UI if needed (renaming title to name)
+    const normalizedData = (data || []).map((p: any) => ({
+      ...p,
+      name: p.title
+    }));
+    
+    return normalizedData;
   } catch (err) {
     console.error('Protocol Agreements fetch failed:', err);
     return [];
@@ -1341,7 +1363,7 @@ export async function getSiteSettings() {
   try {
     await verifyAdmin();
     // Fetch basic settings first - no joins to avoid 400 errors if schema is out of sync
-    const columns = 'id, site_name, contact_email, contact_phone, secondary_phone, whatsapp_link, author_of_the_day_id, author_of_the_day_books, created_at, updated_at, tax_rate';
+    const columns = 'id, site_name, contact_email, contact_phone, secondary_phone, whatsapp_link, author_of_the_day_id, author_of_the_day_books, updated_at, tax_rate';
     let { data: siteData, error: siteError } = await supabase
       .from('site_settings')
       .select(columns)

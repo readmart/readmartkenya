@@ -83,20 +83,26 @@ export default function Checkout() {
 
             if (isSchemaError) {
               console.warn('Schema cache issue on checkout session creation, retrying with minimal select');
-              const { data: retryData, error: retryError } = await supabase
-                .from('checkout_sessions')
-                .insert([{
-                  user_id: user.id,
-                  status: 'initiated',
-                  last_step: step
-                }])
-                .select('id')
-                .maybeSingle();
-              if (retryError) {
-                console.error('Failed to create checkout session even after retry:', retryError);
+              try {
+                const { data: retryData, error: retryError } = await supabase
+                  .from('checkout_sessions')
+                  .insert([{
+                    user_id: user.id,
+                    status: 'initiated',
+                    last_step: step
+                  }])
+                  .select('id')
+                  .maybeSingle();
+                
+                if (retryError) {
+                  console.warn('Failed to create checkout session even after retry (schema issue). Continuing without tracking.', retryError);
+                  return; // Don't block
+                }
+                session = retryData;
+              } catch (e) {
+                console.warn('Exception during checkout session retry. Continuing without tracking.', e);
                 return;
               }
-              session = retryData;
             } else {
               console.error('Failed to create checkout session:', sessionError);
               return;
@@ -292,6 +298,10 @@ export default function Checkout() {
           product_snapshot: item
         }))
       });
+
+      if (!order) {
+        throw new Error('Failed to create order. Please try again.');
+      }
 
       setOrderNumber(order.id.slice(0, 8).toUpperCase());
 

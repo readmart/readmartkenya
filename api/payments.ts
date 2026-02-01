@@ -579,6 +579,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return badRequest(res, `Missing phone or amount for membership`);
       }
 
+      let finalOrderId = orderId || `MEMB-GUEST-${Date.now()}`;
+
       try {
         const token = req.headers.authorization?.split(' ')[1] || '';
         let user = null;
@@ -587,13 +589,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             const { data: userData, error: userError } = await supabase.auth.getUser(token);
             if (!userError && userData?.user) {
               user = userData.user;
+              if (!orderId) {
+                finalOrderId = `MEMB-${user.id.slice(0, 8)}-${Date.now()}`;
+              }
             }
           } catch (e) {
             console.warn('Auth check failed, continuing as guest:', e);
           }
         }
-
-        const finalOrderId = orderId || `MEMB-${user?.id?.slice(0, 8) || 'GUEST'}-${Date.now()}`;
         console.log(`Initiating ${paymentMethod || 'm-pesa'} payment for ${isMembership ? 'membership' : 'order ' + finalOrderId}`);
         console.log(`Amount: ${amount}, Phone: ${phone}`);
         
@@ -690,12 +693,33 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       } catch (err: any) {
         console.error('Payment Init Error Handler:', err);
         
+        const isConfigError = err.message.includes('credentials') || err.message.includes('configured');
+        const isK2Error = err.message.includes('K2') || err.message.includes('token') || err.message.includes('Status');
+
         if (isProduction) {
-          // In production, we don't use demo mode, return the error
+          // In production, we don't use demo mode
+          console.error(`Production Payment Error [${finalOrderId}]:`, err.message);
+          
+          if (isConfigError) {
+            return json(res, 503, { 
+              error: 'Payment Service Unavailable', 
+              message: 'The payment system is currently being configured. Please try again later or contact support.',
+              code: 'CONFIG_ERROR'
+            });
+          }
+          
+          if (isK2Error) {
+             return json(res, 502, { 
+              error: 'Payment Provider Error', 
+              message: 'We are having trouble communicating with our payment provider. Please try again in a few moments.',
+              code: 'PROVIDER_ERROR'
+            });
+          }
+
           return serverError(res, err);
         }
 
-        if (err.message.includes('credentials') || err.message.includes('configured') || err.message.includes('failed') || err.message.includes('Status')) {
+        if (isConfigError || isK2Error || err.message.includes('failed')) {
           console.warn('Payment failed or credentials missing, using demo response in development');
           
           // FOR DEMO: Automatically complete the order/membership

@@ -49,23 +49,26 @@ export async function createOrder(orderData: OrderData) {
     .from('orders')
     .insert(orderInsertData)
     .select('id, subtotal_amount, shipping_amount, total_amount, status, payment_method, shipping_address, created_at, tax_amount')
-    .single();
+    .maybeSingle();
 
   if (orderError) {
     console.error('Order creation error details:', orderError);
     // If it's a schema cache error, try to insert without select(*)
-    if (orderError.message?.includes('cache') || orderError.message?.includes('column')) {
+    if (orderError.message?.includes('cache') || orderError.message?.includes('column') || orderError.code === 'PGRST204') {
        const { data: retryOrder, error: retryError } = await supabase
          .from('orders')
          .insert(orderInsertData)
          .select('id')
-         .single();
+         .maybeSingle();
        
        if (retryError) throw retryError;
+       if (!retryOrder) throw new Error('Order creation failed after retry');
        return retryOrder;
     }
     throw orderError;
   }
+
+  if (!order) throw new Error('Order creation failed');
 
   // 2. Create order items
   const orderItems = orderData.items.map(item => ({
@@ -93,72 +96,63 @@ export async function getOrder(orderId: string) {
   
   let profile;
   try {
-    const { data: profileData, error: profileError } = await supabase.from('profiles').select('role').eq('id', user?.id).single();
+    const { data: profileData, error: profileError } = await supabase.from('profiles').select('role').eq('id', user?.id).maybeSingle();
     if (profileError && (profileError.code === 'PGRST204' || profileError.message?.includes('cache'))) {
-      const { data: retryProfile } = await supabase.from('profiles').select('role').eq('id', user?.id).single();
+      const { data: retryProfile } = await supabase.from('profiles').select('role').eq('id', user?.id).maybeSingle();
       profile = retryProfile;
     } else {
       profile = profileData;
     }
   } catch (e) {
-    console.warn('Profile fetch failed in getOrder');
+    console.warn('Failed to fetch profile for order check:', e);
   }
 
-  const isAdmin = profile?.role === 'founder' || profile?.role === 'admin';
-
-  const orderColumns = `
-    id,
-    user_id,
-    total_amount,
-    subtotal_amount,
-    shipping_amount,
-    tax_amount,
-    status,
-    payment_method,
-    shipping_address,
-    shipping_zone_id,
-    created_at,
-    order_items(
-      id,
-      order_id,
-      product_id,
-      quantity,
-      price,
-      price_at_purchase,
-      product_snapshot,
-      products(id, title, image_url, description)
-    )
-  `;
-
-  let { data, error } = await supabase
+  const query = supabase
     .from('orders')
-    .select(orderColumns)
-    .eq('id', orderId)
-    .single();
+    .select(`
+      id, 
+      user_id, 
+      subtotal_amount, 
+      shipping_amount, 
+      total_amount, 
+      status, 
+      payment_method, 
+      shipping_address, 
+      created_at, 
+      payment_id,
+      payment_status,
+      items:order_items(
+        id, 
+        product_id, 
+        quantity, 
+        price, 
+        product_snapshot,
+        product:products(id, title, image_url, type, metadata)
+      )
+    `)
+    .eq('id', orderId);
 
+  // If not admin, restrict to own orders
+  if (profile?.role !== 'admin' && profile?.role !== 'founder') {
+    query.eq('user_id', user?.id);
+  }
+
+  const { data, error } = await query.maybeSingle();
+  
   if (error) {
-    if (error.code === 'PGRST204' || error.message?.includes('column') || error.message?.includes('cache')) {
-      console.warn('Advanced order columns missing, falling back to core');
-      const { data: fallbackData, error: fallbackError } = await supabase
+    if (error.code === 'PGRST204' || error.message?.includes('cache')) {
+      console.warn('Order fetch schema cache issue, retrying with minimal select');
+      const { data: retryData, error: retryError } = await supabase
         .from('orders')
-        .select(`
-          id, user_id, total_amount, status, created_at,
-          order_items(id, product_id, quantity, price)
-        `)
+        .select('id, user_id, total_amount, status, shipping_address, created_at')
         .eq('id', orderId)
-        .single();
+        .maybeSingle();
       
-      if (fallbackError) throw fallbackError;
-      data = fallbackData as any;
-    } else {
-      throw error;
+      if (retryError) throw retryError;
+      return retryData;
     }
+    throw error;
   }
-
-  if (!isAdmin && data) {
-    const { tax_amount, ...dataForCustomer } = data;
-    return dataForCustomer;
-  }
-
+  
   return data;
 }

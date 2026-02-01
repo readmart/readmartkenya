@@ -9,8 +9,17 @@ The codebase has undergone significant stabilization, but several runtime errors
 1.  **Profiles Query 400 Error**: Despite removing the `bio` column, the query for `profiles` still fails. Investigation suggests that `phone` and `address` columns are missing from the `profiles` table in the database.
 2.  **Site Settings Query 400 Error**: The `useSettings` hook requests 28 columns, many of which (e.g., `tax_rate`, `membership_wall_active`, `author_of_the_day_enabled`) are missing from the `site_settings` table.
 3.  **Checkout Sessions 404/PGRST205 Error**: The `checkout_sessions` table is not found in the schema cache, causing a 404 error during checkout. This persists even after migrations are applied, indicating a severe cache drift issue.
-4.  **Schema Cache Latency**: PostgREST sometimes fails to detect new columns or tables even after migrations are applied, requiring a manual `NOTIFY pgrst, 'reload schema'` or a database restart.
-5.  **Browser Port Disconnection**: Console warnings about `Attempting to use a disconnected port object` are likely due to browser extensions (e.g., Google Translate) and do not impact application stability, though they clutter the logs.
+4.  **Payment 500 Internal Server Error**: The `/api/payments/init` endpoint is failing with a 500 error in production.
+    *   **Root Cause**: Missing environment variables for the K2 (Kopokopo) payment gateway (`KOPOKOPO_CLIENT_ID`, `KOPOKOPO_CLIENT_SECRET`, `KOPOKOPO_API_KEY`, `KOPOKOPO_TILL_NUMBER`).
+    *   **Verification**: Logging has been enhanced in `api/_payments.ts` to explicitly report missing credentials. Local environment check confirms these are missing.
+    *   **Fix**: The user MUST set these environment variables in the Vercel dashboard for the production environment.
+5.  **Shipping Zones 400 Error**:
+    *   **Root Cause**: The query was requesting `rate` and `base_rate` columns which were renamed to `price` in early migrations.
+    *   **Fix**: Query updated in `dashboards.ts` to remove non-existent columns. Fallback logic remains as a safety measure for other advanced columns.
+6.  **Checkout Sessions 404/PGRST205 Error**:
+    *   **Status**: Hardened in `Checkout.tsx` to be non-blocking. If the session tracking fails due to schema cache issues, the checkout process will continue without it to ensure user experience isn't impacted.
+7.  **Schema Cache Latency**: PostgREST sometimes fails to detect new columns or tables even after migrations are applied, requiring a manual `NOTIFY pgrst, 'reload schema'` or a database restart.
+8.  **Browser Port Disconnection**: Console warnings about `Attempting to use a disconnected port object` are likely due to browser extensions (e.g., Google Translate) and do not impact application stability.
 
 ### **Edits Assessment**
 -   **AuthContext.tsx**: Updated to remove `bio`, but still requesting potentially non-existent `phone`/`address`.
