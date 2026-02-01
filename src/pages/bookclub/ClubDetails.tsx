@@ -57,11 +57,11 @@ const ClubDetails: React.FC = () => {
       ]);
 
       setClub(clubDetails);
-      setMembers(clubMembers);
-      setBooks(clubBooks);
-      setDiscussions(clubDiscussions);
+      setMembers(clubMembers || []);
+      setBooks(clubBooks || []);
+      setDiscussions(clubDiscussions || []);
 
-      const membership = clubMembers.find((m: any) => m.user_id === user?.id);
+      const membership = (clubMembers || []).find((m: any) => m.user_id === user?.id);
       if (membership) {
         setIsMember(true);
         setMyRole(membership.role);
