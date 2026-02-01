@@ -71,7 +71,7 @@ export function useSettings() {
       try {
         // Use withRetry for resilience against transient fetch failures
         const siteData = await withRetry(async () => {
-          const columns = 'site_logo, site_name, whatsapp_link, contact_email, contact_phone, secondary_phone, address, working_hours, tax_rate, default_currency, maintenance_mode, instagram_url, facebook_url, twitter_url, x_url, linkedin_url, tiktok_url, threads_url, global_announcement, announcement_active, membership_wall_active, membership_price, membership_duration_days, membership_title, membership_description, author_of_the_day_id, author_of_the_day_enabled, author_of_the_day_books, author_of_the_day_image';
+          const columns = 'site_logo, site_name, whatsapp_link, contact_email, contact_phone, secondary_phone, address, working_hours, tax_rate, default_currency, maintenance_mode, instagram_url, facebook_url, x_url, linkedin_url, tiktok_url, threads_url, global_announcement, announcement_active, membership_wall_active, membership_price, membership_duration_days, membership_title, membership_description, author_of_the_day_id, author_of_the_day_enabled, author_of_the_day_books, author_of_the_day_image';
           
           const { data, error } = await supabase
             .from('site_settings')

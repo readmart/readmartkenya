@@ -64,7 +64,7 @@ export default function Checkout() {
                 last_step: step
               }])
               .select('id')
-              .single();
+              .maybeSingle();
             session = data;
             sessionError = error;
           } catch (e: any) {
@@ -82,7 +82,7 @@ export default function Checkout() {
                   last_step: step
                 }])
                 .select('id')
-                .single();
+                .maybeSingle();
               if (retryError) {
                 console.error('Failed to create checkout session even after retry:', retryError);
                 return;

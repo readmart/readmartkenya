@@ -1550,7 +1550,7 @@ function InventoryView({ data, categories, approvedAuthors, onUpdate }: any) {
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <label htmlFor="price" className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Standard Price (KES)</label>
+                        <label htmlFor="price" className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Standard Value (KES)</label>
                         <input 
                           id="price"
                           name="price"
@@ -1559,10 +1559,12 @@ function InventoryView({ data, categories, approvedAuthors, onUpdate }: any) {
                           value={formData.price}
                           onChange={(e) => setFormData({...formData, price: e.target.value})}
                           className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-2 focus:ring-primary/20 font-bold" 
+                          placeholder="0.00"
                         />
+                        <p className="mt-1 text-[9px] text-slate-400 font-medium">Base acquisition cost within the ecosystem.</p>
                       </div>
                       <div>
-                        <label htmlFor="sale_price" className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Impact Price (Optional)</label>
+                        <label htmlFor="sale_price" className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Impact Value (Optional)</label>
                         <input 
                           id="sale_price"
                           name="sale_price"
@@ -1570,7 +1572,9 @@ function InventoryView({ data, categories, approvedAuthors, onUpdate }: any) {
                           value={formData.sale_price}
                           onChange={(e) => setFormData({...formData, sale_price: e.target.value})}
                           className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-2 focus:ring-primary/20 font-bold" 
+                          placeholder="0.00"
                         />
+                        <p className="mt-1 text-[9px] text-slate-400 font-medium">Promotional or subsidized impact pricing.</p>
                       </div>
                     </div>
                     <div className="grid grid-cols-2 gap-4">
@@ -1585,6 +1589,7 @@ function InventoryView({ data, categories, approvedAuthors, onUpdate }: any) {
                           onChange={(e) => setFormData({...formData, stock_quantity: e.target.value})}
                           className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-2 focus:ring-primary/20 font-bold" 
                         />
+                        <p className="mt-1 text-[9px] text-slate-400 font-medium">Available units for distribution protocol.</p>
                       </div>
                       <div>
                         <label htmlFor="assetType" className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Asset Type</label>
@@ -1598,6 +1603,7 @@ function InventoryView({ data, categories, approvedAuthors, onUpdate }: any) {
                           <option value="physical">Physical Manuscript</option>
                           <option value="ebook">Digital E-Book</option>
                         </select>
+                        <p className="mt-1 text-[9px] text-slate-400 font-medium">Format of the registered protocol asset.</p>
                       </div>
                     </div>
 
@@ -1734,6 +1740,7 @@ function InventoryView({ data, categories, approvedAuthors, onUpdate }: any) {
                           <option key={cat.id} value={cat.id}>{cat.name}</option>
                         ))}
                       </select>
+                      <p className="mt-1 text-[9px] text-slate-400 font-medium">Define the asset's niche within the ecosystem.</p>
                     </div>
                     <div>
                       <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Protocol Status</label>
@@ -1751,6 +1758,11 @@ function InventoryView({ data, categories, approvedAuthors, onUpdate }: any) {
                           <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${formData.is_active ? 'left-6' : 'left-1'}`} />
                         </div>
                       </button>
+                      <p className="mt-1 text-[9px] text-slate-400 font-medium">
+                        {formData.is_active 
+                          ? 'Visible to public protocol participants.' 
+                          : 'Restricted to internal ecosystem review.'}
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -1763,6 +1775,7 @@ function InventoryView({ data, categories, approvedAuthors, onUpdate }: any) {
                     className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-2 focus:ring-primary/20 font-bold h-40 resize-none"
                     placeholder="Describe the asset's impact and contents..."
                   />
+                  <p className="mt-2 text-[10px] text-slate-400 font-medium italic">Provide the ecosystem with context regarding the impact of this protocol asset.</p>
                 </div>
 
                 <div className="mt-12 flex gap-4">

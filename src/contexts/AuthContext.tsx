@@ -96,7 +96,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     try {
-      const columns = 'id, full_name, avatar_url, role, bio, phone, address, preferences, created_at, updated_at';
+      const columns = 'id, full_name, avatar_url, role, phone, address, preferences, created_at, updated_at';
       let { data, error } = await supabase
         .from('profiles')
         .select(columns)
