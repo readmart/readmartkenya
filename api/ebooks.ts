@@ -22,30 +22,105 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const user = userData?.user;
       if (authError || !user) return unauthorized(res);
 
-      // Check if user has purchased the ebook or has a membership
-      const { data: purchase, error: purchaseError } = await supabase
-        .from('order_items')
-        .select('id, orders!inner(status, user_id)')
-        .eq('product_id', ebookId)
-        .eq('orders.user_id', user.id)
-        .in('orders.status', ['paid', 'completed', 'delivered'])
-        .maybeSingle();
+      // Check if user has purchased the ebook or has an active membership with hardening
+      let purchase: any = null;
+      let purchaseError: any = null;
+
+      try {
+        const { data, error } = await supabase
+          .from('order_items')
+          .select('id, orders!inner(status, user_id)')
+          .eq('product_id', ebookId)
+          .eq('orders.user_id', user.id)
+          .in('orders.status', ['paid', 'completed', 'delivered'])
+          .maybeSingle();
+        purchase = data;
+        purchaseError = error;
+      } catch (e: any) {
+        purchaseError = e;
+      }
 
       if (purchaseError) {
-        console.error('Error verifying ebook access:', purchaseError);
-        return serverError(res, purchaseError);
+        if (purchaseError.code === 'PGRST204' || purchaseError.message?.includes('cache')) {
+          console.warn('Order items schema cache issue in ebooks API, falling back to separate fetch');
+          // Find orders for this user
+          const { data: orders } = await supabase
+            .from('orders')
+            .select('id, status')
+            .eq('user_id', user.id)
+            .in('status', ['paid', 'completed', 'delivered']);
+          
+          if (orders && orders.length > 0) {
+            const orderIds = orders.map(o => o.id);
+            const { data: item } = await supabase
+              .from('order_items')
+              .select('id')
+              .eq('product_id', ebookId)
+              .in('order_id', orderIds)
+              .maybeSingle();
+            
+            purchase = item;
+            purchaseError = null;
+          }
+        } else {
+          console.error('Error verifying ebook access:', purchaseError);
+          return serverError(res, purchaseError);
+        }
       }
 
-      if (!purchase) {
-        return json(res, 403, { error: 'Access denied. Purchase required.' });
+      let hasAccess = !!purchase;
+
+      // If no purchase, check for active membership
+      if (!hasAccess) {
+        const { data: profile, error: profileError } = await supabase
+          .from('profiles')
+          .select('is_member, membership_expires_at')
+          .eq('id', user.id)
+          .single();
+
+        if (!profileError && profile?.is_member) {
+          const now = new Date();
+          const expiresAt = profile.membership_expires_at ? new Date(profile.membership_expires_at) : null;
+          if (!expiresAt || expiresAt > now) {
+            hasAccess = true;
+          }
+        }
       }
 
-      // Fetch the ebook path from products table
-      const { data: ebook, error: ebookError } = await supabase
-        .from('products')
-        .select('ebook_file_path, title')
-        .eq('id', ebookId)
-        .single();
+      if (!hasAccess) {
+        return json(res, 403, { error: 'Access denied. Purchase or active membership required.' });
+      }
+
+      // Fetch the ebook path from products table with hardened error handling
+      let ebook: any = null;
+      let ebookError: any = null;
+
+      try {
+        const { data, error } = await supabase
+          .from('products')
+          .select('id, title, ebook_file_path, ebook_metadata')
+          .eq('id', ebookId)
+          .single();
+        ebook = data;
+        ebookError = error;
+      } catch (e: any) {
+        ebookError = e;
+      }
+
+      if (ebookError) {
+        if (ebookError.code === 'PGRST204' || ebookError.message?.includes('cache')) {
+          console.warn('Products schema cache issue in ebooks API, falling back to minimal fetch');
+          const { data: fallbackEbook, error: fallbackError } = await supabase
+            .from('products')
+            .select('id, title, ebook_file_path')
+            .eq('id', ebookId)
+            .single();
+          
+          if (fallbackError) throw fallbackError;
+          ebook = fallbackEbook;
+          ebookError = null;
+        }
+      }
 
       if (ebookError || !ebook?.ebook_file_path) {
         return json(res, 404, { error: 'Ebook file not found' });

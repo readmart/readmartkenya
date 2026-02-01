@@ -55,13 +55,27 @@ export async function initiatePayment(orderId: string, phoneNumber: string, amou
  */
 export async function checkPaymentStatus(orderId: string) {
   try {
-    const { data: order, error } = await supabase
+    let { data: order, error } = await supabase
       .from('orders')
       .select('status, payment_id')
       .eq('id', orderId)
       .maybeSingle();
 
-    if (error) throw error;
+    if (error) {
+      if (error.code === 'PGRST204' || error.message?.includes('column') || error.message?.includes('cache')) {
+        console.warn('Orders schema cache issue in checkPaymentStatus, falling back to core');
+        const { data: fallbackOrder, error: fallbackError } = await supabase
+          .from('orders')
+          .select('status')
+          .eq('id', orderId)
+          .maybeSingle();
+        
+        if (fallbackError) throw fallbackError;
+        order = fallbackOrder as any;
+      } else {
+        throw error;
+      }
+    }
     return order;
   } catch (error) {
     console.error('Status Check Error:', error);
@@ -87,12 +101,38 @@ export async function checkMembershipStatus(userId: string, paymentId?: string, 
       }
     }
 
-    const { data, error } = await query
+    let { data, error } = await query
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle();
 
-    if (error) throw error;
+    if (error) {
+      if (error.code === 'PGRST204' || error.message?.includes('column') || error.message?.includes('cache')) {
+        console.warn('Membership payments schema cache issue, falling back to core');
+        let fallbackQuery = supabase
+          .from('membership_payments')
+          .select('status');
+        
+        if (recordId) {
+          fallbackQuery = fallbackQuery.eq('id', recordId);
+        } else {
+          fallbackQuery = fallbackQuery.eq('user_id', userId);
+          if (paymentId) {
+            fallbackQuery = fallbackQuery.eq('payment_id', paymentId);
+          }
+        }
+        
+        const { data: fallbackData, error: fallbackError } = await fallbackQuery
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+          
+        if (fallbackError) throw fallbackError;
+        data = fallbackData as any;
+      } else {
+        throw error;
+      }
+    }
     return data;
   } catch (error) {
     console.error('Membership Status Check Error:', error);

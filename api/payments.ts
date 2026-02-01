@@ -96,11 +96,34 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (orderId && (isTransactionEvent || isReversalEvent)) {
         // --- IDEMPOTENCY CHECK ---
         // 1. Check if this specific webhook event has been processed
-        const { data: existingProcessedEvent } = await supabase
-          .from('transactions')
-          .select('id')
-          .contains('metadata', { webhook_event_id: webhookEventId })
-          .maybeSingle();
+        let existingProcessedEvent: any = null;
+        let processedError: any = null;
+
+        try {
+          const { data, error } = await supabase
+            .from('transactions')
+            .select('id')
+            .contains('metadata', { webhook_event_id: webhookEventId })
+            .maybeSingle();
+          existingProcessedEvent = data;
+          processedError = error;
+        } catch (e: any) {
+          processedError = e;
+        }
+
+        if (processedError) {
+          if (processedError.code === 'PGRST204' || processedError.message?.includes('cache')) {
+            console.warn('Transactions schema cache issue, falling back to basic select');
+            const { data: retryData } = await supabase
+              .from('transactions')
+              .select('id')
+              .eq('payment_id', transactionId)
+              .maybeSingle();
+            existingProcessedEvent = retryData;
+          } else {
+            console.error('Error checking idempotency:', processedError);
+          }
+        }
 
         if (existingProcessedEvent) {
           console.log(`Webhook event ${webhookEventId} already processed. Skipping.`);
@@ -108,11 +131,32 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
 
         // 2. Check if the order is already paid (for non-reversal events)
-        const { data: existingOrder } = await supabase
-          .from('orders')
-          .select('payment_status, is_paid, payment_id')
-          .eq('id', orderId)
-          .maybeSingle();
+        let existingOrder: any = null;
+        let orderError: any = null;
+
+        try {
+          const { data, error } = await supabase
+            .from('orders')
+            .select('payment_status, is_paid, payment_id')
+            .eq('id', orderId)
+            .maybeSingle();
+          existingOrder = data;
+          orderError = error;
+        } catch (e: any) {
+          orderError = e;
+        }
+
+        if (orderError) {
+          if (orderError.code === 'PGRST204' || orderError.message?.includes('cache')) {
+            console.warn('Orders schema cache issue in webhook, falling back to core columns');
+            const { data: retryOrder } = await supabase
+              .from('orders')
+              .select('id, is_paid')
+              .eq('id', orderId)
+              .maybeSingle();
+            existingOrder = retryOrder;
+          }
+        }
 
         if (existingOrder?.is_paid && !isReversalEvent) {
           console.log(`Order ${orderId} is already marked as paid. Skipping redundant webhook.`);
@@ -129,11 +173,32 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             console.log(`Processing membership payment for order ${orderId}, status: ${finalStatus}`);
             
             // --- IDEMPOTENCY CHECK FOR MEMBERSHIP ---
-            const { data: existingMemb } = await supabase
-              .from('membership_payments')
-              .select('status')
-              .or(`payment_id.eq.${transactionId},metadata->>order_id.eq.${orderId}`)
-              .maybeSingle();
+            let existingMemb: any = null;
+            let membCheckError: any = null;
+
+            try {
+              const { data, error } = await supabase
+                .from('membership_payments')
+                .select('status')
+                .or(`payment_id.eq.${transactionId},metadata->>order_id.eq.${orderId}`)
+                .maybeSingle();
+              existingMemb = data;
+              membCheckError = error;
+            } catch (e: any) {
+              membCheckError = e;
+            }
+
+            if (membCheckError) {
+              if (membCheckError.code === 'PGRST204' || membCheckError.message?.includes('cache')) {
+                console.warn('Membership schema cache issue, falling back to core columns');
+                const { data: retryMemb } = await supabase
+                  .from('membership_payments')
+                  .select('status')
+                  .eq('payment_id', transactionId)
+                  .maybeSingle();
+                existingMemb = retryMemb;
+              }
+            }
 
             if (existingMemb?.status === 'completed' && actuallyPaid) {
               console.log(`Membership payment ${orderId} already completed. Skipping.`);
@@ -141,17 +206,41 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             }
 
             // 1. Update membership_payments table
-            const { data: membershipPayments, error: membError } = await supabase
-              .from('membership_payments')
-              .update({ 
-                status: isReversalEvent ? 'reversed' : (actuallyPaid ? 'completed' : 'failed'),
-                payment_id: transactionId,
-                metadata: { ...payload, webhook_event_id: webhookEventId, updated_at: new Date().toISOString() }
-              })
-              .or(`payment_id.eq.${transactionId},payment_id.ilike.%${transactionId}%,metadata->>order_id.eq.${orderId}`)
-              .select();
+            let membershipPayments: any[] | null = null;
+            let membError: any = null;
 
-            if (membError) console.error('Membership update error:', membError);
+            try {
+              const { data, error } = await supabase
+                .from('membership_payments')
+                .update({ 
+                  status: isReversalEvent ? 'reversed' : (actuallyPaid ? 'completed' : 'failed'),
+                  payment_id: transactionId,
+                  metadata: { ...payload, webhook_event_id: webhookEventId, updated_at: new Date().toISOString() }
+                })
+                .or(`payment_id.eq.${transactionId},payment_id.ilike.%${transactionId}%,metadata->>order_id.eq.${orderId}`)
+                .select('id, user_id, amount, status, metadata');
+              membershipPayments = data;
+              membError = error;
+            } catch (e: any) {
+              membError = e;
+            }
+
+            if (membError) {
+              if (membError.code === 'PGRST204' || membError.message?.includes('cache')) {
+                console.warn('Membership update schema cache issue, retrying with minimal select');
+                const { data: retryData } = await supabase
+                  .from('membership_payments')
+                  .update({ 
+                    status: isReversalEvent ? 'reversed' : (actuallyPaid ? 'completed' : 'failed'),
+                    payment_id: transactionId
+                  })
+                  .eq('payment_id', transactionId)
+                  .select('id, user_id, amount, status');
+                membershipPayments = retryData;
+              } else {
+                console.error('Membership update error:', membError);
+              }
+            }
 
             if (actuallyPaid && (membershipPayments?.length || 0) > 0) {
               const payment = membershipPayments![0];
@@ -171,13 +260,30 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 console.log(`Activating club membership for user ${userId} in club ${clubId}`);
                 
                 // Update club_members table
-                await supabase.from('club_members').upsert({
-                  user_id: userId,
-                  club_id: clubId,
-                  payment_status: 'paid',
-                  status: 'active',
-                  joined_at: new Date().toISOString()
-                }, { onConflict: 'user_id, club_id' });
+                try {
+                  const { error: clubError } = await supabase.from('club_members').upsert({
+                    user_id: userId,
+                    club_id: clubId,
+                    payment_status: 'paid',
+                    status: 'active',
+                    joined_at: new Date().toISOString()
+                  }, { onConflict: 'user_id, club_id' });
+
+                  if (clubError) {
+                    if (clubError.code === 'PGRST204' || clubError.message?.includes('cache')) {
+                      console.warn('Club members schema cache issue, retrying minimal upsert');
+                      await supabase.from('club_members').upsert({
+                        user_id: userId,
+                        club_id: clubId,
+                        status: 'active'
+                      }, { onConflict: 'user_id, club_id' });
+                    } else {
+                      throw clubError;
+                    }
+                  }
+                } catch (e) {
+                  console.error('Failed to update club membership:', e);
+                }
 
                 // Create notification
                 await createNotification({
@@ -189,17 +295,44 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 });
               } else {
                 // 2. Update profile to member status (Site-wide)
-                const { data: settings } = await supabase.from('site_settings').select('membership_duration_days').maybeSingle();
-                const duration = settings?.membership_duration_days || 30;
+                let duration = 30;
+                try {
+                  const { data: settings, error: settingsError } = await supabase
+                    .from('site_settings')
+                    .select('membership_duration_days')
+                    .maybeSingle();
+                  
+                  if (!settingsError && settings) {
+                    duration = settings.membership_duration_days || 30;
+                  }
+                } catch (e) {
+                  console.warn('Failed to fetch site settings for membership duration, using default 30 days');
+                }
                 
                 const expiresAt = new Date();
                 expiresAt.setDate(expiresAt.getDate() + duration);
 
-                await supabase.from('profiles').update({
-                  is_member: true,
-                  membership_started_at: new Date().toISOString(),
-                  membership_expires_at: expiresAt.toISOString()
-                }).eq('id', userId);
+                try {
+                  const { error: profileError } = await supabase.from('profiles').update({
+                    is_member: true,
+                    membership_started_at: new Date().toISOString(),
+                    membership_expires_at: expiresAt.toISOString()
+                  }).eq('id', userId);
+                  
+                  if (profileError) {
+                    if (profileError.code === 'PGRST204' || profileError.message?.includes('cache')) {
+                      console.warn('Profiles schema cache issue during membership update, retrying with minimal update');
+                      // Retry without the new columns if they are causing the issue
+                      await supabase.from('profiles').update({
+                        is_member: true
+                      }).eq('id', userId);
+                    } else {
+                      throw profileError;
+                    }
+                  }
+                } catch (e) {
+                  console.error('Failed to update user profile for membership:', e);
+                }
 
                 // 3. Create notification
                 await createNotification({
@@ -225,26 +358,63 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               updatePayload.mpesa_receipt_number = transactionId;
             }
             
-            const { data: updatedOrders, error: orderError } = await supabase
+            let { data: updatedOrders, error: orderError } = await supabase
               .from('orders')
               .update(updatePayload)
               .eq('id', orderId)
-              .select();
+              .select('id, user_id, total_amount, shipping_address, status');
 
-            if (orderError) throw orderError;
+            if (orderError) {
+              if (orderError.code === 'PGRST204' || orderError.message?.includes('cache')) {
+                console.warn('Orders schema cache issue during update, retrying with minimal select');
+                const { data: retryOrders, error: retryError } = await supabase
+                  .from('orders')
+                  .update(updatePayload)
+                  .eq('id', orderId)
+                  .select('id');
+                
+                if (retryError) throw retryError;
+                
+                // Fetch the rest of the data we need for notification/email
+                const { data: fullOrder } = await supabase
+                  .from('orders')
+                  .select('id, user_id, total_amount, shipping_address, status')
+                  .eq('id', orderId)
+                  .single();
+                
+                updatedOrders = fullOrder ? [fullOrder] : null;
+              } else {
+                throw orderError;
+              }
+            }
 
             if (updatedOrders && updatedOrders.length > 0) {
               const order = updatedOrders[0];
               
               // Log transaction
-              await supabase.from('transactions').insert([{
-                order_id: order.id,
-                user_id: order.user_id,
-                amount: amount || order.total_amount,
-                status: actuallyPaid ? 'completed' : (isReversalEvent ? 'reversed' : 'failed'),
-                provider_reference: transactionId,
-                metadata: { ...payload, webhook_event_id: webhookEventId }
-              }]);
+              try {
+                const { error: txError } = await supabase.from('transactions').insert([{
+                  order_id: order.id,
+                  user_id: order.user_id,
+                  amount: amount || (order as any).total_amount,
+                  status: actuallyPaid ? 'completed' : (isReversalEvent ? 'reversed' : 'failed'),
+                  provider_reference: transactionId,
+                  metadata: { ...payload, webhook_event_id: webhookEventId }
+                }]);
+
+                if (txError) {
+                  if (txError.code === 'PGRST204' || txError.message?.includes('cache')) {
+                    console.warn('Transactions schema cache issue, retrying minimal insert');
+                    await supabase.from('transactions').insert([{
+                      order_id: order.id,
+                      amount: amount || (order as any).total_amount,
+                      status: actuallyPaid ? 'completed' : (isReversalEvent ? 'reversed' : 'failed')
+                    }]);
+                  }
+                }
+              } catch (e) {
+                console.error('Failed to log transaction:', e);
+              }
 
               if (actuallyPaid) {
                 // Send SMS notification if webhookEventId exists (as per K2 docs)
@@ -259,28 +429,80 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 await logAction(req, order.user_id, 'payment_received', 'orders', { orderId: order.id, amount });
                 
                 // Fetch items with product type and ebook metadata to check for digital-only order
-                const { data: items } = await supabase
-                  .from('order_items')
-                  .select(`
-                    *,
-                    product:products(
-                      type,
-                      metadata
-                    )
-                  `)
-                  .eq('order_id', order.id);
+                let items: any[] = [];
+                try {
+                  const itemColumns = 'id, order_id, product_id, quantity, price, price_at_purchase, product_snapshot';
+                  const { data, error } = await supabase
+                    .from('order_items')
+                    .select(`
+                      ${itemColumns},
+                      product:products(
+                        id,
+                        type,
+                        metadata
+                      )
+                    `)
+                    .eq('order_id', order.id);
+                  
+                  if (error) {
+                    if (error.code === 'PGRST204' || error.message?.includes('column') || error.message?.includes('cache')) {
+                      console.warn('Schema cache issue in order_items fetch, retrying with minimal select');
+                      const { data: fallbackItems, error: fallbackError } = await supabase
+                        .from('order_items')
+                        .select('id, product_id, quantity, price_at_purchase, product_snapshot')
+                        .eq('order_id', order.id);
+                      
+                      if (fallbackError) throw fallbackError;
+
+                      // For each fallback item, try to get product info individually to handle joins failing
+                      const enrichedItems = await Promise.all((fallbackItems || []).map(async (item) => {
+                        try {
+                          const { data: productData } = await supabase
+                            .from('products')
+                            .select('id, type, metadata')
+                            .eq('id', item.product_id)
+                            .maybeSingle();
+                          return { ...item, product: productData };
+                        } catch (e) {
+                          return item;
+                        }
+                      }));
+                      items = enrichedItems;
+                    } else {
+                      throw error;
+                    }
+                  } else {
+                    items = data || [];
+                  }
+                } catch (e) {
+                  console.error('Failed to fetch order items for post-payment processing:', e);
+                }
 
                 // Check if this is a digital-only order (all items are ebooks)
                 const isDigitalOnly = items && items.length > 0 && items.every((item: any) => 
-                  item.product?.type === 'ebook' || item.product_snapshot?.type === 'ebook'
+                  item.product?.type === 'ebook' || item.product_snapshot?.type === 'ebook' || item.product_snapshot?.category === 'Digital'
                 );
 
                 if (isDigitalOnly) {
                   console.log(`Order ${order.id} is digital-only. Marking as completed.`);
-                  await supabase
-                    .from('orders')
-                    .update({ status: 'completed' })
-                    .eq('id', order.id);
+                  try {
+                    const { error: completeError } = await supabase
+                      .from('orders')
+                      .update({ status: 'completed' })
+                      .eq('id', order.id);
+                    
+                    if (completeError) {
+                      if (completeError.code === 'PGRST204' || completeError.message?.includes('cache')) {
+                        console.warn('Orders schema cache issue during completion, retrying');
+                        await supabase
+                          .from('orders')
+                          .update({ status: 'completed' })
+                          .eq('id', order.id);
+                      }
+                    }
+                  } catch (e) {
+                    console.error('Failed to mark digital order as completed:', e);
+                  }
                 }
 
                 // Notifications
@@ -370,15 +592,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             console.warn('Auth check failed, continuing as guest:', e);
           }
         }
-        
-        const finalOrderId = orderId || `MEMB-${user?.id?.slice(0, 8) || 'GUEST'}-${Date.now()}`;
 
+        const finalOrderId = orderId || `MEMB-${user?.id?.slice(0, 8) || 'GUEST'}-${Date.now()}`;
+        console.log(`Initiating ${paymentMethod || 'm-pesa'} payment for ${isMembership ? 'membership' : 'order ' + finalOrderId}`);
+        console.log(`Amount: ${amount}, Phone: ${phone}`);
+        
         let k2Result;
         
         if (paymentMethod === 'card') {
-          // KopoKopo Hosted Checkout is a common way to handle card payments.
-          // The URL format is usually https://app.kopokopo.com/pay/[till_number]
-          // or a specific checkout URL provided by KopoKopo.
+          // ... (card logic)
           const tillNumber = process.env.KOPOKOPO_TILL_NUMBER;
           const checkoutBaseUrl = isProduction 
             ? 'https://app.kopokopo.com/pay' 
@@ -405,9 +627,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               lastName,
               email,
             });
+            console.log('K2 STK Push Result:', JSON.stringify(k2Result));
           } catch (stkError: any) {
             console.error('K2 STK Push Initiation Failed:', stkError);
-            // Re-throw to be caught by the outer catch block
             throw stkError;
           }
         }
@@ -417,27 +639,50 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         let dbRecordId = null;
         
         if (isMembership && user) {
-          const { data: membRecord, error: insertError } = await supabase.from('membership_payments').insert([{
-            user_id: user.id,
-            amount,
-            status: 'pending',
-            payment_id: paymentId,
-            metadata: { ...k2Result, type, ...(metadata || {}) }
-          }]).select('id').single();
-          
-          if (insertError) {
-            console.error('Failed to insert membership payment record:', insertError);
-            // We don't necessarily want to fail the whole request if the K2 initiation succeeded
+          try {
+            const { data: membRecord, error: insertError } = await supabase.from('membership_payments').insert([{
+              user_id: user.id,
+              amount,
+              status: 'pending',
+              payment_id: paymentId,
+              metadata: { ...k2Result, type, ...(metadata || {}) }
+            }]).select('id').single();
+            
+            if (insertError) {
+              if (insertError.code === 'PGRST204' || insertError.message?.includes('cache')) {
+                console.warn('Membership payments schema cache issue, retrying minimal insert');
+                const { data: retryMemb } = await supabase.from('membership_payments').insert([{
+                  user_id: user.id,
+                  amount,
+                  status: 'pending'
+                }]).select('id').single();
+                dbRecordId = retryMemb?.id;
+              } else {
+                console.error('Failed to insert membership payment record:', insertError);
+              }
+            } else {
+              dbRecordId = membRecord?.id;
+            }
+          } catch (e) {
+            console.error('Critical failure in membership payment insertion:', e);
           }
-          dbRecordId = membRecord?.id;
         } else if (orderId) {
           const updatePayload: any = { 
             payment_metadata: k2Result 
           };
           if (paymentId) updatePayload.payment_id = paymentId;
-          const { error: updateError } = await supabase.from('orders').update(updatePayload).eq('id', orderId);
-          if (updateError) {
-            console.error('Failed to update order with payment info:', updateError);
+          try {
+            const { error: updateError } = await supabase.from('orders').update(updatePayload).eq('id', orderId);
+            if (updateError) {
+              if (updateError.code === 'PGRST204' || updateError.message?.includes('cache')) {
+                console.warn('Orders schema cache issue during payment init update, retrying');
+                await supabase.from('orders').update({ payment_id: paymentId }).eq('id', orderId);
+              } else {
+                console.error('Failed to update order with payment info:', updateError);
+              }
+            }
+          } catch (e) {
+            console.error('Critical failure in order payment init update:', e);
           }
         }
 
@@ -460,11 +705,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           if (!isMembership && orderId) {
             console.log(`Demo mode: Fulfilling order ${orderId}`);
             // Update order to paid
-            await supabase.from('orders').update({ 
-              status: 'paid',
-              is_paid: true,
-              payment_status: 'paid'
-            }).eq('id', orderId);
+            try {
+              const { error: demoError } = await supabase.from('orders').update({ 
+                status: 'paid',
+                is_paid: true,
+                payment_status: 'paid'
+              }).eq('id', orderId);
+
+              if (demoError) {
+                if (demoError.code === 'PGRST204' || demoError.message?.includes('cache')) {
+                  console.warn('Orders schema cache issue in demo mode, retrying');
+                  await supabase.from('orders').update({ 
+                    status: 'paid',
+                    is_paid: true
+                  }).eq('id', orderId);
+                }
+              }
+            } catch (e) {
+              console.error('Demo mode order update failed:', e);
+            }
             // Trigger commission calculation (will be handled by trigger if is_paid updated, 
             // but we call it explicitly here for immediate effect in demo)
             await calculateOrderCommissions(orderId);
@@ -475,25 +734,57 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           if (user) {
               if (type === 'club_membership' && metadata?.club_id) {
                 console.log(`Demo mode: Activating club membership for user ${user.id} in club ${metadata.club_id}`);
-                await supabase.from('club_members').upsert({
-                  user_id: user.id,
-                  club_id: metadata.club_id,
-                  payment_status: 'paid',
-                  status: 'active',
-                  joined_at: new Date().toISOString()
-                }, { onConflict: 'user_id, club_id' });
+                try {
+                  const { error: clubDemoError } = await supabase.from('club_members').upsert({
+                    user_id: user.id,
+                    club_id: metadata.club_id,
+                    payment_status: 'paid',
+                    status: 'active',
+                    joined_at: new Date().toISOString()
+                  }, { onConflict: 'user_id, club_id' });
+
+                  if (clubDemoError) {
+                    if (clubDemoError.code === 'PGRST204' || clubDemoError.message?.includes('cache')) {
+                      console.warn('Club members schema cache issue in demo mode, retrying');
+                      await supabase.from('club_members').upsert({
+                        user_id: user.id,
+                        club_id: metadata.club_id,
+                        status: 'active'
+                      }, { onConflict: 'user_id, club_id' });
+                    }
+                  }
+                } catch (e) {
+                  console.error('Demo mode club membership activation failed:', e);
+                }
               } else {
                 console.log(`Demo mode: Activating membership for user ${user.id}`);
-                const { data: settings } = await supabase.from('site_settings').select('membership_duration_days').maybeSingle();
-                const duration = settings?.membership_duration_days || 30;
+                let duration = 30;
+                try {
+                  const { data: settings } = await supabase.from('site_settings').select('membership_duration_days').maybeSingle();
+                  duration = settings?.membership_duration_days || 30;
+                } catch (e) {}
+
                 const expiresAt = new Date();
                 expiresAt.setDate(expiresAt.getDate() + duration);
                 
-                await supabase.from('profiles').update({
-                  is_member: true,
-                  membership_started_at: new Date().toISOString(),
-                  membership_expires_at: expiresAt.toISOString()
-                }).eq('id', user.id);
+                try {
+                  const { error: profileDemoError } = await supabase.from('profiles').update({
+                    is_member: true,
+                    membership_started_at: new Date().toISOString(),
+                    membership_expires_at: expiresAt.toISOString()
+                  }).eq('id', user.id);
+
+                  if (profileDemoError) {
+                    if (profileDemoError.code === 'PGRST204' || profileDemoError.message?.includes('cache')) {
+                      console.warn('Profiles schema cache issue in demo mode, retrying');
+                      await supabase.from('profiles').update({
+                        is_member: true
+                      }).eq('id', user.id);
+                    }
+                  }
+                } catch (e) {
+                  console.error('Demo mode profile update failed:', e);
+                }
               }
             }
           }

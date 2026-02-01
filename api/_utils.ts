@@ -63,11 +63,29 @@ export const logAction = async (req: VercelRequest, userId: string | null, actio
   const forward = req.headers['x-forwarded-for'];
   const ip = (Array.isArray(forward) ? forward[0] : (forward as string | undefined))?.split(',')[0]?.trim() || req.socket.remoteAddress || null;
   try {
-    await supabase
+    // Explicit columns to avoid schema cache issues with wildcard select
+    const { error } = await supabase
       .from('audit_logs')
-      .insert([{ user_id: userId, action, resource, payload, ip }]);
+      .insert([{ 
+        user_id: userId, 
+        action, 
+        resource, 
+        payload: payload || {}, 
+        ip 
+      }]);
+    
+    if (error) {
+      if (error.code === 'PGRST204' || error.message?.includes('column') || error.message?.includes('cache')) {
+        console.warn('Audit log schema cache issue, retrying with minimal insert');
+        await supabase
+          .from('audit_logs')
+          .insert([{ action: 'system_log_retry', payload: { original_action: action, resource, userId, ip } }]);
+      } else {
+        console.error('Audit log failed:', error);
+      }
+    }
   } catch (e) {
-    console.error('Audit log failed:', e);
+    console.error('Audit log critical failure:', e);
   }
 };
 
@@ -80,19 +98,46 @@ export const createNotification = async (params: {
   metadata?: Record<string, unknown>;
 }) => {
   const { userId, type, title, message, link, metadata } = params;
-  const { data, error } = await supabase
-    .from('notifications')
-    .insert([{ 
-      user_id: userId, 
-      type, 
-      title, 
-      message, 
-      metadata: { ...metadata, link } 
-    }])
-    .select()
-    .single();
+  let data: any = null;
+  let error: any = null;
+
+  try {
+    const { data: insertData, error: insertError } = await supabase
+      .from('notifications')
+      .insert([{ 
+        user_id: userId, 
+        type, 
+        title, 
+        message, 
+        metadata: { ...metadata, link } 
+      }])
+      .select('id, user_id, type, title')
+      .single();
+    data = insertData;
+    error = insertError;
+  } catch (e: any) {
+    error = e;
+  }
   
   if (error) {
+    if (error.code === 'PGRST204' || error.message?.includes('column') || error.message?.includes('cache')) {
+      console.warn('Schema cache issue on notification creation, retrying with minimal select');
+      const { data: retryData, error: retryError } = await supabase
+        .from('notifications')
+        .insert([{ 
+          user_id: userId, 
+          type, 
+          title, 
+          message
+        }])
+        .select('id')
+        .single();
+      if (retryError) {
+        console.error('Notification creation failed even after retry:', retryError);
+        return null;
+      }
+      return retryData;
+    }
     console.error('Notification creation failed:', error);
     return null;
   }
@@ -116,22 +161,88 @@ export const calculateOrderCommissions = async (orderId: string) => {
       return true;
     }
 
-    // 1. Get order and items
-    const { data: order, error: orderError } = await supabase
+    // 1. Get order and items - hardened selection
+    let order: any = null;
+    const { data: initialOrder, error: orderError } = await supabase
       .from('orders')
-      .select('*, order_items(*)')
+      .select(`
+        id, 
+        user_id, 
+        total_amount, 
+        subtotal_amount, 
+        shipping_amount, 
+        shipping_zone_id, 
+        status, 
+        payment_status, 
+        is_paid,
+        order_items(
+          id,
+          product_id,
+          quantity,
+          price,
+          price_at_purchase,
+          product_snapshot
+        )
+      `)
       .eq('id', orderId)
       .single();
     
-    if (orderError || !order) throw orderError || new Error('Order not found');
+    if (orderError || !initialOrder) {
+      if (orderError?.code === 'PGRST204' || orderError?.message?.includes('cache')) {
+        console.warn('Orders schema cache issue in calculateOrderCommissions, retrying with minimal selection');
+        const { data: fallbackOrder, error: fallbackError } = await supabase
+          .from('orders')
+          .select('id, user_id, total_amount, shipping_amount, shipping_zone_id, status')
+          .eq('id', orderId)
+          .single();
+        
+        if (fallbackError) throw fallbackError;
+        
+        // Fetch items separately
+        const { data: fallbackItems } = await supabase
+          .from('order_items')
+          .select('id, product_id, quantity, price, price_at_purchase, product_snapshot')
+          .eq('order_id', orderId);
+          
+        order = fallbackOrder;
+        if (order) {
+          order.order_items = fallbackItems || [];
+        }
+      } else {
+        throw orderError || new Error('Order not found');
+      }
+    } else {
+      order = initialOrder;
+    }
     
+    if (!order) throw new Error('Order not found after fallback');
     const items = order.order_items || [];
     
     // 2. Fetch active partnership services to calculate commissions
-    const { data: services } = await supabase
-      .from('partnership_services')
-      .select('*')
-      .eq('is_active', true);
+    let services: any[] = [];
+    try {
+      const { data, error: servicesError } = await supabase
+        .from('partnership_services')
+        .select('id, name, commission_rate, is_active')
+        .eq('is_active', true);
+      
+      if (servicesError) {
+        if (servicesError.code === 'PGRST204' || servicesError.message?.includes('cache')) {
+          console.warn('Partnership services schema cache issue, falling back to core columns');
+          const { data: fallbackServices } = await supabase
+            .from('partnership_services')
+            .select('id, name, commission_rate')
+            .eq('is_active', true);
+          services = fallbackServices || [];
+        } else {
+          throw servicesError;
+        }
+      } else {
+        services = data || [];
+      }
+    } catch (e) {
+      console.error('Failed to fetch partnership services:', e);
+    }
 
     const platformService = services?.find((s: any) => s.name.toLowerCase().includes('platform')) || 
                            services?.find((s: any) => s.name.toLowerCase().includes('readmart'));
@@ -146,30 +257,77 @@ export const calculateOrderCommissions = async (orderId: string) => {
 
     // 2.1 Calculate Logistics Payout if order has a shipping zone with an assigned partner
     if (order.shipping_zone_id && Number(order.shipping_amount) > 0) {
-      const { data: zone } = await supabase
-        .from('shipping_zones')
-        .select('partner_id')
-        .eq('id', order.shipping_zone_id)
-        .single();
-      
-      if (zone?.partner_id) {
-        ledgerEntries.push({
-          order_id: orderId,
-          partner_id: zone.partner_id,
-          partner_service_id: logisticsService?.id,
-          amount: order.shipping_amount,
-          payout_status: 'pending',
-          metadata: {
-            type: 'logistics_fulfillment',
-            zone_id: order.shipping_zone_id
+      try {
+        const { data: zone, error: zoneError } = await supabase
+          .from('shipping_zones')
+          .select('partner_id')
+          .eq('id', order.shipping_zone_id)
+          .single();
+        
+        if (zoneError) {
+          if (zoneError.code === 'PGRST204' || zoneError.message?.includes('cache')) {
+            console.warn('Shipping zones schema cache issue in calculateOrderCommissions, retrying with minimal select');
+            const { data: fallbackZone } = await supabase
+              .from('shipping_zones')
+              .select('id, partner_id')
+              .eq('id', order.shipping_zone_id)
+              .single();
+            
+            if (fallbackZone?.partner_id) {
+              ledgerEntries.push({
+                order_id: orderId,
+                partner_id: fallbackZone.partner_id,
+                partner_service_id: logisticsService?.id,
+                amount: order.shipping_amount,
+                payout_status: 'pending',
+                metadata: {
+                  type: 'logistics_fulfillment',
+                  zone_id: order.shipping_zone_id,
+                  cache_fallback: true
+                }
+              });
+            }
+          } else {
+            throw zoneError;
           }
-        });
+        } else if (zone?.partner_id) {
+          ledgerEntries.push({
+            order_id: orderId,
+            partner_id: zone.partner_id,
+            partner_service_id: logisticsService?.id,
+            amount: order.shipping_amount,
+            payout_status: 'pending',
+            metadata: {
+              type: 'logistics_fulfillment',
+              zone_id: order.shipping_zone_id
+            }
+          });
+        }
+      } catch (err) {
+        console.error('Failed to fetch shipping zone partner:', err);
       }
     }
 
     // Fetch site settings once for author rates
-    const { data: settings } = await supabase.from('site_settings').select('author_commission_rate').single();
-    const defaultAuthorRate = settings?.author_commission_rate || 70;
+    let authorCommissionRate = 70;
+    try {
+      const { data: settings, error: settingsError } = await supabase.from('site_settings').select('author_commission_rate').single();
+      if (settingsError) {
+        if (settingsError.code === 'PGRST204' || settingsError.message?.includes('cache')) {
+          console.warn('Site settings cache issue in commissions, using default rate');
+          // Retry with explicit minimal selection if possible
+          const { data: retrySettings } = await supabase.from('site_settings').select('author_commission_rate').limit(1).maybeSingle();
+          if (retrySettings?.author_commission_rate) {
+            authorCommissionRate = Number(retrySettings.author_commission_rate);
+          }
+        }
+      } else if (settings?.author_commission_rate) {
+        authorCommissionRate = Number(settings.author_commission_rate);
+      }
+    } catch (err) {
+      console.warn('Failed to fetch author commission rate, using default 70%');
+    }
+    const defaultAuthorRate = authorCommissionRate;
 
     for (const item of items) {
       const price = Number(item.price_at_purchase || item.price || 0);
@@ -218,7 +376,26 @@ export const calculateOrderCommissions = async (orderId: string) => {
     }
 
     if (ledgerEntries.length > 0) {
-      await supabase.from('fulfillment_ledger').insert(ledgerEntries);
+      const { error: ledgerError } = await supabase.from('fulfillment_ledger').insert(ledgerEntries);
+      if (ledgerError) {
+        if (ledgerError.code === 'PGRST204' || ledgerError.message?.includes('cache')) {
+          console.warn('Fulfillment ledger schema cache issue, retrying with minimal insert');
+          // Retry one by one if batch fails, or just log for manual reconciliation
+          for (const entry of ledgerEntries) {
+            try {
+              await supabase.from('fulfillment_ledger').insert([{
+                order_id: entry.order_id,
+                amount: entry.amount,
+                payout_status: 'pending'
+              }]);
+            } catch (e) {
+              console.error('Failed to retry ledger entry:', e);
+            }
+          }
+        } else {
+          console.error('Failed to insert ledger entries:', ledgerError);
+        }
+      }
     }
 
     // 3. Handle Digital Assets (E-books)

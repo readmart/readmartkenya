@@ -623,7 +623,8 @@ function NewsletterView({ data, onUpdate }: any) {
   }, [filteredData, currentPage, itemsPerPage]);
 
   const handleToggleStatus = async (id: string, currentStatus: string) => {
-    const statuses: NewsletterStatus[] = ['active', 'unconfirmed', 'unsubscribed', 'paused', 'deleted'];
+    // Only use statuses supported by current DB constraint
+    const statuses: NewsletterStatus[] = ['active', 'unsubscribed'];
     const currentIndex = statuses.indexOf(currentStatus as any);
     const nextStatus = statuses[(currentIndex + 1) % statuses.length];
     
@@ -632,8 +633,14 @@ function NewsletterView({ data, onUpdate }: any) {
       await updateNewsletterStatus(id, nextStatus);
       toast.success(`Status updated to ${nextStatus}`, { id: loadingToast });
       onUpdate();
-    } catch (error) {
-      toast.error('Status transition failed', { id: loadingToast });
+    } catch (error: any) {
+      console.error('Status update failed:', error);
+      // If it's a constraint error, we might have tried a status that's not allowed yet
+      if (error.code === '23514' || error.message?.includes('check constraint')) {
+        toast.error(`Status "${nextStatus}" is not supported by your current database schema.`, { id: loadingToast });
+      } else {
+        toast.error('Status transition failed', { id: loadingToast });
+      }
     }
   };
 
@@ -781,7 +788,7 @@ function NewsletterView({ data, onUpdate }: any) {
                   </div>
                   <h3 className="text-xl font-black uppercase tracking-tighter">Subscriber Lifecycle</h3>
                   <p className="text-slate-400 text-sm font-medium leading-relaxed">
-                    Subscribers begin as <span className="text-white font-bold italic">unconfirmed</span>. They must verify their email via the link sent to them. Once verified, they transition to <span className="text-white font-bold italic">active</span> status.
+                    Subscribers are automatically marked as <span className="text-white font-bold italic">active</span> upon signup. You can manually transition them to <span className="text-white font-bold italic">unsubscribed</span> if they request removal or bounce.
                   </p>
                 </div>
                 <div className="space-y-4">
@@ -835,10 +842,7 @@ function NewsletterView({ data, onUpdate }: any) {
           >
             <option value="all">All Status Protocol</option>
             <option value="active">Active (Synced)</option>
-            <option value="unconfirmed">Unconfirmed</option>
             <option value="unsubscribed">Unsubscribed</option>
-            <option value="paused">Paused</option>
-            <option value="deleted">Decommissioned</option>
           </select>
         </div>
         <div className="flex gap-2">
@@ -874,7 +878,6 @@ function NewsletterView({ data, onUpdate }: any) {
             </div>
             <div className="flex gap-2">
               <button onClick={() => handleBatchAction('active')} className="px-4 py-2 bg-white text-primary rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-slate-50 transition-all">Activate</button>
-              <button onClick={() => handleBatchAction('paused')} className="px-4 py-2 bg-white/20 text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-white/30 transition-all">Pause</button>
               <button onClick={() => handleBatchAction('unsubscribed')} className="px-4 py-2 bg-white/20 text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-white/30 transition-all">Unsubscribe</button>
               <button onClick={() => setSelectedIds([])} className="px-4 py-2 text-white/60 font-bold text-[10px] uppercase tracking-widest hover:text-white transition-all">Cancel</button>
             </div>
@@ -919,7 +922,6 @@ function NewsletterView({ data, onUpdate }: any) {
                     <div className="flex items-center gap-4">
                       <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all ${
                         sub.status === 'active' ? 'bg-green-50 text-green-500' : 
-                        sub.status === 'paused' ? 'bg-orange-50 text-orange-500' :
                         'bg-slate-100 text-slate-400'
                       }`}>
                         <Mail className="w-5 h-5" />
@@ -939,12 +941,10 @@ function NewsletterView({ data, onUpdate }: any) {
                   <td className="px-8 py-6">
                     <span className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-tighter ${
                       sub.status === 'active' ? 'bg-green-100 text-green-600' : 
-                      sub.status === 'unconfirmed' ? 'bg-yellow-100 text-yellow-600' :
-                      sub.status === 'paused' ? 'bg-orange-100 text-orange-600' :
                       sub.status === 'unsubscribed' ? 'bg-red-100 text-red-600' :
                       'bg-slate-100 text-slate-500'
                     }`}>
-                      {sub.status}
+                      {sub.status || 'Active'}
                     </span>
                   </td>
                   <td className="px-8 py-6 text-right">
@@ -955,13 +955,6 @@ function NewsletterView({ data, onUpdate }: any) {
                         title="Transition Status"
                       >
                         <RefreshCw className="w-4 h-4" />
-                      </button>
-                      <button 
-                        onClick={() => handleBatchAction('deleted')}
-                        className="p-3 bg-white border border-slate-100 text-slate-400 rounded-xl hover:bg-red-500 hover:text-white hover:border-red-500 transition-all shadow-sm"
-                        title="Decommission"
-                      >
-                        <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
                   </td>
@@ -1135,7 +1128,7 @@ function AnalyticsView({ data, formatPrice, isMounted }: any) {
           <h3 className="text-xl font-black tracking-tighter uppercase mb-10">Category Saturation</h3>
           <div className="h-[400px] w-full relative">
             {isMounted && (
-              <ResponsiveContainer width="100%" height="100%">
+              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                 <PieChart>
                   <Pie
                     data={data.categoryStats}
@@ -1316,7 +1309,7 @@ function InventoryView({ data, categories, approvedAuthors, onUpdate }: any) {
 
     try {
       // Destructure to remove fields that don't belong in the products table
-      const { is_ebook, ebook_url, type, ...rawFormData } = formData;
+      const { is_ebook, ebook_url, type, author, ...rawFormData } = formData;
 
       const productPayload = {
         ...rawFormData,

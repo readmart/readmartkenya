@@ -48,25 +48,52 @@ export default function Checkout() {
     const trackSession = async () => {
       try {
         if (!sessionId) {
-          const { data, error } = await supabase
-            .from('checkout_sessions')
-            .insert([{
-              user_id: user.id,
-              email: formData.email || user.email,
-              phone: formData.phone,
-              cart_data: cartItems,
-              shipping_zone_id: selectedZoneId || null,
-              status: 'initiated',
-              last_step: step
-            }])
-            .select()
-            .single();
-          
-          if (error) {
-            console.error('Failed to create checkout session:', error);
-            return;
+          let session: any = null;
+          let sessionError: any = null;
+
+          try {
+            const { data, error } = await supabase
+              .from('checkout_sessions')
+              .insert([{
+                user_id: user.id,
+                email: formData.email || user.email,
+                phone: formData.phone,
+                cart_data: cartItems,
+                shipping_zone_id: selectedZoneId || null,
+                status: 'initiated',
+                last_step: step
+              }])
+              .select('id')
+              .single();
+            session = data;
+            sessionError = error;
+          } catch (e: any) {
+            sessionError = e;
           }
-          if (data) setSessionId(data.id);
+          
+          if (sessionError) {
+            if (sessionError.code === 'PGRST204' || sessionError.message?.includes('column') || sessionError.message?.includes('cache')) {
+              console.warn('Schema cache issue on checkout session creation, retrying with minimal select');
+              const { data: retryData, error: retryError } = await supabase
+                .from('checkout_sessions')
+                .insert([{
+                  user_id: user.id,
+                  status: 'initiated',
+                  last_step: step
+                }])
+                .select('id')
+                .single();
+              if (retryError) {
+                console.error('Failed to create checkout session even after retry:', retryError);
+                return;
+              }
+              session = retryData;
+            } else {
+              console.error('Failed to create checkout session:', sessionError);
+              return;
+            }
+          }
+          if (session) setSessionId(session.id);
         } else {
           await supabase
             .from('checkout_sessions')
@@ -260,10 +287,13 @@ export default function Checkout() {
       setOrderNumber(order.id.slice(0, 8).toUpperCase());
 
       // 2. Initiate payment based on selected method
+      // Use calculated total as fallback if the order object doesn't have it (schema cache issues)
+      const paymentAmount = (order as any).total_amount || (cartTotal + shippingAmount);
+      
       const result = await initiatePayment(
         order.id, 
         formData.phone, 
-        order.total_amount, 
+        paymentAmount, 
         paymentMethod
       );
       

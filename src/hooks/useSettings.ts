@@ -71,22 +71,36 @@ export function useSettings() {
       try {
         // Use withRetry for resilience against transient fetch failures
         const siteData = await withRetry(async () => {
+          const columns = 'site_logo, site_name, whatsapp_link, contact_email, contact_phone, secondary_phone, address, working_hours, tax_rate, default_currency, maintenance_mode, instagram_url, facebook_url, twitter_url, x_url, linkedin_url, tiktok_url, threads_url, global_announcement, announcement_active, membership_wall_active, membership_price, membership_duration_days, membership_title, membership_description, author_of_the_day_id, author_of_the_day_enabled, author_of_the_day_books, author_of_the_day_image';
+          
           const { data, error } = await supabase
             .from('site_settings')
-            .select('*')
+            .select(columns)
             .maybeSingle();
 
-          if (error) throw error;
+          if (error) {
+            if (error.code === 'PGRST204' || error.message?.includes('column') || error.message?.includes('cache')) {
+              console.warn('Advanced site_settings columns missing, falling back to core columns');
+              const { data: fallbackData, error: fallbackError } = await supabase
+                .from('site_settings')
+                .select('site_name, site_logo, contact_email')
+                .maybeSingle();
+              if (fallbackError) throw fallbackError;
+              return fallbackData;
+            }
+            throw error;
+          }
           return data;
         }, { retries: 2, delay: 500 });
 
         if (siteData) {
           // Only overwrite defaults with truthy values from database
+          const data = siteData as any;
           const processedSettings = { ...defaultSettings };
           
-          Object.keys(siteData).forEach(key => {
-            if (siteData[key] !== null && siteData[key] !== undefined && siteData[key] !== '') {
-              let value = siteData[key];
+          Object.keys(data).forEach(key => {
+            if (data[key] !== null && data[key] !== undefined && data[key] !== '') {
+              let value = data[key];
               
               // Sanitize dummy numbers
               if (typeof value === 'string' && (value.includes('700 000 000') || value.includes('700000000'))) {
@@ -100,8 +114,8 @@ export function useSettings() {
           });
 
           // Special handling for X/Twitter sync
-          processedSettings.twitter_url = siteData.x_url || siteData.twitter_url || defaultSettings.twitter_url;
-          processedSettings.x_url = siteData.x_url || siteData.twitter_url || defaultSettings.x_url;
+          processedSettings.twitter_url = data.x_url || data.twitter_url || defaultSettings.twitter_url;
+          processedSettings.x_url = data.x_url || data.twitter_url || defaultSettings.x_url;
 
           setSettings(processedSettings);
         } else {

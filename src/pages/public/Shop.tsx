@@ -31,7 +31,7 @@ export default function Shop() {
     async function loadData() {
       setIsLoading(true);
       try {
-        const productsData = await getProducts();
+        const productsData = await getProducts() || [];
         // Map metadata to top-level props for BookCard
         const mappedProducts = productsData.map((p: any) => ({
           ...p,

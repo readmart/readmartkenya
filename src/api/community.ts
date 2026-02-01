@@ -97,10 +97,23 @@ export async function addToWishlist(productId: string) {
   const { data, error } = await supabase
     .from('wishlist_items')
     .insert({ user_id: user.id, product_id: productId })
-    .select()
+    .select('id, user_id, product_id')
     .single();
 
-  if (error) throw error;
+  if (error) {
+    if (error.code === 'PGRST204' || error.message?.includes('cache')) {
+      console.warn('Wishlist insert cache issue, retrying');
+      const { data: retryData, error: retryError } = await supabase
+        .from('wishlist_items')
+        .insert({ user_id: user.id, product_id: productId })
+        .select('id')
+        .single();
+      
+      if (retryError) throw retryError;
+      return retryData;
+    }
+    throw error;
+  }
   return data;
 }
 
@@ -128,12 +141,33 @@ export async function getWishlist() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Authentication required');
 
-  const { data, error } = await supabase
+  const productColumns = 'id, title, price, sale_price, image_url, category_id, stock_quantity, author_id, type';
+  let { data, error } = await supabase
     .from('wishlist_items')
-    .select('*, product:products(*)')
+    .select(`
+      id, user_id, product_id, created_at,
+      product:products(${productColumns})
+    `)
     .eq('user_id', user.id);
 
-  if (error) throw error;
+  if (error) {
+    if (error.code === 'PGRST204' || error.message?.includes('column') || error.message?.includes('cache')) {
+      console.warn('Advanced wishlist columns missing from cache, falling back to core columns');
+      const { data: fallbackData, error: fallbackError } = await supabase
+        .from('wishlist_items')
+        .select(`
+          id, user_id, product_id,
+          product:products(id, title, price, sale_price)
+        `)
+        .eq('user_id', user.id);
+      
+      if (fallbackError) throw fallbackError;
+      data = fallbackData as any;
+    } else {
+      throw error;
+    }
+  }
+
   return data;
 }
 
@@ -144,12 +178,26 @@ export async function getWishlist() {
  */
 export async function getAvailableBookClubs(): Promise<BookClub[]> {
   try {
-    const { data, error } = await supabase
+    const columns = 'id, name, description, image_url, founder_id, membership_price, is_active, created_at, metadata';
+    let { data, error } = await supabase
       .from('clubs')
-      .select('*')
+      .select(columns)
       .eq('is_active', true);
 
-    if (error) throw error;
+    if (error) {
+      if (error.code === 'PGRST204' || error.message?.includes('column') || error.message?.includes('cache')) {
+        console.warn('Advanced club columns missing from cache, falling back to core columns');
+        const { data: fallbackData, error: fallbackError } = await supabase
+          .from('clubs')
+          .select('id, name, is_active')
+          .eq('is_active', true);
+        
+        if (fallbackError) throw fallbackError;
+        data = fallbackData as any;
+      } else {
+        throw error;
+      }
+    }
     return (data as BookClub[]) || [];
   } catch (error) {
     console.warn('Clubs fetch failed, returning empty list');
@@ -162,13 +210,28 @@ export async function getAvailableBookClubs(): Promise<BookClub[]> {
  */
 export async function getBookClubById(id: string): Promise<BookClub | null> {
   try {
-    const { data, error } = await supabase
+    const columns = 'id, name, description, image_url, founder_id, membership_price, is_active, created_at, metadata';
+    let { data, error } = await supabase
       .from('clubs')
-      .select('*')
+      .select(columns)
       .eq('id', id)
-      .single();
+      .maybeSingle();
 
-    if (error) throw error;
+    if (error) {
+      if (error.code === 'PGRST204' || error.message?.includes('column') || error.message?.includes('cache')) {
+        console.warn('Advanced club columns missing from cache, falling back to core columns');
+        const { data: fallbackData, error: fallbackError } = await supabase
+          .from('clubs')
+          .select('id, name, is_active')
+          .eq('id', id)
+          .maybeSingle();
+        
+        if (fallbackError) throw fallbackError;
+        data = fallbackData as any;
+      } else {
+        throw error;
+      }
+    }
     return data as BookClub;
   } catch (error) {
     return null;
@@ -204,11 +267,28 @@ export async function joinBookClub(clubId: string): Promise<BookClubMembership> 
         status: 'active',
         payment_status: 'unpaid' // Default to unpaid until payment flow is integrated
       })
-      .select()
+      .select('id, user_id, club_id, status, payment_status')
       .single();
 
-    if (error) throw error;
-    return data as BookClubMembership;
+    if (error) {
+      if (error.code === 'PGRST204' || error.message?.includes('cache')) {
+        console.warn('Club join cache issue, retrying');
+        const { data: retryData, error: retryError } = await supabase
+          .from('club_members')
+          .upsert({ 
+            user_id: user.id, 
+            club_id: clubId, 
+            status: 'active'
+          })
+          .select('id')
+          .single();
+        
+        if (retryError) throw retryError;
+        return retryData as unknown as BookClubMembership;
+      }
+      throw error;
+    }
+    return data as unknown as BookClubMembership;
   } catch (error: any) {
     throw new Error(error.message || 'Failed to join book club');
   }
@@ -243,17 +323,38 @@ export async function getUserMembership(): Promise<BookClubMembership | null> {
   if (!user) return null;
 
   try {
-    const { data, error } = await supabase
+    const clubColumns = 'id, name, description, image_url, founder_id, membership_price, is_active, created_at';
+    let { data, error } = await supabase
       .from('club_members')
-      .select('*, club:clubs(*)')
+      .select(`
+        id, user_id, club_id, status, joined_at, expires_at, payment_status,
+        club:clubs(${clubColumns})
+      `)
       .eq('user_id', user.id)
       .eq('status', 'active')
       .maybeSingle();
 
-    if (error) throw error;
-    return data as BookClubMembership | null;
+    if (error) {
+      if (error.code === 'PGRST204' || error.message?.includes('column') || error.message?.includes('cache')) {
+        console.warn('Advanced membership columns missing from cache, falling back to core columns');
+        const { data: fallbackData, error: fallbackError } = await supabase
+          .from('club_members')
+          .select(`
+            id, user_id, club_id, status,
+            club:clubs(id, name)
+          `)
+          .eq('user_id', user.id)
+          .eq('status', 'active')
+          .maybeSingle();
+        
+        if (fallbackError) throw fallbackError;
+        data = fallbackData as any;
+      } else {
+        throw error;
+      }
+    }
+    return data as unknown as BookClubMembership;
   } catch (error) {
-    console.warn('Book club membership fetch failed, returning null');
     return null;
   }
 }
@@ -263,14 +364,29 @@ export async function getUserMembership(): Promise<BookClubMembership | null> {
  */
 export async function getInsights(): Promise<CMSContent[]> {
   try {
-    const { data, error } = await supabase
+    const columns = 'id, type, title, content, image_url, link_url, is_active, metadata, published_at, created_at';
+    let { data, error } = await supabase
       .from('cms_content')
-      .select('*')
+      .select(columns)
       .eq('type', 'announcement')
       .eq('is_active', true)
       .order('created_at', { ascending: false });
 
-    if (error) throw error;
+    if (error) {
+      if (error.code === 'PGRST204' || error.message?.includes('column') || error.message?.includes('cache')) {
+        console.warn('Advanced cms_content columns missing, falling back to core');
+        const { data: fallbackData, error: fallbackError } = await supabase
+          .from('cms_content')
+          .select('id, type, title, is_active')
+          .eq('type', 'announcement')
+          .eq('is_active', true)
+          .order('created_at', { ascending: false });
+        if (fallbackError) throw fallbackError;
+        data = fallbackData as any;
+      } else {
+        throw error;
+      }
+    }
     return (data as CMSContent[]) || [];
   } catch (error) {
     console.warn('CMS Content (announcements) fetch failed, returning empty list');
@@ -283,14 +399,29 @@ export async function getInsights(): Promise<CMSContent[]> {
  */
 export async function getEvents(): Promise<CMSContent[]> {
   try {
-    const { data, error } = await supabase
+    const columns = 'id, type, title, content, image_url, link_url, is_active, metadata, published_at, created_at';
+    let { data, error } = await supabase
       .from('cms_content')
-      .select('*')
+      .select(columns)
       .eq('type', 'event')
       .eq('is_active', true)
       .order('created_at', { ascending: true });
 
-    if (error) throw error;
+    if (error) {
+      if (error.code === 'PGRST204' || error.message?.includes('column') || error.message?.includes('cache')) {
+        console.warn('Advanced cms_content columns missing, falling back to core');
+        const { data: fallbackData, error: fallbackError } = await supabase
+          .from('cms_content')
+          .select('id, type, title, is_active')
+          .eq('type', 'event')
+          .eq('is_active', true)
+          .order('created_at', { ascending: true });
+        if (fallbackError) throw fallbackError;
+        data = fallbackData as any;
+      } else {
+        throw error;
+      }
+    }
     return (data as CMSContent[]) || [];
   } catch (error) {
     console.warn('CMS Content (events) fetch failed, returning empty list');
@@ -303,28 +434,87 @@ export async function getEvents(): Promise<CMSContent[]> {
  */
 export async function getRecentReviews(): Promise<Review[]> {
   try {
-    const { data, error } = await supabase
+    const columns = 'id, user_id, product_id, rating, comment, created_at';
+    const profileColumns = 'full_name, avatar_url';
+    const productColumns = 'title';
+    let { data, error } = await supabase
       .from('reviews')
-      .select('*, profile:profiles(full_name, avatar_url), product:products(title)')
+      .select(`
+        ${columns},
+        profile:profiles(${profileColumns}),
+        product:products(${productColumns})
+      `)
       .order('created_at', { ascending: false })
       .limit(10);
 
     if (error) {
-      // Silently handle missing table or RLS issues in production
-      if (error.code === 'PGRST116' || error.code === '42P01') {
+      if (error.code === 'PGRST204' || error.message?.includes('column') || error.message?.includes('cache')) {
+        console.warn('Advanced review columns missing, falling back to core');
+        const { data: fallbackData, error: fallbackError } = await supabase
+          .from('reviews')
+          .select(`
+            id, rating, comment, created_at,
+            profile:profiles(full_name),
+            product:products(title)
+          `)
+          .order('created_at', { ascending: false })
+          .limit(10);
+        if (fallbackError) throw fallbackError;
+        data = fallbackData as any;
+      } else if (error.code === 'PGRST116' || error.code === '42P01') {
         console.warn('Reviews table not found or inaccessible, using mock data');
+        return [
+          { id: '1', user_id: '1', product_id: '1', rating: 5, comment: 'The Alchemist changed my perspective on life!', created_at: new Date().toISOString(), user: 'Sarah W.', book: 'The Alchemist', date: '2 days ago' },
+          { id: '2', user_id: '2', product_id: '2', rating: 4, comment: 'Great read, highly recommend for tech enthusiasts.', created_at: new Date().toISOString(), user: 'John D.', book: 'Life 3.0', date: '1 week ago' },
+          { id: '3', user_id: '3', product_id: '3', rating: 5, comment: 'Beautifully written, a must-read for everyone.', created_at: new Date().toISOString(), user: 'Grace M.', book: 'Creative Minds', date: '3 days ago' },
+        ] as Review[];
       } else {
         throw error;
       }
-      return [
-        { id: '1', user_id: '1', product_id: '1', rating: 5, comment: 'The Alchemist changed my perspective on life!', created_at: new Date().toISOString(), user: 'Sarah W.', book: 'The Alchemist', date: '2 days ago' },
-        { id: '2', user_id: '2', product_id: '2', rating: 4, comment: 'Great read, highly recommend for tech enthusiasts.', created_at: new Date().toISOString(), user: 'John D.', book: 'Life 3.0', date: '1 week ago' },
-        { id: '3', user_id: '3', product_id: '3', rating: 5, comment: 'Beautifully written, a must-read for everyone.', created_at: new Date().toISOString(), user: 'Grace M.', book: 'Creative Minds', date: '3 days ago' },
-      ] as Review[];
     }
-    return (data as Review[]) || [];
+    return (data as unknown as Review[]) || [];
   } catch (error: any) {
     console.warn('Reviews fetch failed:', error.message);
+    return [];
+  }
+}
+
+/**
+ * Get reviews for a product
+ */
+export async function getProductReviews(productId: string): Promise<Review[]> {
+  try {
+    const columns = 'id, user_id, product_id, rating, comment, created_at';
+    const profileColumns = 'full_name, avatar_url';
+    let { data, error } = await supabase
+      .from('reviews')
+      .select(`
+        ${columns},
+        profile:profiles(${profileColumns})
+      `)
+      .eq('product_id', productId)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      if (error.code === 'PGRST204' || error.message?.includes('column') || error.message?.includes('cache')) {
+        console.warn('Advanced review columns missing from cache, falling back to core columns');
+        const { data: fallbackData, error: fallbackError } = await supabase
+          .from('reviews')
+          .select(`
+            id, rating, comment, created_at,
+            profile:profiles(full_name)
+          `)
+          .eq('product_id', productId)
+          .order('created_at', { ascending: false });
+        
+        if (fallbackError) throw fallbackError;
+        data = fallbackData as any;
+      } else {
+        throw error;
+      }
+    }
+    return (data as unknown as Review[]) || [];
+  } catch (error) {
     return [];
   }
 }
@@ -362,12 +552,25 @@ export async function getUserRSVPs(): Promise<EventRSVP[]> {
   if (!user) return [];
 
   try {
-    const { data, error } = await supabase
+    const columns = 'id, user_id, event_id, status, created_at';
+    let { data, error } = await supabase
       .from('event_rsvps')
-      .select('*')
+      .select(columns)
       .eq('user_id', user.id);
 
-    if (error) throw error;
+    if (error) {
+      if (error.code === 'PGRST204' || error.message?.includes('column') || error.message?.includes('cache')) {
+        console.warn('Advanced rsvp columns missing, falling back to core');
+        const { data: fallbackData, error: fallbackError } = await supabase
+          .from('event_rsvps')
+          .select('id, user_id, event_id, status')
+          .eq('user_id', user.id);
+        if (fallbackError) throw fallbackError;
+        data = fallbackData as any;
+      } else {
+        throw error;
+      }
+    }
     return (data as EventRSVP[]) || [];
   } catch (error) {
     return [];
@@ -379,12 +582,32 @@ export async function getUserRSVPs(): Promise<EventRSVP[]> {
  */
 export async function getEventRSVPs(eventId: string): Promise<(EventRSVP & { profile?: { full_name: string | null, email: string | null } })[]> {
   try {
-    const { data, error } = await supabase
+    const columns = 'id, user_id, event_id, status, created_at';
+    const profileColumns = 'full_name, email';
+    let { data, error } = await supabase
       .from('event_rsvps')
-      .select('*, profile:profiles(full_name, email)')
+      .select(`
+        ${columns},
+        profile:profiles(${profileColumns})
+      `)
       .eq('event_id', eventId);
 
-    if (error) throw error;
+    if (error) {
+      if (error.code === 'PGRST204' || error.message?.includes('column') || error.message?.includes('cache')) {
+        console.warn('Advanced rsvp columns missing, falling back to core');
+        const { data: fallbackData, error: fallbackError } = await supabase
+          .from('event_rsvps')
+          .select(`
+            id, user_id, event_id, status,
+            profile:profiles(full_name)
+          `)
+          .eq('event_id', eventId);
+        if (fallbackError) throw fallbackError;
+        data = fallbackData as any;
+      } else {
+        throw error;
+      }
+    }
     return (data as any[]) || [];
   } catch (error) {
     return [];
@@ -399,15 +622,38 @@ export async function getEventRSVPs(eventId: string): Promise<(EventRSVP & { pro
  */
 export async function getClubDiscussions(clubId: string): Promise<ClubDiscussion[]> {
   try {
-    const { data, error } = await supabase
+    const columns = 'id, club_id, author_id, title, content, image_url, is_pinned, created_at';
+    const profileColumns = 'full_name, avatar_url';
+    let { data, error } = await supabase
       .from('club_discussions')
-      .select('*, author:profiles(full_name, avatar_url)')
+      .select(`
+        ${columns},
+        author:profiles(${profileColumns})
+      `)
       .eq('club_id', clubId)
       .order('is_pinned', { ascending: false })
       .order('created_at', { ascending: false });
 
-    if (error) throw error;
-    return (data as ClubDiscussion[]) || [];
+    if (error) {
+      if (error.code === 'PGRST204' || error.message?.includes('column') || error.message?.includes('cache')) {
+        console.warn('Advanced discussion columns missing from cache, falling back to core columns');
+        const { data: fallbackData, error: fallbackError } = await supabase
+          .from('club_discussions')
+          .select(`
+            id, club_id, author_id, title, is_pinned, created_at,
+            author:profiles(full_name)
+          `)
+          .eq('club_id', clubId)
+          .order('is_pinned', { ascending: false })
+          .order('created_at', { ascending: false });
+        
+        if (fallbackError) throw fallbackError;
+        data = fallbackData as any;
+      } else {
+        throw error;
+      }
+    }
+    return (data as unknown as ClubDiscussion[]) || [];
   } catch (error) {
     return [];
   }
@@ -428,13 +674,94 @@ export async function postClubDiscussion(clubId: string, payload: { title: strin
         club_id: clubId,
         author_id: user.id
       })
-      .select()
+      .select('id, club_id, author_id, title, content, is_pinned, created_at')
       .single();
 
-    if (error) throw error;
-    return data as ClubDiscussion;
+    if (error) {
+      if (error.code === 'PGRST204' || error.message?.includes('cache')) {
+        console.warn('Discussion post cache issue, retrying');
+        const { data: retryData, error: retryError } = await supabase
+          .from('club_discussions')
+          .insert({
+            ...payload,
+            club_id: clubId,
+            author_id: user.id
+          })
+          .select('id')
+          .single();
+        
+        if (retryError) throw retryError;
+        return retryData as any;
+      }
+      throw error;
+    }
+    return data as any;
   } catch (error: any) {
     throw new Error(error.message || 'Failed to post discussion');
+  }
+}
+
+/**
+ * Delete a discussion (Founder/Admin or Author only)
+ */
+export async function deleteClubDiscussion(discussionId: string): Promise<boolean> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Authentication required');
+
+  try {
+    const { error } = await supabase
+      .from('club_discussions')
+      .delete()
+      .eq('id', discussionId);
+
+    if (error) throw error;
+    return true;
+  } catch (error: any) {
+    throw new Error(error.message || 'Failed to delete discussion');
+  }
+}
+
+/**
+ * Post a review for a product
+ */
+export async function postReview(productId: string, rating: number, comment: string): Promise<Review> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Authentication required');
+
+  try {
+    const { data, error } = await supabase
+      .from('reviews')
+      .insert({
+        user_id: user.id,
+        product_id: productId,
+        rating,
+        comment
+      })
+      .select('id, user_id, product_id, rating, comment, created_at')
+      .single();
+
+    if (error) {
+      if (error.code === 'PGRST204' || error.message?.includes('cache')) {
+        console.warn('Review post cache issue, retrying');
+        const { data: retryData, error: retryError } = await supabase
+          .from('reviews')
+          .insert({
+            user_id: user.id,
+            product_id: productId,
+            rating,
+            comment
+          })
+          .select('id')
+          .single();
+        
+        if (retryError) throw retryError;
+        return retryData as any;
+      }
+      throw error;
+    }
+    return data as unknown as Review;
+  } catch (error: any) {
+    throw new Error(error.message || 'Failed to post review');
   }
 }
 

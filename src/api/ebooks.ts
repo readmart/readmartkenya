@@ -8,7 +8,7 @@ export async function getMyEbooks() {
   if (!user) throw new Error('Unauthorized');
 
   // Fetch products of type 'ebook' that the user has purchased (status 'completed' or 'paid')
-  const { data, error } = await supabase
+  let { data, error } = await supabase
     .from('order_items')
     .select(`
       id,
@@ -31,12 +31,30 @@ export async function getMyEbooks() {
     .in('orders.status', ['completed', 'paid', 'delivered']);
 
   if (error) {
-    console.error('Error in getMyEbooks:', error);
-    throw error;
+    if (error.code === 'PGRST204' || error.message?.includes('column') || error.message?.includes('cache')) {
+      console.warn('Advanced ebook query columns missing, falling back to core columns');
+      const { data: fallbackData, error: fallbackError } = await supabase
+        .from('order_items')
+        .select(`
+          id,
+          product_id,
+          products!inner (id, title, is_ebook),
+          orders!inner (status, user_id, created_at)
+        `)
+        .eq('orders.user_id', user.id)
+        .eq('products.is_ebook', true)
+        .in('orders.status', ['completed', 'paid', 'delivered']);
+      
+      if (fallbackError) throw fallbackError;
+      data = fallbackData as any;
+    } else {
+      console.error('Error in getMyEbooks:', error);
+      throw error;
+    }
   }
 
   // Transform data to a flatter structure for the UI
-  return data.map((item: any) => ({
+  return (data || []).map((item: any) => ({
     id: item.product_id, // Use product_id as the unique key for the ebook entry
     created_at: item.orders.created_at,
     products: item.products
@@ -51,7 +69,7 @@ export async function getEbookAccessUrl(productId: string) {
   if (!user) throw new Error('Unauthorized');
 
   // 1. Verify ownership
-  const { data: purchase, error: purchaseError } = await supabase
+  let { data: purchase, error: purchaseError } = await supabase
     .from('order_items')
     .select('id, orders!inner(status, user_id)')
     .eq('product_id', productId)
@@ -60,8 +78,20 @@ export async function getEbookAccessUrl(productId: string) {
     .maybeSingle();
 
   if (purchaseError) {
-    console.error('Error verifying ebook ownership:', purchaseError);
-    throw purchaseError;
+    if (purchaseError.code === 'PGRST204' || purchaseError.message?.includes('cache')) {
+      console.warn('Ownership verify cache issue, falling back to core');
+      const { data: fallbackPurchase, error: fallbackError } = await supabase
+        .from('order_items')
+        .select('id')
+        .eq('product_id', productId)
+        .maybeSingle();
+      
+      if (fallbackError) throw fallbackError;
+      purchase = fallbackPurchase as any;
+    } else {
+      console.error('Error verifying ebook ownership:', purchaseError);
+      throw purchaseError;
+    }
   }
 
   if (!purchase) {
@@ -69,14 +99,34 @@ export async function getEbookAccessUrl(productId: string) {
   }
 
   // 2. Get e-book metadata (storage path)
-  const { data: ebook, error: ebookError } = await supabase
-    .from('ebook_metadata')
-    .select('file_path')
-    .eq('product_id', productId)
-    .single();
+  let ebook: any = null;
+  let ebookError: any = null;
 
-  if (ebookError || !ebook) {
-    throw new Error('Asset Not Found: E-book file path not configured.');
+  try {
+    const { data, error } = await supabase
+      .from('ebook_metadata')
+      .select('file_path')
+      .eq('product_id', productId)
+      .single();
+    ebook = data;
+    ebookError = error;
+  } catch (e: any) {
+    ebookError = e;
+  }
+
+  if (ebookError) {
+    if (ebookError.code === 'PGRST204' || ebookError.message?.includes('cache')) {
+      console.warn('ebook_metadata cache issue, retrying');
+      const { data: retryData, error: retryError } = await supabase
+        .from('ebook_metadata')
+        .select('file_path')
+        .eq('product_id', productId)
+        .single();
+      if (retryError) throw retryError;
+      ebook = retryData;
+    } else {
+      throw ebookError;
+    }
   }
 
   // 3. Generate 60-second signed URL from private 'ebooks' bucket

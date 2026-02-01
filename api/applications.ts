@@ -24,21 +24,47 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       const table = type === 'author' ? 'author_applications' : 'partnership_applications';
       
-      const { data: application, error: dbError } = await supabase
-        .from(table)
-        .insert([{
-          full_name,
-          email,
-          bio,
-          organization,
-          service_type,
-          proof_url,
-          status: 'pending'
-        }])
-        .select()
-        .single();
+      let application: any = null;
+      let dbError: any = null;
 
-      if (dbError) throw dbError;
+      try {
+        const { data, error } = await supabase
+          .from(table)
+          .insert([{
+            full_name,
+            email,
+            bio,
+            organization,
+            service_type,
+            proof_url,
+            status: 'pending'
+          }])
+          .select('id, email, full_name, status')
+          .single();
+        application = data;
+        dbError = error;
+      } catch (e: any) {
+        dbError = e;
+      }
+
+      if (dbError) {
+        if (dbError.code === 'PGRST204' || dbError.message?.includes('column') || dbError.message?.includes('cache')) {
+          console.warn('Schema cache issue on application insert, retrying with minimal select');
+          const { data: retryData, error: retryError } = await supabase
+            .from(table)
+            .insert([{
+              full_name,
+              email,
+              status: 'pending'
+            }])
+            .select('id, email, full_name, status')
+            .single();
+          if (retryError) throw retryError;
+          application = retryData;
+        } else {
+          throw dbError;
+        }
+      }
 
       await logAction(req, null, 'submit_application', table, { applicationId: application.id, type });
 
@@ -73,10 +99,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         .from(table)
         .update(updateData)
         .eq('id', id)
-        .select()
+        .select('id, email, full_name, status')
         .single();
 
-      if (dbError) throw dbError;
+      if (dbError) {
+        if (dbError.code === 'PGRST204' || dbError.message?.includes('column') || dbError.message?.includes('cache')) {
+          console.warn('Schema cache issue on application update, retrying with minimal select');
+          const { data: retryData, error: retryError } = await supabase
+            .from(table)
+            .update(updateData)
+            .eq('id', id)
+            .select('id, email, full_name, status')
+            .single();
+          if (retryError) throw retryError;
+          return json(res, 200, { success: true, application: retryData });
+        }
+        throw dbError;
+      }
 
       await logAction(req, null, 'update_application_status', table, { applicationId: application.id, status });
 

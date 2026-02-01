@@ -44,8 +44,8 @@ export async function getGlobalAnalytics() {
       recentProductsResult,
       recentUsersResult
     ] = await Promise.all([
-      supabase.from('profiles').select('*', { count: 'exact', head: true }),
-      supabase.from('products').select('*', { count: 'exact', head: true }),
+      supabase.from('profiles').select('id', { count: 'exact', head: true }),
+      supabase.from('products').select('id', { count: 'exact', head: true }),
       supabase.from('products').select('created_at').gte('created_at', sixtyDaysAgo.toISOString()),
       supabase.from('profiles').select('created_at').gte('created_at', sixtyDaysAgo.toISOString())
     ]);
@@ -131,7 +131,7 @@ export async function getGlobalAnalytics() {
     try {
       const { count, error: clubError } = await supabase
         .from('book_club_memberships')
-        .select('*', { count: 'exact', head: true })
+        .select('id', { count: 'exact', head: true })
         .eq('is_active', true);
       
       if (clubError) throw clubError;
@@ -284,18 +284,58 @@ export async function sendAbandonedCartReminders() {
 export async function getShippingZones() {
   return withRetry(async () => {
     try {
+      // Explicitly select columns to avoid schema cache issues with '*'
+      // We list all columns we expect. If some are missing from the cache, 
+      // PostgREST will return 400.
       const { data, error } = await supabase
         .from('shipping_zones')
-        .select('*')
+        .select('id, name, price, rate, base_rate, estimated_days, is_active, country_code, region, postal_codes, shipping_method, weight_surcharge, volume_surcharge, county')
         .order('name');
 
       if (error) {
-        console.error('Error fetching shipping zones:', error);
+        // If it's a "column not found" error (PGRST204 or message includes column name), 
+        // try a minimal set of columns that we know exist from the early schema.
+        if (error.code === 'PGRST204' || error.message?.includes('column') || error.message?.includes('cache')) {
+          console.warn('Advanced shipping columns missing from cache, falling back to core columns');
+          const { data: fallbackData, error: fallbackError } = await supabase
+            .from('shipping_zones')
+            .select('id, name, is_active')
+            .order('name');
+          
+          if (fallbackError) throw fallbackError;
+          
+          return (fallbackData || []).map(zone => ({
+            ...zone,
+            price: (zone as any).price ?? (zone as any).rate ?? (zone as any).base_rate ?? 0,
+            country_code: 'KE',
+            estimated_days: 3,
+            shipping_method: 'Standard',
+            region: '',
+            postal_codes: '',
+            weight_surcharge: 0,
+            volume_surcharge: 0,
+            county: ''
+          }));
+        }
         throw error;
       }
       
-      console.log(`Fetched ${data?.length || 0} shipping zones`);
-      return data || [];
+      // Normalize the data to ensure 'price' is always present and other fields have defaults
+      const normalizedData = (data || []).map(zone => {
+        const price = zone.price ?? (zone as any).rate ?? (zone as any).base_rate ?? 0;
+        return {
+          ...zone,
+          country_code: zone.country_code || 'KE',
+          estimated_days: zone.estimated_days || 3,
+          shipping_method: zone.shipping_method || 'Standard',
+          weight_surcharge: zone.weight_surcharge || 0,
+          volume_surcharge: zone.volume_surcharge || 0,
+          price
+        };
+      });
+
+      console.log(`Fetched ${normalizedData.length} shipping zones`);
+      return normalizedData;
     } catch (err) {
       console.error('Shipping Zones fetch failed:', err);
       return [];
@@ -312,19 +352,85 @@ export async function getShippingZones() {
 async function getAllRecords(table: string, orderBy: string = 'created_at') {
   return withRetry(async () => {
     try {
-      const { data, error, status } = await supabase
-        .from(table)
-        .select('*')
-        .order(orderBy, { ascending: false });
+      // For shipping_zones, explicitly select columns to avoid schema cache issues
+      let query;
+      if (table === 'shipping_zones') {
+        query = supabase
+          .from(table)
+          .select('id, name, price, rate, base_rate, estimated_days, is_active, country_code, region, postal_codes, shipping_method, weight_surcharge, volume_surcharge, county');
+      } else if (table === 'profiles') {
+        query = supabase
+          .from(table)
+          .select('id, full_name, email, role, avatar_url, bio, created_at');
+      } else if (table === 'cms_content') {
+        query = supabase
+          .from(table)
+          .select('id, type, title, content, image_url, is_active, metadata, created_at');
+      } else if (table === 'newsletter_subscriptions') {
+        query = supabase
+          .from(table)
+          .select('id, email, status, created_at');
+      } else if (table === 'partnership_applications') {
+        query = supabase
+          .from(table)
+          .select('id, full_name, email, company_name, status, created_at');
+      } else if (table === 'author_applications') {
+        query = supabase
+          .from(table)
+          .select('id, full_name, email, pen_name, status, created_at');
+      } else if (table === 'contact_messages') {
+        query = supabase
+          .from(table)
+          .select('id, name, email, subject, message, status, created_at');
+      } else if (table === 'audit_logs') {
+        query = supabase
+          .from(table)
+          .select('id, actor_id, action, table_name, record_id, created_at');
+      } else {
+        query = supabase
+          .from(table)
+          .select('id, created_at');
+      }
+
+      const { data, error, status } = await query.order(orderBy, { ascending: false });
 
       if (error) {
-        // If table doesn't exist (404), return empty array
+        // Handle schema cache issues
+        if (error.code === 'PGRST204' || error.message?.includes('column') || error.message?.includes('cache')) {
+          console.warn(`Advanced columns missing for ${table}, falling back to core`);
+          const { data: fallbackData, error: fallbackError } = await supabase
+            .from(table)
+            .select('id, created_at')
+            .order(orderBy, { ascending: false });
+          
+          if (fallbackError) throw fallbackError;
+          return fallbackData || [];
+        }
+
+        // Handle table not found
         if (status === 404 || error.code === 'PGRST116' || error.message?.includes('not found')) {
           console.warn(`Table ${table} not found, returning empty list`);
           return [];
         }
         throw error;
       }
+
+      // Normalize shipping_zones if fetched successfully
+      if (table === 'shipping_zones' && data) {
+        return data.map(zone => {
+          const price = (zone as any).price ?? (zone as any).rate ?? (zone as any).base_rate ?? 0;
+          return {
+            ...zone,
+            country_code: (zone as any).country_code || 'KE',
+            estimated_days: (zone as any).estimated_days || 3,
+            shipping_method: (zone as any).shipping_method || 'Standard',
+            weight_surcharge: (zone as any).weight_surcharge || 0,
+            volume_surcharge: (zone as any).volume_surcharge || 0,
+            price
+          };
+        });
+      }
+
       return data || [];
     } catch (err) {
       console.error(`Fetch failed for table ${table}:`, err);
@@ -343,9 +449,31 @@ export async function getInventory(authorId?: string) {
         await verifyAdmin();
       }
 
+      // Explicitly select columns to avoid schema cache issues with '*'
       let query = supabase
         .from('products')
-        .select('*, category:categories(name), ebook_metadata(*)')
+        .select(`
+          id, 
+          title, 
+          author, 
+          author_id, 
+          price, 
+          sale_price, 
+          stock_quantity, 
+          category_id, 
+          image_url, 
+          description, 
+          weight, 
+          volume, 
+          is_active, 
+          metadata, 
+          is_ebook, 
+          ebook_url, 
+          slug, 
+          created_at,
+          category:categories(name), 
+          ebook_metadata(id, product_id, format, size_bytes, page_count, isbn_13)
+        `)
         .order('created_at', { ascending: false });
 
       if (authorId) {
@@ -355,6 +483,17 @@ export async function getInventory(authorId?: string) {
       const { data, error } = await query;
 
       if (error) {
+        // Fallback for products table schema cache issue
+        if (error.code === 'PGRST204' || error.message?.includes('column') || error.message?.includes('cache')) {
+          console.warn('Advanced product columns missing from cache, falling back to core columns');
+          const { data: fallbackData, error: fallbackError } = await supabase
+            .from('products')
+            .select('id, title, price, stock_quantity, is_active, created_at')
+            .order('created_at', { ascending: false });
+          
+          if (fallbackError) throw fallbackError;
+          return fallbackData || [];
+        }
         console.error('Error fetching inventory:', error);
         throw error;
       }
@@ -395,14 +534,32 @@ export async function getOrders(partnerId?: string) {
         if (zoneIds.length === 0) return [];
 
         // Fetch orders for those zones with customer and item details
+        // Hardened: explicit column selection to avoid schema cache issues
         const { data: orders, error } = await supabase
           .from('orders')
           .select(`
-            *,
+            id,
+            user_id,
+            total_amount,
+            subtotal_amount,
+            shipping_amount,
+            tax_amount,
+            tax_rate,
+            status,
+            payment_method,
+            shipping_address,
+            shipping_zone_id,
+            created_at,
             profiles(full_name, email),
             order_items(
-              *,
-              product:products(title, image_url)
+              id,
+              order_id,
+              product_id,
+              quantity,
+              price,
+              price_at_purchase,
+              product_snapshot,
+              product:products(id, title, image_url)
             )
           `)
           .in('shipping_zone_id', zoneIds)
@@ -417,14 +574,32 @@ export async function getOrders(partnerId?: string) {
           return [];
         }
         
+        // Hardened: explicit column selection to avoid schema cache issues
         const { data: orders, error } = await supabase
           .from('orders')
           .select(`
-            *,
+            id,
+            user_id,
+            total_amount,
+            subtotal_amount,
+            shipping_amount,
+            tax_amount,
+            tax_rate,
+            status,
+            payment_method,
+            shipping_address,
+            shipping_zone_id,
+            created_at,
             profiles(full_name, email),
             order_items(
-              *,
-              product:products(title, image_url)
+              id,
+              order_id,
+              product_id,
+              quantity,
+              price,
+              price_at_purchase,
+              product_snapshot,
+              product:products(id, title, image_url)
             )
           `)
           .order('created_at', { ascending: false });
@@ -499,13 +674,24 @@ export async function getCMSContent() {
 export async function getClubs() {
   try {
     await verifyAdmin();
-    const { data, error, status } = await supabase
+    const columns = 'id, type, title, content, image_url, is_active, metadata, created_at';
+    let { data, error, status } = await supabase
       .from('cms_content')
-      .select('*')
+      .select(columns)
       .eq('type', 'book_club')
       .order('created_at', { ascending: false });
 
     if (error) {
+      if (error.code === 'PGRST204' || error.message?.includes('column') || error.message?.includes('cache')) {
+        console.warn('Advanced cms_content columns missing, falling back to core');
+        const { data: fallbackData, error: fallbackError } = await supabase
+          .from('cms_content')
+          .select('id, title, is_active')
+          .eq('type', 'book_club')
+          .order('created_at', { ascending: false });
+        if (fallbackError) throw fallbackError;
+        return fallbackData || [];
+      }
       if (status === 404 || error.code === 'PGRST116') return [];
       throw error;
     }
@@ -520,10 +706,22 @@ export async function getEvents() {
   try {
     await verifyAdmin();
     // Prefer the new events table
-    const { data, error, status } = await supabase
+    const eventColumns = 'id, title, description, event_date, location, image_url, is_active, created_at';
+    let { data, error, status } = await supabase
       .from('events')
-      .select('*')
+      .select(eventColumns)
       .order('event_date', { ascending: false });
+
+    if (error) {
+      if (error.code === 'PGRST204' || error.message?.includes('column') || error.message?.includes('cache')) {
+        console.warn('Advanced events columns missing, falling back to core');
+        const { data: fallbackData, error: fallbackError } = await supabase
+          .from('events')
+          .select('id, title, event_date')
+          .order('event_date', { ascending: false });
+        if (!fallbackError) return fallbackData || [];
+      }
+    }
 
     if (!error && data) return data;
     
@@ -531,7 +729,7 @@ export async function getEvents() {
     if (status === 404 || error?.code === 'PGRST116') {
       const { data: legacyData, error: legacyError } = await supabase
         .from('cms_content')
-        .select('*')
+        .select('id, type, title, content, image_url, is_active, metadata, created_at')
         .eq('type', 'event')
         .order('created_at', { ascending: false });
 
@@ -574,12 +772,22 @@ export async function updateEvent(id: string, updates: any) {
 export async function getAgreements() {
   try {
     await verifyAdmin();
-    const { data, error, status } = await supabase
+    const columns = 'id, partner_id, type, status, content, metadata, created_at, signed_at, expires_at';
+    let { data, error, status } = await supabase
       .from('agreements')
-      .select('*, partner:profiles(full_name, email)')
+      .select(`${columns}, partner:profiles(full_name, email)`)
       .order('created_at', { ascending: false });
 
     if (error) {
+      if (error.code === 'PGRST204' || error.message?.includes('column') || error.message?.includes('cache')) {
+        console.warn('Advanced agreements columns missing, falling back to core');
+        const { data: fallbackData, error: fallbackError } = await supabase
+          .from('agreements')
+          .select('id, partner_id, status, created_at')
+          .order('created_at', { ascending: false });
+        if (fallbackError) throw fallbackError;
+        return fallbackData || [];
+      }
       if (status === 404 || error.code === 'PGRST116') return [];
       throw error;
     }
@@ -595,13 +803,24 @@ export async function getAgreements() {
  */
 export async function getUserAgreements(userId: string) {
   try {
-    const { data, error, status } = await supabase
+    const columns = 'id, partner_id, type, status, content, metadata, created_at, signed_at, expires_at';
+    let { data, error, status } = await supabase
       .from('agreements')
-      .select('*')
+      .select(columns)
       .eq('partner_id', userId)
       .order('created_at', { ascending: false });
 
     if (error) {
+      if (error.code === 'PGRST204' || error.message?.includes('column') || error.message?.includes('cache')) {
+        console.warn('Advanced user agreements columns missing, falling back to core');
+        const { data: fallbackData, error: fallbackError } = await supabase
+          .from('agreements')
+          .select('id, partner_id, status, created_at')
+          .eq('partner_id', userId)
+          .order('created_at', { ascending: false });
+        if (fallbackError) throw fallbackError;
+        return fallbackData || [];
+      }
       if (status === 404 || error.code === 'PGRST116') return [];
       throw error;
     }
@@ -667,13 +886,26 @@ export async function updateAgreementStatus(agreementId: string, status: 'approv
 export async function getBanners() {
   try {
     await verifyAdmin();
-    const { data, error } = await supabase
+    const columns = 'id, type, title, content, image_url, is_active, metadata, created_at';
+    let { data, error } = await supabase
       .from('cms_content')
-      .select('*')
+      .select(columns)
       .eq('type', 'banner')
       .order('created_at', { ascending: false });
 
-    if (error) throw error;
+    if (error) {
+      if (error.code === 'PGRST204' || error.message?.includes('column') || error.message?.includes('cache')) {
+        console.warn('Advanced banner columns missing, falling back to core');
+        const { data: fallbackData, error: fallbackError } = await supabase
+          .from('cms_content')
+          .select('id, title, is_active')
+          .eq('type', 'banner')
+          .order('created_at', { ascending: false });
+        if (fallbackError) throw fallbackError;
+        return fallbackData || [];
+      }
+      throw error;
+    }
     return data || [];
   } catch (err) {
     console.error('Banners fetch failed:', err);
@@ -684,13 +916,25 @@ export async function getBanners() {
 export async function getPromos() {
   try {
     await verifyAdmin();
-    // Fetch from promos table with newly added fields
-    const { data, error } = await supabase
+    // Fetch from promos table with explicit columns
+    const columns = 'id, title, description, code, type, value, status, start_date, end_date, created_at, creator_id, promo_signature';
+    let { data, error } = await supabase
       .from('promos')
-      .select('*')
+      .select(columns)
       .order('created_at', { ascending: false });
 
-    if (error) throw error;
+    if (error) {
+      if (error.code === 'PGRST204' || error.message?.includes('column') || error.message?.includes('cache')) {
+        console.warn('Advanced promo columns missing, falling back to core');
+        const { data: fallbackData, error: fallbackError } = await supabase
+          .from('promos')
+          .select('id, title, code, status')
+          .order('created_at', { ascending: false });
+        if (fallbackError) throw fallbackError;
+        return fallbackData || [];
+      }
+      throw error;
+    }
     return data || [];
   } catch (err) {
     console.error('Promos fetch failed:', err);
@@ -740,40 +984,89 @@ export async function updateCampaignStatus(promoId: string, status: string, note
 }
 
 export async function getPromoMetrics(promoId: string) {
-  await verifyAdmin();
-  const { data, error } = await supabase
-    .from('promo_metrics')
-    .select('*')
-    .eq('promo_id', promoId)
-    .order('recorded_at', { ascending: false });
+  try {
+    await verifyAdmin();
+    const columns = 'id, promo_id, metric_type, value, metadata, recorded_at';
+    let { data, error } = await supabase
+      .from('promo_metrics')
+      .select(columns)
+      .eq('promo_id', promoId)
+      .order('recorded_at', { ascending: false });
 
-  if (error) throw error;
-  return data || [];
+    if (error) {
+      if (error.code === 'PGRST204' || error.message?.includes('column') || error.message?.includes('cache')) {
+        console.warn('Advanced promo metrics columns missing, falling back to core');
+        const { data: fallbackData, error: fallbackError } = await supabase
+          .from('promo_metrics')
+          .select('id, promo_id, value, recorded_at')
+          .eq('promo_id', promoId)
+          .order('recorded_at', { ascending: false });
+        if (fallbackError) throw fallbackError;
+        data = fallbackData as any;
+      } else {
+        throw error;
+      }
+    }
+    return data || [];
+  } catch (err) {
+    console.error('Promo Metrics fetch failed:', err);
+    return [];
+  }
 }
 
 export async function getPromoAuditLogs(promoId: string) {
-  await verifyAdmin();
-  const { data, error } = await supabase
-    .from('promo_audit_logs')
-    .select('*, actor:profiles(full_name)')
-    .eq('promo_id', promoId)
-    .order('created_at', { ascending: false });
+  try {
+    await verifyAdmin();
+    const columns = 'id, promo_id, actor_id, action, previous_state, new_state, created_at';
+    let { data, error } = await supabase
+      .from('promo_audit_logs')
+      .select(`${columns}, actor:profiles(full_name)`)
+      .eq('promo_id', promoId)
+      .order('created_at', { ascending: false });
 
-  if (error) throw error;
-  return data || [];
+    if (error) {
+      if (error.code === 'PGRST204' || error.message?.includes('column') || error.message?.includes('cache')) {
+        console.warn('Advanced promo audit logs columns missing, falling back to core');
+        const { data: fallbackData, error: fallbackError } = await supabase
+          .from('promo_audit_logs')
+          .select('id, promo_id, action, created_at')
+          .eq('promo_id', promoId)
+          .order('created_at', { ascending: false });
+        if (fallbackError) throw fallbackError;
+        data = fallbackData as any;
+      } else {
+        throw error;
+      }
+    }
+    return data || [];
+  } catch (err) {
+    console.error('Promo Audit Logs fetch failed:', err);
+    return [];
+  }
 }
 
 export async function calculateImpact(promoId: string) {
-  await verifyAdmin();
-  // This would involve complex logic to calculate actual vs predicted impact
-  // For now, we'll fetch current utilization and order data
-  const { data: promo } = await supabase.from('promos').select('*').eq('id', promoId).single();
-  
-  // Logic to simulate impact calculation
-  const impact = (promo?.utilization_count || 0) * Number(promo?.discount_value || 0);
-  
-  await updateRecord('promos', promoId, { impact_value: impact });
-  return impact;
+  try {
+    await verifyAdmin();
+    // This would involve complex logic to calculate actual vs predicted impact
+    // For now, we'll fetch current utilization and order data
+    const { data: promo, error } = await supabase
+      .from('promos')
+      .select('id, utilization_count, discount_value')
+      .eq('id', promoId)
+      .maybeSingle();
+    
+    if (error) throw error;
+    
+    // Logic to simulate impact calculation
+    const impact = (promo?.utilization_count || 0) * Number(promo?.discount_value || 0);
+    
+    await updateRecord('promos', promoId, { impact_value: impact });
+    return impact;
+  } catch (err) {
+    console.error('Calculate Impact failed:', err);
+    return 0;
+  }
 }
 
 export async function getAuditLogs() {
@@ -890,14 +1183,25 @@ export async function getAuthors() {
 export async function getProtocolAgreements() {
   try {
     await verifyAdmin();
-    const { data, error, status } = await supabase
+    const columns = 'id, name, content, metadata, is_active, created_at, updated_at';
+    let { data, error, status } = await supabase
       .from('partnership_agreements')
-      .select('*')
+      .select(columns)
       .order('created_at', { ascending: false });
 
     if (error) {
-      if (status === 404 || error.code === 'PGRST116') return [];
-      throw error;
+      if (error.code === 'PGRST204' || error.message?.includes('column') || error.message?.includes('cache')) {
+        console.warn('Advanced protocol agreements columns missing, falling back to core');
+        const { data: fallbackData, error: fallbackError } = await supabase
+          .from('partnership_agreements')
+          .select('id, name, created_at')
+          .order('created_at', { ascending: false });
+        if (fallbackError) throw fallbackError;
+        data = fallbackData as any;
+      } else {
+        if (status === 404 || error.code === 'PGRST116') return [];
+        throw error;
+      }
     }
     return data || [];
   } catch (err) {
@@ -1027,16 +1331,29 @@ export async function getSiteSettings() {
   try {
     await verifyAdmin();
     // Fetch basic settings first - no joins to avoid 400 errors if schema is out of sync
-    const { data: siteData, error: siteError } = await supabase
+    const columns = 'id, site_name, contact_email, contact_phone, secondary_phone, whatsapp_link, global_support_whatsapp, author_of_the_day_id, author_of_the_day_books, metadata, created_at, updated_at';
+    let { data: siteData, error: siteError } = await supabase
       .from('site_settings')
-      .select('*')
+      .select(columns)
       .maybeSingle();
 
-    if (siteError) throw siteError;
+    if (siteError) {
+      if (siteError.code === 'PGRST204' || siteError.message?.includes('column') || siteError.message?.includes('cache')) {
+        console.warn('Advanced site settings columns missing, falling back to core');
+        const { data: fallbackData, error: fallbackError } = await supabase
+          .from('site_settings')
+          .select('id, site_name, contact_email')
+          .maybeSingle();
+        if (fallbackError) throw fallbackError;
+        siteData = fallbackData as any;
+      } else {
+        throw siteError;
+      }
+    }
     if (!siteData) return {};
 
     // Sanitize dummy numbers
-    const sanitizedData = { ...siteData };
+    const sanitizedData: any = { ...siteData };
     const dummyPattern = /700 000 000|700000000/;
     
     if (sanitizedData.contact_phone && dummyPattern.test(sanitizedData.contact_phone)) {
@@ -1094,10 +1411,11 @@ export async function createRecord(table: string, record: any) {
   
   return withRetry(async () => {
     try {
+      // Use explicit select('id') to avoid schema cache issues with select(*)
       const { data, error, status } = await supabase
         .from(table)
         .insert([currentRecord])
-        .select()
+        .select('id')
         .maybeSingle();
 
       if (error) {
@@ -1107,15 +1425,31 @@ export async function createRecord(table: string, record: any) {
           throw new Error(`Table ${table} does not exist`);
         }
 
-        // Handle missing columns (PGRST204)
-        if (error.code === 'PGRST204' || error.message?.includes('column') && error.message?.includes('not found')) {
-          const match = error.message.match(/column ['"](.+)['"]/);
+        // Handle missing columns (PGRST204) or schema cache errors
+        if (error.code === 'PGRST204' || 
+            (error.message?.includes('column') && 
+             (error.message?.includes('not found') || error.message?.includes('cache')))) {
+          
+          // Improved regex to prioritize the column name over the table name
+          // The error message usually says: Could not find the 'column_name' column of 'table_name' ...
+          const match = error.message.match(/['"]([^'"]+)['"] column/) || error.message.match(/column ['"]([^'"]+)['"]/);
+          
           if (match && match[1]) {
             const missingCol = match[1];
-            console.warn(`Column ${missingCol} missing in ${table}, filtering and retrying...`);
-            delete currentRecord[missingCol];
-            // Throw to trigger retry with filtered record
-            throw error; 
+            // If the match is the table name, try to find the column name elsewhere in the message
+            if (missingCol === table) {
+              const alternativeMatch = error.message.match(/['"]([^'"]+)['"] column/);
+              if (alternativeMatch && alternativeMatch[1]) {
+                const realMissingCol = alternativeMatch[1];
+                console.warn(`Detected missing column ${realMissingCol} in ${table} (table name was matched first)`);
+                delete currentRecord[realMissingCol];
+                throw error;
+              }
+            } else {
+              console.warn(`Column ${missingCol} missing in ${table}, filtering and retrying...`);
+              delete currentRecord[missingCol];
+              throw error; 
+            }
           }
         }
         throw error;
@@ -1147,14 +1481,40 @@ export async function updateRecord(table: string, id: string, updates: any) {
   
   return withRetry(async () => {
     try {
-      // Optionally fetch old data for audit on first attempt
-      const { data: oldData } = await supabase.from(table).select('*').eq('id', id).single();
+      // Fetch old data for audit before update
+      // Hardened: only select ID first to avoid schema cache issues on select(*)
+      let oldData = null;
+      try {
+        const { data } = await supabase.from(table).select('id').eq('id', id).maybeSingle();
+        if (data) {
+          // Then try to get the rest with explicit columns for common tables
+          let fullDataQuery;
+          if (table === 'products') {
+            fullDataQuery = supabase.from(table).select('id, title, price, stock_quantity, is_active').eq('id', id).maybeSingle();
+          } else if (table === 'profiles') {
+            fullDataQuery = supabase.from(table).select('id, full_name, email, role').eq('id', id).maybeSingle();
+          } else if (table === 'orders') {
+            fullDataQuery = supabase.from(table).select('id, status, total_amount, user_id').eq('id', id).maybeSingle();
+          } else if (table === 'site_settings') {
+            fullDataQuery = supabase.from(table).select('id, site_name, contact_email').eq('id', id).maybeSingle();
+          } else {
+            // For unknown tables, we use a very minimal set
+            fullDataQuery = supabase.from(table).select('id, created_at').eq('id', id).maybeSingle();
+          }
+          
+          const { data: fullData } = await fullDataQuery;
+          oldData = fullData || data;
+        }
+      } catch (e) {
+        console.warn('Failed to fetch full oldData for audit, proceeding with minimal data');
+      }
 
+      // Use explicit select('id') to avoid schema cache issues with select(*)
       const { data, error, status } = await supabase
         .from(table)
         .update(currentUpdates)
         .eq('id', id)
-        .select()
+        .select('id')
         .maybeSingle();
 
       if (error) {
@@ -1164,15 +1524,28 @@ export async function updateRecord(table: string, id: string, updates: any) {
           throw new Error(`Table ${table} does not exist`);
         }
 
-        // Handle missing columns (PGRST204)
-        if (error.code === 'PGRST204' || error.message?.includes('column') && error.message?.includes('not found')) {
-          const match = error.message.match(/column ['"](.+)['"]/);
+        // Handle missing columns (PGRST204) or schema cache errors
+        if (error.code === 'PGRST204' || 
+            (error.message?.includes('column') && 
+             (error.message?.includes('not found') || error.message?.includes('cache')))) {
+          
+          const match = error.message.match(/['"]([^'"]+)['"] column/) || error.message.match(/column ['"]([^'"]+)['"]/);
+          
           if (match && match[1]) {
             const missingCol = match[1];
-            console.warn(`Column ${missingCol} missing in ${table}, filtering and retrying...`);
-            delete currentUpdates[missingCol];
-            // Throw to trigger retry with filtered updates
-            throw error;
+            if (missingCol === table) {
+              const alternativeMatch = error.message.match(/['"]([^'"]+)['"] column/);
+              if (alternativeMatch && alternativeMatch[1]) {
+                const realMissingCol = alternativeMatch[1];
+                console.warn(`Detected missing column ${realMissingCol} in ${table} (table name was matched first)`);
+                delete currentUpdates[realMissingCol];
+                throw error;
+              }
+            } else {
+              console.warn(`Column ${missingCol} missing in ${table}, filtering and retrying...`);
+              delete currentUpdates[missingCol];
+              throw error;
+            }
           }
         }
         throw error;
@@ -1199,7 +1572,32 @@ export async function deleteRecord(table: string, id: string) {
   
   return withRetry(async () => {
     // Optionally fetch old data for audit
-    const { data: oldData } = await supabase.from(table).select('*').eq('id', id).single();
+    // Hardened: handle potential schema cache issues when fetching oldData
+    let oldData = null;
+    try {
+      const { data } = await supabase.from(table).select('id').eq('id', id).maybeSingle();
+      if (data) {
+        // Then try to get the rest with explicit columns for common tables
+        let fullDataQuery;
+        if (table === 'products') {
+          fullDataQuery = supabase.from(table).select('id, title, price, stock_quantity, is_active').eq('id', id).maybeSingle();
+        } else if (table === 'profiles') {
+          fullDataQuery = supabase.from(table).select('id, full_name, email, role').eq('id', id).maybeSingle();
+        } else if (table === 'orders') {
+          fullDataQuery = supabase.from(table).select('id, status, total_amount, user_id').eq('id', id).maybeSingle();
+        } else if (table === 'site_settings') {
+          fullDataQuery = supabase.from(table).select('id, site_name, contact_email').eq('id', id).maybeSingle();
+        } else {
+          // For unknown tables, we use a very minimal set
+          fullDataQuery = supabase.from(table).select('id, created_at').eq('id', id).maybeSingle();
+        }
+        
+        const { data: fullData } = await fullDataQuery;
+        oldData = fullData || data;
+      }
+    } catch (e) {
+      console.warn(`Failed to fetch oldData for deletion audit on ${table}, proceeding...`);
+    }
 
     const { error } = await supabase
       .from(table)
@@ -1304,13 +1702,21 @@ export async function createProduct(product: any) {
     const { data, error } = await supabase
       .from('products')
       .insert([currentData])
-      .select()
+      .select('id, title, slug')
       .maybeSingle();
 
     if (error) {
-      console.error('[API] Product insertion error:', error);
-      // Handle missing columns
-      if (error.code === 'PGRST204' || (error.message?.includes('column') && (error.message?.includes('not found') || error.message?.includes('schema cache')))) {
+      console.error('[API] Product insertion error:', {
+        code: error.code,
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+        payload: currentData
+      });
+      // Handle missing columns or schema cache errors
+      if (error.code === 'PGRST204' || 
+          (error.message?.includes('column') && 
+           (error.message?.includes('not found') || error.message?.includes('cache')))) {
         // Handle different error formats:
         // 1. "column 'name' not found"
         // 2. "Could not find the 'name' column... in the schema cache"
@@ -1356,8 +1762,20 @@ export async function updateProduct(id: string, product: any) {
   
   const { ebook_metadata, ...productData } = product;
 
-  // Get old data for audit
-  const { data: oldData } = await supabase.from('products').select('*').eq('id', id).single();
+  // Get old data for audit - hardened to avoid schema cache issues
+  let oldData = null;
+  try {
+    const productCols = 'id, title, slug, description, price, sale_price, image_url, category_id, stock_quantity, author_id, type, is_active, metadata';
+    const { data: minimalData } = await supabase.from('products').select(productCols).eq('id', id).maybeSingle();
+    if (minimalData) {
+      oldData = minimalData;
+    } else {
+      const { data: idOnly } = await supabase.from('products').select('id').eq('id', id).maybeSingle();
+      oldData = idOnly;
+    }
+  } catch (e) {
+    console.warn('Failed to fetch oldData for product update audit, proceeding...');
+  }
 
   let currentData = { ...productData };
 
@@ -1367,13 +1785,21 @@ export async function updateProduct(id: string, product: any) {
       .from('products')
       .update(currentData)
       .eq('id', id)
-      .select()
+      .select('id, title, slug')
       .maybeSingle();
 
     if (error) {
-      console.error('[API] Product update error:', error);
-      // Handle missing columns
-      if (error.code === 'PGRST204' || (error.message?.includes('column') && (error.message?.includes('not found') || error.message?.includes('schema cache')))) {
+      console.error('[API] Product update error:', {
+        code: error.code,
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+        payload: currentData
+      });
+      // Handle missing columns or schema cache errors
+      if (error.code === 'PGRST204' || 
+          (error.message?.includes('column') && 
+           (error.message?.includes('not found') || error.message?.includes('cache')))) {
         // Handle different error formats:
         // 1. "column 'name' not found"
         // 2. "Could not find the 'name' column... in the schema cache"
@@ -1411,36 +1837,48 @@ export async function updateProduct(id: string, product: any) {
 export async function bulkUpdateProducts(ids: string[], updates: any) {
   await verifyAdmin();
   
+  let currentUpdates = { ...updates };
+  
   return withRetry(async () => {
-    let { data, error } = await supabase
+    const { data, error } = await supabase
       .from('products')
-      .update(updates)
+      .update(currentUpdates)
       .in('id', ids)
-      .select();
+      .select('id');
 
-    // Handle missing columns
-    if (error && error.code === 'PGRST204') {
-      console.warn('Column missing in products during bulk update, filtering:', error.message);
-      const match = error.message.match(/column '(.+)' of/);
-      if (match && match[1]) {
-        const missingCol = match[1];
-        const filteredUpdates = { ...updates };
-        delete filteredUpdates[missingCol];
+    if (error) {
+      // Handle missing columns or schema cache errors
+      if (error.code === 'PGRST204' || 
+          (error.message?.includes('column') && 
+           (error.message?.includes('not found') || error.message?.includes('cache')))) {
         
-        console.warn(`Retrying products bulk update without column: ${missingCol}`);
-        const { data: retryData, error: retryError } = await supabase
-          .from('products')
-          .update(filteredUpdates)
-          .in('id', ids)
-          .select();
+        const match = error.message.match(/['"]([^'"]+)['"] column/) || error.message.match(/column ['"]([^'"]+)['"]/);
         
-        data = retryData;
-        error = retryError;
+        if (match && match[1]) {
+          const missingCol = match[1];
+          if (missingCol === 'products') { // table name matched
+            const alternativeMatch = error.message.match(/['"]([^'"]+)['"] column/);
+            if (alternativeMatch && alternativeMatch[1]) {
+              const realMissingCol = alternativeMatch[1];
+              console.warn(`Column ${realMissingCol} missing in products bulk update, filtering...`);
+              delete currentUpdates[realMissingCol];
+              throw error;
+            }
+          } else {
+            console.warn(`Column ${missingCol} missing in products bulk update, filtering...`);
+            delete currentUpdates[missingCol];
+            throw error;
+          }
+        }
       }
+      throw error;
     }
-
-    if (error) throw error;
+    
     return data;
+  }, {
+    onRetry: (error, attempt) => {
+      console.warn(`Retry attempt ${attempt} for bulkUpdateProducts:`, error.message);
+    }
   });
 }
 

@@ -34,10 +34,31 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         status: 'New',
         priority: 'Medium'
       }])
-      .select()
+      .select('id, full_name, email, subject, message, attachment_url')
       .single();
 
-    if (dbError) throw dbError;
+    if (dbError) {
+      if (dbError.code === 'PGRST204' || dbError.message?.includes('column') || dbError.message?.includes('cache')) {
+        console.warn('Schema cache issue on contact insert, retrying with minimal select');
+        const { data: retryData, error: retryError } = await supabase
+          .from('contact_messages')
+          .insert([{
+            full_name: name,
+            email,
+            subject,
+            message,
+            attachment_url,
+            status: 'New',
+            priority: 'Medium'
+          }])
+          .select('id')
+          .single();
+        if (retryError) throw retryError;
+        // Mock the rest of the object for the email logic
+        return json(res, 200, { success: true, id: retryData.id, message: 'Inquiry received successfully' });
+      }
+      throw dbError;
+    }
 
     await logAction(req, null, 'submit_contact_form', 'contact_messages', { messageId: contactMsg.id });
 

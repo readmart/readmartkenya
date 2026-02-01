@@ -151,7 +151,7 @@ export const initiateK2StkPush = async (params: K2StkPushRequest) => {
     },
     amount: {
       currency: params.currency || 'KES',
-      value: params.amount, // K2 docs show it can be a number/float
+      value: Number(params.amount), 
     },
     metadata: {
       order_id: params.orderId,

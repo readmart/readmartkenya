@@ -4,7 +4,8 @@ import {
   User, Package, Heart, Settings, LogOut, 
   ChevronRight, MapPin, Phone, Mail,
   Shield, Bell, Clock, Star, Trash2, ShoppingCart,
-  Loader2, Briefcase, PenTool, ExternalLink, ShieldCheck
+  Loader2, Briefcase, PenTool, ExternalLink, ShieldCheck,
+  BookOpen, Download
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useWishlist } from '@/contexts/WishlistContext';
@@ -13,6 +14,7 @@ import { useCurrency } from '@/contexts/CurrencyContext';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
+import { getMyEbooks, getEbookAccessUrl } from '@/api/ebooks';
 
 const getTabs = (isPartner: boolean, isAuthor: boolean) => [
   { id: 'profile', label: 'Profile', icon: <User className="w-5 h-5" /> },
@@ -23,9 +25,6 @@ const getTabs = (isPartner: boolean, isAuthor: boolean) => [
   ...(isAuthor ? [{ id: 'author', label: 'Author Portal', icon: <PenTool className="w-5 h-5" /> }] : []),
   { id: 'settings', label: 'Settings', icon: <Settings className="w-5 h-5" /> },
 ];
-
-import { BookOpen, Download } from 'lucide-react';
-import { getMyEbooks, getEbookAccessUrl } from '@/api/ebooks';
 
 const mockOrders = [
   { id: 'ORD-1234', date: 'Jan 12, 2026', status: 'Delivered', total: 45.99, items: 2 },
@@ -62,8 +61,10 @@ export default function Account() {
   const handleProfileUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsUpdatingProfile(true);
+    console.log('[Account] Updating profile with:', profileForm);
     const { error } = await updateProfile(profileForm);
     if (error) {
+      console.error('[Account] Profile update error:', error);
       toast.error('Failed to update profile');
     } else {
       toast.success('Profile updated successfully');
@@ -76,41 +77,51 @@ export default function Account() {
     if (isUpdatingPreferences) return;
     setIsUpdatingPreferences(true);
     
+    // Use deep copy and handle potential null preferences
+    const currentPrefs = profile?.preferences || { sms_notifications: false, newsletter: false };
     const newPrefs = {
-      ...profile?.preferences,
-      sms_notifications: !profile?.preferences?.sms_notifications
+      ...currentPrefs,
+      sms_notifications: !currentPrefs.sms_notifications
     };
 
-    const { error } = await updateProfile({ preferences: newPrefs });
-    
-    if (error) {
-      toast.error('Failed to update preferences');
-    } else {
+    console.log('[Account] Toggling SMS notifications to:', newPrefs.sms_notifications);
+    try {
+      const { error } = await updateProfile({ preferences: newPrefs });
+      if (error) throw error;
       toast.success(`SMS notifications ${newPrefs.sms_notifications ? 'enabled' : 'disabled'}`);
+    } catch (err: any) {
+      console.error('[Account] SMS toggle error:', err);
+      toast.error(err.message || 'Failed to update preferences');
+    } finally {
+      setIsUpdatingPreferences(false);
     }
-    setIsUpdatingPreferences(false);
   };
 
   const toggleNewsletter = async () => {
     if (isUpdatingPreferences) return;
     setIsUpdatingPreferences(true);
     
+    const currentPrefs = profile?.preferences || { sms_notifications: false, newsletter: false };
     const newPrefs = {
-      ...profile?.preferences,
-      newsletter: !profile?.preferences?.newsletter
+      ...currentPrefs,
+      newsletter: !currentPrefs.newsletter
     };
 
-    const { error } = await updateProfile({ preferences: newPrefs });
-    
-    if (error) {
-      toast.error('Failed to update preferences');
-    } else {
+    console.log('[Account] Toggling newsletter to:', newPrefs.newsletter);
+    try {
+      const { error } = await updateProfile({ preferences: newPrefs });
+      if (error) throw error;
       toast.success(`Newsletter ${newPrefs.newsletter ? 'subscribed' : 'unsubscribed'}`);
+    } catch (err: any) {
+      console.error('[Account] Newsletter toggle error:', err);
+      toast.error(err.message || 'Failed to update preferences');
+    } finally {
+      setIsUpdatingPreferences(false);
     }
-    setIsUpdatingPreferences(false);
   };
 
   const [paymentMethods, setPaymentMethods] = useState<any[]>([]);
+  const [showAddPaymentForm, setShowAddPaymentForm] = useState(false);
   const [isAddingPayment, setIsAddingPayment] = useState(false);
   const [isLoadingPayments, setIsLoadingPayments] = useState(false);
   const [newPaymentPhone, setNewPaymentPhone] = useState('');
@@ -148,18 +159,30 @@ export default function Account() {
     if (!user) return;
     setIsLoadingPayments(true);
     try {
-      const { data, error } = await supabase
+      const columns = 'id, user_id, type, provider, identifier, is_default, metadata, created_at';
+      let { data, error } = await supabase
         .from('payment_methods')
-        .select('*')
+        .select(columns)
         .eq('user_id', user.id);
       
       if (error) {
-        console.error('Error fetching payment methods:', error);
-        // If it's a 404, it might mean the table doesn't exist or isn't accessible
-        if (error.code === 'PGRST204' || error.message.includes('not found')) {
+        // Handle schema cache issues (PGRST204)
+        if (error.code === 'PGRST204' || error.message?.includes('column') || error.message?.includes('cache')) {
+          console.warn('Advanced payment_methods columns missing from cache, falling back to core columns');
+          const { data: fallbackData, error: fallbackError } = await supabase
+            .from('payment_methods')
+            .select('id, user_id, type, identifier, is_default')
+            .eq('user_id', user.id);
+          
+          if (fallbackError) throw fallbackError;
+          data = fallbackData as any;
+        } else if (error.code === 'PGRST116' || error.message?.includes('not found')) {
           console.warn('Payment methods table might be missing or inaccessible');
+          return;
+        } else {
+          console.error('Error fetching payment methods:', error);
+          return;
         }
-        return;
       }
       
       setPaymentMethods(data || []);
@@ -175,6 +198,16 @@ export default function Account() {
     if (!user || !newPaymentPhone) return;
     
     setIsAddingPayment(true);
+    
+    // Sanitize phone number: remove +, spaces, and ensure it starts with 254
+    let sanitizedPhone = newPaymentPhone.replace(/[\s+]/g, '');
+    if (sanitizedPhone.startsWith('0')) {
+      sanitizedPhone = '254' + sanitizedPhone.substring(1);
+    } else if (sanitizedPhone.startsWith('7') || sanitizedPhone.startsWith('1')) {
+      sanitizedPhone = '254' + sanitizedPhone;
+    }
+
+    console.log('[Account] Adding M-Pesa payment method:', sanitizedPhone);
     try {
       const { error } = await supabase
         .from('payment_methods')
@@ -182,18 +215,22 @@ export default function Account() {
           user_id: user.id,
           type: 'mpesa',
           provider: 'M-Pesa',
-          identifier: newPaymentPhone,
+          identifier: sanitizedPhone,
           is_default: paymentMethods.length === 0
         });
 
-      if (error) throw error;
+      if (error) {
+        console.error('[Account] Add payment method error:', error);
+        throw error;
+      }
 
       toast.success('Payment method added successfully');
       setNewPaymentPhone('');
-      setIsAddingPayment(false);
+      setShowAddPaymentForm(false);
       fetchPaymentMethods();
-    } catch (err) {
-      toast.error('Failed to add payment method');
+    } catch (err: any) {
+      console.error('[Account] Add payment method exception:', err);
+      toast.error(err.message || 'Failed to add payment method');
     } finally {
       setIsAddingPayment(false);
     }
@@ -863,21 +900,21 @@ export default function Account() {
                           ))
                         ) : null}
 
-                        {!isAddingPayment && !isLoadingPayments ? (
+                        {!showAddPaymentForm && !isLoadingPayments ? (
                           <button 
-                            onClick={() => setIsAddingPayment(true)}
+                            onClick={() => setShowAddPaymentForm(true)}
                             className="w-full glass p-6 rounded-3xl border-dashed border-white/20 flex items-center justify-center gap-3 text-muted-foreground hover:text-primary hover:border-primary/50 transition-all"
                           >
                             <Phone className="w-5 h-5" />
                             <span className="font-black text-sm uppercase tracking-widest">Add New M-Pesa Number</span>
                           </button>
-                        ) : isAddingPayment ? (
+                        ) : showAddPaymentForm ? (
                           <form onSubmit={handleAddPayment} className="glass p-8 rounded-3xl border-primary/30 space-y-6">
                             <div className="flex items-center justify-between mb-2">
                               <label htmlFor="mpesa_number" className="font-black uppercase text-sm tracking-widest cursor-pointer">Add M-Pesa Number</label>
                               <button 
                                 type="button" 
-                                onClick={() => setIsAddingPayment(false)}
+                                onClick={() => setShowAddPaymentForm(false)}
                                 className="text-muted-foreground hover:text-white"
                               >
                                 Cancel
@@ -899,9 +936,11 @@ export default function Account() {
                               </div>
                               <button 
                                 type="submit"
-                                className="w-full bg-primary text-white py-4 rounded-2xl font-black uppercase tracking-widest hover:scale-[1.02] transition-all shadow-xl shadow-primary/20"
+                                disabled={isAddingPayment}
+                                className="w-full bg-primary text-white py-4 rounded-2xl font-black uppercase tracking-widest hover:scale-[1.02] transition-all shadow-xl shadow-primary/20 flex items-center justify-center gap-2"
                               >
-                                Save Payment Method
+                                {isAddingPayment && <Loader2 className="w-4 h-4 animate-spin" />}
+                                {isAddingPayment ? 'Adding...' : 'Save Payment Method'}
                               </button>
                             </div>
                           </form>

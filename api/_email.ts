@@ -34,21 +34,36 @@ export const sendEmail = async (params: SendEmailParams) => {
   const fromAddr = params.from || process.env.EMAIL_FROM || 'ReadMart <no-reply@readmartke.com>';
   const recipient = Array.isArray(to) ? to.join(', ') : to;
 
-  // 1. Log initiation
-  const { data: logEntry, error: logError } = await supabase
-    .from('notification_logs')
-    .insert([{ 
-      recipient, 
-      subject, 
-      status: 'pending',
-      metadata: { 
-        from: fromAddr,
-        bcc: bcc ? (Array.isArray(bcc) ? bcc.join(', ') : bcc) : undefined,
-        replyTo
+  // 1. Log initiation with hardened selection for schema cache
+  let logEntry: any = null;
+  try {
+    const { data, error } = await supabase
+      .from('notification_logs')
+      .insert([{ 
+        recipient, 
+        subject, 
+        status: 'pending',
+        metadata: { 
+          from: fromAddr,
+          bcc: bcc ? (Array.isArray(bcc) ? bcc.join(', ') : bcc) : undefined,
+          replyTo
+        }
+      }])
+      .select('id')
+      .maybeSingle();
+    
+    if (error) {
+      if (error.code === 'PGRST204' || error.message?.includes('cache')) {
+        console.warn('notification_logs schema cache issue, continuing without logging');
+      } else {
+        console.error('Failed to log notification:', error);
       }
-    }])
-    .select()
-    .single();
+    } else {
+      logEntry = data;
+    }
+  } catch (e) {
+    console.warn('Notification logging failed, proceeding with email send:', e);
+  }
 
   try {
     const resend = getResend();
@@ -64,32 +79,44 @@ export const sendEmail = async (params: SendEmailParams) => {
     if (error) {
       console.error('Resend error:', error);
       // Update log with failure
-      if (logEntry) {
-        await supabase
-          .from('notification_logs')
-          .update({ status: 'failed', error_message: error.message })
-          .eq('id', logEntry.id);
+      if (logEntry?.id) {
+        try {
+          await supabase
+            .from('notification_logs')
+            .update({ status: 'failed', error_message: error.message })
+            .eq('id', logEntry.id);
+        } catch (e) {
+          console.warn('Failed to update failure status in notification_logs');
+        }
       }
       return { success: false, error: error.message };
     }
 
     // Update log with success
-    if (logEntry) {
-      await supabase
-        .from('notification_logs')
-        .update({ status: 'sent', metadata: { ...logEntry.metadata, resend_id: data?.id } })
-        .eq('id', logEntry.id);
+    if (logEntry?.id) {
+      try {
+        await supabase
+          .from('notification_logs')
+          .update({ status: 'sent', metadata: { resend_id: data?.id } })
+          .eq('id', logEntry.id);
+      } catch (e) {
+        console.warn('Failed to update success status in notification_logs');
+      }
     }
 
     return { success: true, data };
   } catch (err) {
     console.error('Failed to send email:', err);
     // Update log with exception
-    if (logEntry) {
-      await supabase
-        .from('notification_logs')
-        .update({ status: 'failed', error_message: String(err) })
-        .eq('id', logEntry.id);
+    if (logEntry?.id) {
+      try {
+        await supabase
+          .from('notification_logs')
+          .update({ status: 'failed', error_message: String(err) })
+          .eq('id', logEntry.id);
+      } catch (e) {
+        console.warn('Failed to update error status in notification_logs');
+      }
     }
     return { success: false, error: String(err) };
   }

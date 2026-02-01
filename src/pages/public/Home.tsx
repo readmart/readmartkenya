@@ -33,19 +33,37 @@ export default function Home() {
         setBanners(cms.filter((item: any) => item.type === 'banner' && item.is_active));
 
         // Fetch latest books
-        const { data: latestBooks } = await supabase
+        const productColumns = 'id, title, price, sale_price, image_url, category_id, stock_quantity, author_id, type, metadata, created_at';
+        let { data: latestBooks, error: latestBooksError } = await supabase
           .from('products')
-          .select('*, category:categories(name)')
+          .select(`${productColumns}, category:categories(name)`)
           .eq('is_active', true)
           .order('created_at', { ascending: false })
           .limit(4);
         
+        if (latestBooksError) {
+          if (latestBooksError.code === 'PGRST204' || latestBooksError.message?.includes('column') || latestBooksError.message?.includes('cache')) {
+            console.warn('Advanced product columns missing from cache, falling back to core columns');
+            const { data: fallbackBooks, error: fallbackError } = await supabase
+              .from('products')
+              .select('id, title, price, sale_price, image_url, is_active')
+              .eq('is_active', true)
+              .order('created_at', { ascending: false })
+              .limit(4);
+            
+            if (fallbackError) throw fallbackError;
+            latestBooks = fallbackBooks as any;
+          } else {
+            console.error('Latest books fetch error:', latestBooksError);
+          }
+        }
+
         if (latestBooks) {
           // Map metadata to top-level props for BookCard
           const mappedBooks = latestBooks.map(book => ({
             ...book,
             category: (book.category as any)?.name || 'Uncategorized',
-            rating: book.metadata?.rating || 0
+            rating: (book as any).metadata?.rating || 0
           }));
           setFeaturedBooks(mappedBooks);
         }
@@ -54,12 +72,24 @@ export default function Home() {
         let settings: any = null;
         try {
           const data = await withRetry(async () => {
-            const { data, error } = await supabase
+            const settingsColumns = 'site_logo, site_name, hero_headline, hero_subtext, hero_image_url, author_of_the_day_id, author_of_the_day_enabled, author_of_the_day_books, author_of_the_day_image';
+            let { data, error } = await supabase
               .from('site_settings')
-              .select('*')
+              .select(settingsColumns)
               .maybeSingle();
             
-            if (error) throw error;
+            if (error) {
+              if (error.code === 'PGRST204' || error.message?.includes('column') || error.message?.includes('cache')) {
+                console.warn('Advanced settings columns missing, falling back to core');
+                const { data: fallbackData, error: fallbackError } = await supabase
+                  .from('site_settings')
+                  .select('site_name, site_logo')
+                  .maybeSingle();
+                if (fallbackError) throw fallbackError;
+                return fallbackData;
+              }
+              throw error;
+            }
             return data;
           }, { retries: 2, delay: 500 });
           

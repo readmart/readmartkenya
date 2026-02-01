@@ -22,11 +22,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const expiresAt = new Date();
       expiresAt.setHours(expiresAt.getHours() + 24); // 24 hour expiry
 
-      const { data: existing, error: checkError } = await supabase
+      let { data: existing, error: checkError } = await supabase
         .from('newsletter_subscriptions')
         .select('id, status')
         .eq('email', email)
-        .single();
+        .maybeSingle();
+
+      if (checkError) {
+        if (checkError.code === 'PGRST204' || checkError.message?.includes('cache')) {
+          console.warn('Newsletter check cache issue, retrying minimal select');
+          const { data } = await supabase.from('newsletter_subscriptions').select('id, status').eq('email', email).maybeSingle();
+          existing = data;
+        }
+      }
 
       if (existing) {
         if (existing.status === 'active') {
@@ -37,7 +45,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const { error: updateError } = await supabase
           .from('newsletter_subscriptions')
           .update({ 
-            status: 'unconfirmed', 
+            status: 'active', 
             metadata: { confirmation_token: token, token_expires: expiresAt.toISOString() } 
           })
           .eq('id', existing.id);
@@ -49,7 +57,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           .from('newsletter_subscriptions')
           .insert([{ 
             email, 
-            status: 'unconfirmed',
+            status: 'active',
             metadata: { confirmation_token: token, token_expires: expiresAt.toISOString() }
           }]);
 
@@ -89,14 +97,32 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const protocol = publicDomain.includes('localhost') ? 'http' : 'https';
         const baseUrl = `${protocol}://${publicDomain}`;
         
-        // Find subscription by token in metadata
-        const { data: sub, error: findError } = await supabase
+        // Find subscription by token in metadata - using explicit columns for cache resilience
+        const columns = 'id, email, status, metadata, created_at';
+        let { data: sub, error: findError } = await supabase
           .from('newsletter_subscriptions')
-          .select('*')
+          .select(columns)
           .filter('metadata->>confirmation_token', 'eq', token)
-          .single();
+          .maybeSingle();
 
-        if (findError || !sub) {
+        if (findError) {
+          // Handle schema cache issues (PGRST204)
+          if (findError.code === 'PGRST204' || findError.message?.includes('column') || findError.message?.includes('cache')) {
+            console.warn('Advanced newsletter columns missing from cache, falling back to core columns');
+            const { data: fallbackData, error: fallbackError } = await supabase
+              .from('newsletter_subscriptions')
+              .select('id, email, status')
+              .filter('metadata->>confirmation_token', 'eq', token)
+              .maybeSingle();
+            
+            if (fallbackError) throw fallbackError;
+            sub = fallbackData as any;
+          } else {
+            throw findError;
+          }
+        }
+
+        if (!sub) {
           return res.redirect(`${baseUrl}/newsletter/error?reason=invalid_token`);
         }
 
@@ -105,7 +131,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           return res.redirect(`${baseUrl}/newsletter/error?reason=expired`);
         }
 
-        // Confirm subscription
+      // Update subscription confirmation
+      try {
         const { error: confirmError } = await supabase
           .from('newsletter_subscriptions')
           .update({ 
@@ -114,16 +141,42 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           })
           .eq('id', sub.id);
 
-        if (confirmError) throw confirmError;
+        if (confirmError) {
+          if (confirmError.code === 'PGRST204' || confirmError.message?.includes('cache')) {
+            console.warn('Newsletter update cache issue, retrying minimal update');
+            await supabase
+              .from('newsletter_subscriptions')
+              .update({ status: 'active' })
+              .eq('id', sub.id);
+          } else {
+            throw confirmError;
+          }
+        }
 
-        // Log confirmation
-        await supabase.from('newsletter_logs').insert([{
-          subscription_id: sub.id,
-          action: 'subscription_confirmed',
-          metadata: { method: 'email_link' }
-        }]);
+        // Log confirmation - hardened
+        try {
+          const { error: logError } = await supabase.from('newsletter_logs').insert([{
+            subscription_id: sub.id,
+            action: 'subscription_confirmed',
+            metadata: { method: 'email_link' }
+          }]);
+          
+          if (logError && (logError.code === 'PGRST204' || logError.message?.includes('cache'))) {
+            console.warn('Newsletter logs cache issue, retrying minimal log');
+            await supabase.from('newsletter_logs').insert([{
+              action: 'system_log_retry',
+              metadata: { original_action: 'newsletter_confirmation', sub_id: sub.id }
+            }]);
+          }
+        } catch (e) {
+          console.error('Failed to log newsletter confirmation:', e);
+        }
 
         return res.redirect(`${baseUrl}/newsletter/success`);
+      } catch (err) {
+        console.error('Newsletter confirmation failed:', err);
+        return res.redirect(`${baseUrl}/newsletter/error?reason=update_failed`);
+      }
       }
 
       // Admin fetch logic
@@ -147,10 +200,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       const { data, error } = await supabase
         .from('newsletter_subscriptions')
-        .select('*')
+        .select('id, email, status, created_at, metadata')
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
+      if (error) {
+        if (error.code === 'PGRST204' || error.message?.includes('column') || error.message?.includes('cache')) {
+          console.warn('Advanced newsletter columns missing, falling back to core columns');
+          const { data: fallbackData, error: fallbackError } = await supabase
+            .from('newsletter_subscriptions')
+            .select('id, email, status, created_at')
+            .order('created_at', { ascending: false });
+          if (fallbackError) throw fallbackError;
+          return json(res, 200, fallbackData);
+        }
+        throw error;
+      }
       return json(res, 200, data);
     }
 

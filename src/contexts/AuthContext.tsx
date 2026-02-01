@@ -96,14 +96,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     try {
+      const columns = 'id, full_name, avatar_url, role, bio, phone, address, preferences, created_at, updated_at';
       let { data, error } = await supabase
         .from('profiles')
-        .select('*')
+        .select(columns)
         .eq('id', userId)
         .maybeSingle();
 
       if (error) {
-        console.error('Profile fetch error:', error);
+        if (error.code === 'PGRST204' || error.message?.includes('column') || error.message?.includes('cache')) {
+          console.warn('Advanced profile columns missing from cache, falling back to core columns');
+          const { data: fallbackData, error: fallbackError } = await supabase
+            .from('profiles')
+            .select('id, full_name, avatar_url, role')
+            .eq('id', userId)
+            .maybeSingle();
+          
+          if (fallbackError) {
+            console.error('Fallback profile fetch error:', fallbackError);
+          } else {
+            data = fallbackData as any;
+          }
+        } else {
+          console.error('Profile fetch error:', error);
+        }
         // Don't throw, just allow the user to be logged in without a profile
       }
 
@@ -122,13 +138,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             }, {
               onConflict: 'id'
             })
-            .select()
+            .select('id, full_name, avatar_url, role')
             .single();
           
           if (createError) {
             console.error('Profile creation error:', createError);
           } else {
-            setProfile(newProfile);
+            setProfile(newProfile as any);
           }
         }
       } else {
@@ -151,7 +167,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Determine the redirect URL based on environment
     const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
     const redirectTo = isLocalhost 
-      ? 'http://localhost:5173/reset-password'
+      ? `${window.location.origin}/reset-password`
       : `${window.location.origin}/reset-password`;
 
     console.log('[Auth] Reset password request for:', email, 'Redirecting to:', redirectTo);
@@ -176,7 +192,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .eq('id', user.id);
       
       if (!error) {
-        setProfile(prev => prev ? { ...prev, ...updates } : null);
+        setProfile(prev => {
+          if (!prev) return null;
+          
+          // Deep merge for nested objects like preferences
+          const newProfile = { ...prev };
+          
+          Object.keys(updates).forEach(key => {
+            const k = key as keyof Profile;
+            if (updates[k] !== null && typeof updates[k] === 'object' && !Array.isArray(updates[k]) && prev[k]) {
+              // @ts-ignore - Handle nested object merge
+              newProfile[k] = { ...prev[k], ...updates[k] };
+            } else {
+              // @ts-ignore - Handle regular field update
+              newProfile[k] = updates[k];
+            }
+          });
+          
+          return newProfile;
+        });
       }
       return { error };
     } catch (error: any) {

@@ -9,7 +9,7 @@
     { "source": "/api/orders/(.*)", "destination": "/api/orders?action=$1" },
     { "source": "/api/ebooks/(.*)", "destination": "/api/ebooks?action=$1" },
     { "source": "/api/(.*)", "destination": "/api/$1" }, 
-    { "source": "/((?!api/).*)", "destination": "/index.html" } 
+    { "source": "/((?!api/|@|src/|node_modules/|assets/|favicon.ico|logo.jpg|vite.svg).*)", "destination": "/index.html" } 
   ], 
   "headers": [ 
     { 

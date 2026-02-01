@@ -19,29 +19,63 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const user = userData?.user;
     if (authError || !user) return unauthorized(res);
 
-    const { data: profile } = await supabase
+    let { data: profile, error: profileError } = await supabase
       .from('profiles')
       .select('role')
       .eq('id', user.id)
       .single();
 
+    if (profileError) {
+      if (profileError.code === 'PGRST204' || profileError.message?.includes('cache') || profileError.message?.includes('column')) {
+        console.warn('Profiles schema cache issue in dashboard, retrying with minimal select');
+        const { data: retryProfile, error: retryError } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', user.id)
+          .single();
+        if (retryError) throw retryError;
+        profile = retryProfile;
+      } else {
+        throw profileError;
+      }
+    }
+
     if (!profile) return unauthorized(res, 'Profile not found');
 
     if (profile.role === 'founder') {
-      // Aggregate stats for founder
-      const [orders, products, users] = await Promise.all([
-        supabase.from('orders').select('total_amount, status'),
-        supabase.from('products').select('count', { count: 'exact', head: true }),
-        supabase.from('profiles').select('count', { count: 'exact', head: true })
-      ]);
+      // Aggregate stats for founder - hardened against schema cache issues
+      let ordersData: any[] = [];
+      let productsCount: number | null = 0;
+      let usersCount: number | null = 0;
 
-      const totalRevenue = orders.data?.reduce((sum, o) => sum + (o.total_amount || 0), 0) || 0;
+      try {
+        const [ordersRes, productsRes, usersRes] = await Promise.all([
+          supabase.from('orders').select('total_amount, status'),
+          supabase.from('products').select('id', { count: 'exact', head: true }),
+          supabase.from('profiles').select('id', { count: 'exact', head: true })
+        ]);
+
+        if (ordersRes.error && (ordersRes.error.code === 'PGRST204' || ordersRes.error.message?.includes('cache'))) {
+          console.warn('Orders stats cache issue, retrying minimal select');
+          const { data } = await supabase.from('orders').select('total_amount');
+          ordersData = data || [];
+        } else {
+          ordersData = ordersRes.data || [];
+        }
+
+        productsCount = productsRes.count;
+        usersCount = usersRes.count;
+      } catch (e) {
+        console.error('Failed to fetch dashboard stats:', e);
+      }
+
+      const totalRevenue = ordersData.reduce((sum, o) => sum + (o.total_amount || 0), 0) || 0;
       
       return json(res, 200, {
         revenue: totalRevenue,
-        ordersCount: orders.data?.length || 0,
-        productsCount: products.count,
-        usersCount: users.count
+        ordersCount: ordersData.length,
+        productsCount: productsCount,
+        usersCount: usersCount
       });
     }
 

@@ -66,33 +66,70 @@ export async function getMyBookClubs() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return [];
 
-  const { data, error } = await supabase
+  const clubColumns = 'id, name, description, genre, image_url, is_public, meeting_frequency, meeting_format, meeting_platform, is_active, created_at';
+  let { data, error } = await supabase
     .from('book_club_members')
     .select(`
       club_id,
       role,
       status,
-      book_clubs (*)
+      book_clubs (${clubColumns})
     `)
     .eq('user_id', user.id)
     .eq('status', 'active');
 
-  if (error) throw error;
-  return data.map(item => ({
-    ...item.book_clubs,
+  if (error) {
+    if (error.code === 'PGRST204' || error.message?.includes('column') || error.message?.includes('cache')) {
+      console.warn('Advanced book club columns missing from cache, falling back to core columns');
+      const { data: fallbackData, error: fallbackError } = await supabase
+        .from('book_club_members')
+        .select(`
+          club_id,
+          role,
+          status,
+          book_clubs (id, name, is_active)
+        `)
+        .eq('user_id', user.id)
+        .eq('status', 'active');
+      
+      if (fallbackError) throw fallbackError;
+      data = fallbackData as any;
+    } else {
+      throw error;
+    }
+  }
+
+  return (data || []).map(item => ({
+    ...(item.book_clubs as any),
     my_role: item.role,
     my_status: item.status
   }));
 }
 
 export async function getBookClubDetails(clubId: string) {
-  const { data, error } = await supabase
+  const clubColumns = 'id, name, description, genre, image_url, is_public, require_approval, meeting_frequency, meeting_format, meeting_platform, created_by, is_active, metadata, created_at, updated_at';
+  let { data, error } = await supabase
     .from('book_clubs')
-    .select('*')
+    .select(clubColumns)
     .eq('id', clubId)
-    .single();
+    .maybeSingle();
 
-  if (error) throw error;
+  if (error) {
+    if (error.code === 'PGRST204' || error.message?.includes('column') || error.message?.includes('cache')) {
+      console.warn('Advanced book club columns missing from cache, falling back to core columns');
+      const { data: fallbackData, error: fallbackError } = await supabase
+        .from('book_clubs')
+        .select('id, name, description, is_active')
+        .eq('id', clubId)
+        .maybeSingle();
+      
+      if (fallbackError) throw fallbackError;
+      data = fallbackData as any;
+    } else {
+      throw error;
+    }
+  }
+
   return data;
 }
 
@@ -106,10 +143,26 @@ export async function createBookClub(clubData: Partial<BookClub>) {
       ...clubData,
       created_by: user.id
     })
-    .select()
+    .select('id, name, description, is_active')
     .single();
 
-  if (error) throw error;
+  if (error) {
+    if (error.code === 'PGRST204' || error.message?.includes('cache')) {
+      console.warn('Club create cache issue, retrying');
+      const { data: retryData, error: retryError } = await supabase
+        .from('book_clubs')
+        .insert({
+          ...clubData,
+          created_by: user.id
+        })
+        .select('id')
+        .single();
+      
+      if (retryError) throw retryError;
+      return retryData;
+    }
+    throw error;
+  }
 
   // Automatically add creator as admin
   await supabase.from('book_club_members').insert({
@@ -125,15 +178,33 @@ export async function createBookClub(clubData: Partial<BookClub>) {
 // --- Member Management ---
 
 export async function getClubMembers(clubId: string) {
-  const { data, error } = await supabase
+  const profileColumns = 'full_name, avatar_url';
+  let { data, error } = await supabase
     .from('book_club_members')
     .select(`
-      *,
-      profile:profiles (full_name, avatar_url)
+      id, club_id, user_id, role, status, joined_at,
+      profile:profiles (${profileColumns})
     `)
     .eq('club_id', clubId);
 
-  if (error) throw error;
+  if (error) {
+    if (error.code === 'PGRST204' || error.message?.includes('column') || error.message?.includes('cache')) {
+      console.warn('Advanced profile columns missing from cache, falling back to core columns');
+      const { data: fallbackData, error: fallbackError } = await supabase
+        .from('book_club_members')
+        .select(`
+          id, club_id, user_id, role, status, joined_at,
+          profile:profiles (full_name)
+        `)
+        .eq('club_id', clubId);
+      
+      if (fallbackError) throw fallbackError;
+      data = fallbackData as any;
+    } else {
+      throw error;
+    }
+  }
+
   return data;
 }
 
@@ -141,13 +212,27 @@ export async function joinBookClub(clubId: string) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Authentication required');
 
-  const { data: club } = await supabase
-    .from('book_clubs')
-    .select('require_approval')
-    .eq('id', clubId)
-    .single();
+  let requireApproval = false;
+  try {
+    const { data: club, error: clubError } = await supabase
+      .from('book_clubs')
+      .select('require_approval')
+      .eq('id', clubId)
+      .single();
+    
+    if (clubError) {
+      if (clubError.code === 'PGRST204' || clubError.message?.includes('cache')) {
+        console.warn('Club settings cache issue, defaulting to no approval');
+      } else {
+        throw clubError;
+      }
+    }
+    requireApproval = club?.require_approval || false;
+  } catch (e) {
+    console.warn('Failed to fetch club approval setting', e);
+  }
 
-  const status = club?.require_approval ? 'pending' : 'active';
+  const status = requireApproval ? 'pending' : 'active';
 
   const { data, error } = await supabase
     .from('book_club_members')
@@ -157,40 +242,95 @@ export async function joinBookClub(clubId: string) {
       role: 'member',
       status
     })
-    .select()
+    .select('id, club_id, user_id, role, status')
     .single();
 
-  if (error) throw error;
+  if (error) {
+    if (error.code === 'PGRST204' || error.message?.includes('cache')) {
+      console.warn('Club join cache issue, retrying');
+      const { data: retryData, error: retryError } = await supabase
+        .from('book_club_members')
+        .insert({
+          club_id: clubId,
+          user_id: user.id,
+          role: 'member',
+          status
+        })
+        .select('id')
+        .single();
+      
+      if (retryError) throw retryError;
+      return retryData;
+    }
+    throw error;
+  }
   return data;
 }
 
 // --- Reading List ---
 
 export async function getClubBooks(clubId: string) {
-  const { data, error } = await supabase
+  const columns = 'id, club_id, product_id, title, author, status, start_date, end_date, progress_tracking, created_at';
+  let { data, error } = await supabase
     .from('book_club_books')
-    .select('*')
+    .select(columns)
     .eq('club_id', clubId)
     .order('created_at', { ascending: false });
 
-  if (error) throw error;
+  if (error) {
+    if (error.code === 'PGRST204' || error.message?.includes('column') || error.message?.includes('cache')) {
+      console.warn('Advanced book club books columns missing from cache, falling back to core columns');
+      const { data: fallbackData, error: fallbackError } = await supabase
+        .from('book_club_books')
+        .select('id, club_id, title, status, created_at')
+        .eq('club_id', clubId)
+        .order('created_at', { ascending: false });
+      
+      if (fallbackError) throw fallbackError;
+      data = fallbackData as any;
+    } else {
+      throw error;
+    }
+  }
+
   return data;
 }
 
 // --- Discussions ---
 
 export async function getClubDiscussions(clubId: string) {
-  const { data, error } = await supabase
+  const columns = 'id, club_id, author_id, title, content, is_pinned, created_at, updated_at';
+  const profileColumns = 'full_name, avatar_url';
+  let { data, error } = await supabase
     .from('book_club_discussions')
     .select(`
-      *,
-      author:profiles (full_name, avatar_url)
+      ${columns},
+      author:profiles (${profileColumns})
     `)
     .eq('club_id', clubId)
     .order('is_pinned', { ascending: false })
     .order('created_at', { ascending: false });
 
-  if (error) throw error;
+  if (error) {
+    if (error.code === 'PGRST204' || error.message?.includes('column') || error.message?.includes('cache')) {
+      console.warn('Advanced discussion columns missing from cache, falling back to core columns');
+      const { data: fallbackData, error: fallbackError } = await supabase
+        .from('book_club_discussions')
+        .select(`
+          id, club_id, author_id, title, is_pinned, created_at,
+          author:profiles (full_name)
+        `)
+        .eq('club_id', clubId)
+        .order('is_pinned', { ascending: false })
+        .order('created_at', { ascending: false });
+      
+      if (fallbackError) throw fallbackError;
+      data = fallbackData as any;
+    } else {
+      throw error;
+    }
+  }
+
   return data;
 }
 
@@ -206,9 +346,27 @@ export async function createDiscussion(clubId: string, title: string, content: s
       title,
       content
     })
-    .select()
+    .select('id, club_id, author_id, title, content, created_at')
     .single();
 
-  if (error) throw error;
+  if (error) {
+    if (error.code === 'PGRST204' || error.message?.includes('cache')) {
+      console.warn('Club discussion create cache issue, retrying');
+      const { data: retryData, error: retryError } = await supabase
+        .from('book_club_discussions')
+        .insert({
+          club_id: clubId,
+          author_id: user.id,
+          title,
+          content
+        })
+        .select('id')
+        .single();
+      
+      if (retryError) throw retryError;
+      return retryData;
+    }
+    throw error;
+  }
   return data;
 }

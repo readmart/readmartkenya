@@ -60,9 +60,9 @@ async function bootstrap() {
     // but we need to ensure it has the correct role.
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
-      .select('*')
+      .select('id, role')
       .eq('id', founderUser.id)
-      .single();
+      .maybeSingle();
 
     if (profileError && profileError.code !== 'PGRST116') throw profileError;
 

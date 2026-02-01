@@ -48,11 +48,22 @@ export async function createOrder(orderData: OrderData) {
   const { data: order, error: orderError } = await supabase
     .from('orders')
     .insert(orderInsertData)
-    .select()
+    .select('id, subtotal_amount, shipping_amount, total_amount, status, payment_method, shipping_address, created_at, tax_amount, tax_rate')
     .single();
 
   if (orderError) {
     console.error('Order creation error details:', orderError);
+    // If it's a schema cache error, try to insert without select(*)
+    if (orderError.message?.includes('cache') || orderError.message?.includes('column')) {
+       const { data: retryOrder, error: retryError } = await supabase
+         .from('orders')
+         .insert(orderInsertData)
+         .select('id')
+         .single();
+       
+       if (retryError) throw retryError;
+       return retryOrder;
+    }
     throw orderError;
   }
 
@@ -79,18 +90,73 @@ export async function createOrder(orderData: OrderData) {
 
 export async function getOrder(orderId: string) {
   const { data: { user } } = await supabase.auth.getUser();
-  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user?.id).single();
+  
+  let profile;
+  try {
+    const { data: profileData, error: profileError } = await supabase.from('profiles').select('role').eq('id', user?.id).single();
+    if (profileError && (profileError.code === 'PGRST204' || profileError.message?.includes('cache'))) {
+      const { data: retryProfile } = await supabase.from('profiles').select('role').eq('id', user?.id).single();
+      profile = retryProfile;
+    } else {
+      profile = profileData;
+    }
+  } catch (e) {
+    console.warn('Profile fetch failed in getOrder');
+  }
+
   const isAdmin = profile?.role === 'founder' || profile?.role === 'admin';
 
-  const { data, error } = await supabase
+  const orderColumns = `
+    id,
+    user_id,
+    total_amount,
+    subtotal_amount,
+    shipping_amount,
+    tax_amount,
+    tax_rate,
+    status,
+    payment_method,
+    shipping_address,
+    shipping_zone_id,
+    created_at,
+    order_items(
+      id,
+      order_id,
+      product_id,
+      quantity,
+      price,
+      price_at_purchase,
+      product_snapshot,
+      products(id, title, image_url, description)
+    )
+  `;
+
+  let { data, error } = await supabase
     .from('orders')
-    .select('*, order_items(*, products(*))')
+    .select(orderColumns)
     .eq('id', orderId)
     .single();
 
-  if (error) throw error;
+  if (error) {
+    if (error.code === 'PGRST204' || error.message?.includes('column') || error.message?.includes('cache')) {
+      console.warn('Advanced order columns missing, falling back to core');
+      const { data: fallbackData, error: fallbackError } = await supabase
+        .from('orders')
+        .select(`
+          id, user_id, total_amount, status, created_at,
+          order_items(id, product_id, quantity, price)
+        `)
+        .eq('id', orderId)
+        .single();
+      
+      if (fallbackError) throw fallbackError;
+      data = fallbackData as any;
+    } else {
+      throw error;
+    }
+  }
 
-  if (!isAdmin) {
+  if (!isAdmin && data) {
     const { tax_amount, tax_rate, ...dataForCustomer } = data;
     return dataForCustomer;
   }

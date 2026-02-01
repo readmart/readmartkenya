@@ -16,9 +16,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (type === 'book-clubs') {
       const { data, error } = await supabase
         .from('book_clubs')
-        .select('*')
+        .select('id, name, description, cover_url, member_count, is_active, created_at')
         .eq('is_active', true);
-      if (error) throw error;
+      
+      if (error) {
+        if (error.code === 'PGRST204' || error.message?.includes('column') || error.message?.includes('cache')) {
+          console.warn('Advanced book_clubs columns missing, falling back to core columns');
+          const { data: fallbackData, error: fallbackError } = await supabase
+            .from('book_clubs')
+            .select('id, name, is_active')
+            .eq('is_active', true);
+          if (fallbackError) throw fallbackError;
+          return json(res, 200, fallbackData);
+        }
+        throw error;
+      }
       return json(res, 200, data);
     }
 
@@ -28,11 +40,39 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       const { data, error } = await supabase
         .from('club_discussions')
-        .select('*, author:profiles(full_name, avatar_url)')
+        .select('id, club_id, author_id, content, created_at, author:profiles(full_name, avatar_url)')
         .eq('club_id', clubId)
         .order('created_at', { ascending: false });
       
-      if (error) throw error;
+      if (error) {
+        if (error.code === 'PGRST204' || error.message?.includes('column') || error.message?.includes('cache')) {
+          console.warn('Advanced club_discussions columns missing, falling back to core columns');
+          const { data: fallbackData, error: fallbackError } = await supabase
+            .from('club_discussions')
+            .select('id, author_id, content, created_at')
+            .eq('club_id', clubId)
+            .order('created_at', { ascending: false });
+          
+          if (fallbackError) throw fallbackError;
+
+          // Try to enrich with author names manually if join failed
+          const enrichedData = await Promise.all((fallbackData || []).map(async (disc) => {
+            try {
+              const { data: profile } = await supabase
+                .from('profiles')
+                .select('full_name, avatar_url')
+                .eq('id', disc.author_id)
+                .maybeSingle();
+              return { ...disc, author: profile };
+            } catch (e) {
+              return disc;
+            }
+          }));
+
+          return json(res, 200, enrichedData);
+        }
+        throw error;
+      }
       return json(res, 200, data);
     }
 

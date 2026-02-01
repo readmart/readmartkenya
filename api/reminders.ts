@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { supabase, json, serverError, badRequest } from './_utils.js';
+import { supabase, json, serverError } from './_utils.js';
 import { sendEmail, renderAbandonedCartEmail } from './_email.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -15,11 +15,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const user = userData?.user;
     if (authError || !user) return json(res, 401, { error: 'Unauthorized' });
 
-    const { data: profile } = await supabase
+    let { data: profile, error: profileError } = await supabase
       .from('profiles')
       .select('role')
       .eq('id', user.id)
       .single();
+
+    if (profileError) {
+      if (profileError.code === 'PGRST204' || profileError.message?.includes('cache')) {
+        console.warn('Profiles schema cache issue in reminders, falling back to core selection');
+        const { data: fallbackProfile, error: fallbackError } = await supabase
+          .from('profiles')
+          .select('id, role')
+          .eq('id', user.id)
+          .single();
+        
+        if (fallbackError) throw fallbackError;
+        profile = fallbackProfile;
+      } else {
+        throw profileError;
+      }
+    }
 
     if (!profile || !['admin', 'founder'].includes(profile.role)) {
       return json(res, 403, { error: 'Forbidden' });
@@ -29,8 +45,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Criteria: Items in cart older than 24 hours, user hasn't received a reminder in 7 days
     const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     
-    // We'll fetch all cart items and their products
-    const { data: cartItems, error: cartError } = await supabase
+    // We'll fetch all cart items and their products with hardening
+    let { data: cartItems, error: cartError } = await supabase
       .from('cart_items')
       .select(`
         user_id,
@@ -40,7 +56,31 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       `)
       .lt('created_at', twentyFourHoursAgo);
 
-    if (cartError) throw cartError;
+    if (cartError) {
+      if (cartError.code === 'PGRST204' || cartError.message?.includes('cache')) {
+        console.warn('Cart items schema cache issue, falling back to basic fetch');
+        const { data: fallbackItems, error: fallbackError } = await supabase
+          .from('cart_items')
+          .select('user_id, quantity, product_id')
+          .lt('created_at', twentyFourHoursAgo);
+        
+        if (fallbackError) throw fallbackError;
+
+        // Enrich manually if join failed
+        const enriched = await Promise.all((fallbackItems || []).map(async (item) => {
+          try {
+            const { data: product } = await supabase.from('products').select('id, title, price, sale_price').eq('id', item.product_id).maybeSingle();
+            const { data: user } = await supabase.from('profiles').select('id, email, full_name, last_reminder_sent_at').eq('id', item.user_id).maybeSingle();
+            return { ...item, product, user };
+          } catch (e) {
+            return item;
+          }
+        }));
+        cartItems = enriched as any;
+      } else {
+        throw cartError;
+      }
+    }
 
     // 3. Group by user and filter those who need reminders
     const userCarts = new Map<string, any>();
@@ -88,11 +128,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           html
         });
 
-        // Update last_reminder_sent_at
-        await supabase
-          .from('profiles')
-          .update({ last_reminder_sent_at: new Date().toISOString() })
-          .eq('id', userId);
+        // Update last_reminder_sent_at with fallback
+        try {
+          const { error: updateError } = await supabase
+            .from('profiles')
+            .update({ last_reminder_sent_at: new Date().toISOString() })
+            .eq('id', userId);
+          
+          if (updateError) {
+            if (updateError.code === 'PGRST204' || updateError.message?.includes('cache')) {
+              console.warn(`Could not update last_reminder_sent_at for ${userId} due to cache issue, skipping update`);
+            } else {
+              throw updateError;
+            }
+          }
+        } catch (e) {
+          console.warn(`Failed to update reminder timestamp for ${userId}:`, e);
+        }
 
         sentCount++;
       } catch (err: any) {
