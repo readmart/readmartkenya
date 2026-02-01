@@ -463,16 +463,10 @@ export async function getInventory(authorId?: string) {
           category_id, 
           image_url, 
           description, 
-          weight, 
-          volume, 
           is_active, 
-          metadata, 
-          is_ebook, 
-          ebook_url, 
           slug, 
           created_at,
-          category:categories(name), 
-          ebook_metadata(id, product_id, format, size_bytes, page_count, isbn_13)
+          category:categories(name)
         `)
         .order('created_at', { ascending: false });
 
@@ -544,7 +538,6 @@ export async function getOrders(partnerId?: string) {
             subtotal_amount,
             shipping_amount,
             tax_amount,
-            tax_rate,
             status,
             payment_method,
             shipping_address,
@@ -584,7 +577,6 @@ export async function getOrders(partnerId?: string) {
             subtotal_amount,
             shipping_amount,
             tax_amount,
-            tax_rate,
             status,
             payment_method,
             shipping_address,
@@ -637,7 +629,7 @@ export async function getOrders(partnerId?: string) {
 
       if (!isAdmin && mappedData) {
         return mappedData.map((order: any) => {
-          const { tax_amount, tax_rate, ...rest } = order;
+          const { tax_amount, ...rest } = order;
           return rest;
         });
       }
@@ -1331,7 +1323,7 @@ export async function getSiteSettings() {
   try {
     await verifyAdmin();
     // Fetch basic settings first - no joins to avoid 400 errors if schema is out of sync
-    const columns = 'id, site_name, contact_email, contact_phone, secondary_phone, whatsapp_link, global_support_whatsapp, author_of_the_day_id, author_of_the_day_books, metadata, created_at, updated_at';
+    const columns = 'id, site_name, contact_email, contact_phone, secondary_phone, whatsapp_link, author_of_the_day_id, author_of_the_day_books, created_at, updated_at, tax_rate';
     let { data: siteData, error: siteError } = await supabase
       .from('site_settings')
       .select(columns)
@@ -1364,9 +1356,6 @@ export async function getSiteSettings() {
     }
     if (sanitizedData.whatsapp_link && dummyPattern.test(sanitizedData.whatsapp_link)) {
       sanitizedData.whatsapp_link = 'https://wa.me/254794129958';
-    }
-    if (sanitizedData.global_support_whatsapp && dummyPattern.test(sanitizedData.global_support_whatsapp)) {
-      sanitizedData.global_support_whatsapp = 'https://wa.me/254794129958';
     }
 
     // Fetch Author of the Day profile separately if enabled

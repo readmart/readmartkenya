@@ -1,5 +1,8 @@
 import { supabase } from '@/lib/supabase/client';
 
+const PRODUCT_COLUMNS = 'id, title, description, price, sale_price, image_url, category_id, stock_quantity, is_active, is_featured, created_at, slug';
+const CORE_PRODUCT_COLUMNS = 'id, title, price, sale_price, image_url, is_active, stock_quantity';
+
 /**
  * Fetch products with optional filters with hardening
  */
@@ -10,11 +13,9 @@ export async function getProducts(options: {
   maxPrice?: number;
   limit?: number;
 } = {}) {
-  const productColumns = 'id, title, description, price, sale_price, image_url, category_id, stock_quantity, is_active, is_featured, created_at, type';
-  
   let query = supabase
     .from('products')
-    .select(`${productColumns}, category:categories(name)`)
+    .select(`${PRODUCT_COLUMNS}, category:categories(name)`)
     .eq('is_active', true);
 
   if (options.category && options.category !== 'All') {
@@ -25,7 +26,7 @@ export async function getProducts(options: {
       // Use inner join to filter by category name
       query = supabase
         .from('products')
-        .select(`${productColumns}, category:categories!inner(name)`)
+        .select(`${PRODUCT_COLUMNS}, category:categories!inner(name)`)
         .eq('is_active', true)
         .eq('category.name', options.category);
     }
@@ -65,7 +66,7 @@ export async function getProducts(options: {
         if (categoryData) {
           const { data: fallbackData, error: fallbackError } = await supabase
             .from('products')
-            .select('id, title, price, image_url, is_active')
+            .select(CORE_PRODUCT_COLUMNS)
             .eq('is_active', true)
             .eq('category_id', categoryData.id)
             .limit(options.limit || 50);
@@ -76,7 +77,7 @@ export async function getProducts(options: {
 
       const { data: fallbackData, error: fallbackError } = await supabase
         .from('products')
-        .select('id, title, price, image_url, is_active')
+        .select(CORE_PRODUCT_COLUMNS)
         .eq('is_active', true)
         .limit(options.limit || 50);
       
@@ -92,11 +93,9 @@ export async function getProducts(options: {
  * Fetch a single product by ID with hardening
  */
 export async function getProductById(id: string) {
-  const productColumns = 'id, title, description, price, sale_price, image_url, category_id, stock_quantity, is_active, is_featured, created_at, type, metadata, ebook_metadata';
-  
   let { data, error } = await supabase
     .from('products')
-    .select(`${productColumns}, category:categories(name)`)
+    .select(`${PRODUCT_COLUMNS}, category:categories(name)`)
     .eq('id', id)
     .single();
 
@@ -105,7 +104,7 @@ export async function getProductById(id: string) {
       console.warn('Single product fetch schema cache issue, falling back to core columns');
       const { data: fallbackData, error: fallbackError } = await supabase
         .from('products')
-        .select('id, title, price, image_url')
+        .select(CORE_PRODUCT_COLUMNS)
         .eq('id', id)
         .single();
       
@@ -121,20 +120,25 @@ export async function getProductById(id: string) {
  * Fetch a single product by slug with hardening
  */
 export async function getProductBySlug(slug: string) {
-  const productColumns = 'id, title, description, price, sale_price, image_url, category_id, stock_quantity, is_active, is_featured, created_at, type, metadata, ebook_metadata';
-  
   let { data, error } = await supabase
     .from('products')
-    .select(`${productColumns}, category:categories(name)`)
+    .select(`${PRODUCT_COLUMNS}, category:categories(name)`)
     .eq('slug', slug)
     .single();
 
   if (error) {
-    if (error.code === 'PGRST204' || error.message?.includes('column') || error.message?.includes('cache')) {
-      console.warn('Product by slug fetch schema cache issue, falling back to core columns');
+    if (error.code === 'PGRST204' || error.message?.includes('column') || error.message?.includes('cache') || error.message?.includes('slug')) {
+      console.warn('Product by slug fetch issue, falling back to core columns by ID if possible');
+      
+      // If slug column itself is missing or cache issue, we can't search by slug
+      // But we can try to find it by ID if the slug looks like a UUID
+      if (slug.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
+        return getProductById(slug);
+      }
+
       const { data: fallbackData, error: fallbackError } = await supabase
         .from('products')
-        .select('id, title, price, image_url')
+        .select(CORE_PRODUCT_COLUMNS)
         .eq('slug', slug)
         .single();
       

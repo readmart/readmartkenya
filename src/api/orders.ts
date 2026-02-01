@@ -48,7 +48,7 @@ export async function createOrder(orderData: OrderData) {
   const { data: order, error: orderError } = await supabase
     .from('orders')
     .insert(orderInsertData)
-    .select('id, subtotal_amount, shipping_amount, total_amount, status, payment_method, shipping_address, created_at, tax_amount, tax_rate')
+    .select('id, subtotal_amount, shipping_amount, total_amount, status, payment_method, shipping_address, created_at, tax_amount')
     .single();
 
   if (orderError) {
@@ -84,7 +84,7 @@ export async function createOrder(orderData: OrderData) {
   if (itemsError) throw itemsError;
 
   // Filter VAT for customer
-  const { tax_amount, tax_rate, ...orderForCustomer } = order;
+  const { tax_amount, ...orderForCustomer } = order;
   return orderForCustomer;
 }
 
@@ -113,7 +113,6 @@ export async function getOrder(orderId: string) {
     subtotal_amount,
     shipping_amount,
     tax_amount,
-    tax_rate,
     status,
     payment_method,
     shipping_address,
@@ -157,7 +156,7 @@ export async function getOrder(orderId: string) {
   }
 
   if (!isAdmin && data) {
-    const { tax_amount, tax_rate, ...dataForCustomer } = data;
+    const { tax_amount, ...dataForCustomer } = data;
     return dataForCustomer;
   }
 

@@ -23,7 +23,10 @@ export default function OrderHistory() {
       const { data, error } = await supabase
         .from('orders')
         .select(`
-          *,
+          id,
+          total_amount,
+          status,
+          created_at,
           order_items (
             product_snapshot
           )
