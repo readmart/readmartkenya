@@ -104,7 +104,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .maybeSingle();
 
       if (error) {
-        if (error.code === 'PGRST204' || error.message?.includes('column') || error.message?.includes('cache')) {
+        // Handle 400 Bad Request specifically for missing columns
+        if (error.code === 'PGRST204' || error.code === 'PGRST100' || error.message?.includes('column') || error.message?.includes('cache') || error.status === 400) {
           console.warn('Advanced profile columns missing from cache, falling back to core columns');
           const { data: fallbackData, error: fallbackError } = await supabase
             .from('profiles')

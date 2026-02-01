@@ -1330,7 +1330,7 @@ export async function getSiteSettings() {
       .maybeSingle();
 
     if (siteError) {
-      if (siteError.code === 'PGRST204' || siteError.message?.includes('column') || siteError.message?.includes('cache')) {
+      if (siteError.code === 'PGRST204' || siteError.code === 'PGRST100' || siteError.message?.includes('column') || siteError.message?.includes('cache') || siteError.status === 400) {
         console.warn('Advanced site settings columns missing, falling back to core');
         const { data: fallbackData, error: fallbackError } = await supabase
           .from('site_settings')
@@ -1362,7 +1362,7 @@ export async function getSiteSettings() {
     if (sanitizedData.author_of_the_day_id) {
       const { data: profileData } = await supabase
         .from('profiles')
-        .select('id, full_name, avatar_url, bio')
+        .select('id, full_name, avatar_url')
         .eq('id', sanitizedData.author_of_the_day_id)
         .maybeSingle();
       
