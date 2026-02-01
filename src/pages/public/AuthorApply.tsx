@@ -3,8 +3,7 @@ import { motion } from 'framer-motion';
 import { 
   PenTool, Mail, User, FileText, Send, 
   Loader2, CheckCircle2, Lock, ArrowRight,
-  Upload, X, Phone, MessageSquare,
-  BookOpen, CheckCircle, Link as LinkIcon, Globe, Instagram, Twitter, Linkedin, Github
+  Upload, X, Phone, MessageSquare
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';

@@ -1,4 +1,5 @@
 import 'dotenv/config';
+// @ts-ignore
 import fetch from 'node-fetch';
 import crypto from 'crypto';
 

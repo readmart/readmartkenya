@@ -1310,8 +1310,11 @@ export async function createProduct(product: any) {
     if (error) {
       console.error('[API] Product insertion error:', error);
       // Handle missing columns
-      if (error.code === 'PGRST204' || (error.message?.includes('column') && error.message?.includes('not found'))) {
-        const match = error.message.match(/column ['"](.+)['"]/);
+      if (error.code === 'PGRST204' || (error.message?.includes('column') && (error.message?.includes('not found') || error.message?.includes('schema cache')))) {
+        // Handle different error formats:
+        // 1. "column 'name' not found"
+        // 2. "Could not find the 'name' column... in the schema cache"
+        const match = error.message.match(/column ['"](.+)['"]/) || error.message.match(/['"](.+)['"] column/);
         if (match && match[1]) {
           const missingCol = match[1];
           console.warn(`Column ${missingCol} missing in products, filtering and retrying...`);
@@ -1370,8 +1373,11 @@ export async function updateProduct(id: string, product: any) {
     if (error) {
       console.error('[API] Product update error:', error);
       // Handle missing columns
-      if (error.code === 'PGRST204' || (error.message?.includes('column') && error.message?.includes('not found'))) {
-        const match = error.message.match(/column ['"](.+)['"]/);
+      if (error.code === 'PGRST204' || (error.message?.includes('column') && (error.message?.includes('not found') || error.message?.includes('schema cache')))) {
+        // Handle different error formats:
+        // 1. "column 'name' not found"
+        // 2. "Could not find the 'name' column... in the schema cache"
+        const match = error.message.match(/column ['"](.+)['"]/) || error.message.match(/['"](.+)['"] column/);
         if (match && match[1]) {
           const missingCol = match[1];
           console.warn(`Column ${missingCol} missing in products, filtering and retrying...`);
