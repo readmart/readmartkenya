@@ -43,23 +43,28 @@ export async function getGlobalAnalytics() {
       productsCountResult,
       recentProductsResult,
       recentUsersResult
-    ] = await Promise.all([
-      supabase.from('profiles').select('id', { count: 'exact', head: true }),
-      supabase.from('products').select('id', { count: 'exact', head: true }),
+    ] = await Promise.allSettled([
+      supabase.from('profiles').select('*', { count: 'exact', head: true }),
+      supabase.from('products').select('*', { count: 'exact', head: true }),
       supabase.from('products').select('created_at').gte('created_at', sixtyDaysAgo.toISOString()),
       supabase.from('profiles').select('created_at').gte('created_at', sixtyDaysAgo.toISOString())
     ]);
 
-    // Check for errors in parallel queries
-    if (profilesCountResult.error) throw profilesCountResult.error;
-    if (productsCountResult.error) throw productsCountResult.error;
-    if (recentProductsResult.error) throw recentProductsResult.error;
-    if (recentUsersResult.error) throw recentUsersResult.error;
+    // Check for results in parallel queries
+    const profilesCount = profilesCountResult.status === 'fulfilled' ? profilesCountResult.value : { count: 0, error: null };
+    const productsCount = productsCountResult.status === 'fulfilled' ? productsCountResult.value : { count: 0, error: null };
+    const recentProducts = recentProductsResult.status === 'fulfilled' ? recentProductsResult.value : { data: [], error: null };
+    const recentUsers = recentUsersResult.status === 'fulfilled' ? recentUsersResult.value : { data: [], error: null };
 
-    const userCount = profilesCountResult.count;
-    const productCount = productsCountResult.count;
-    const productsData = recentProductsResult.data;
-    const usersData = recentUsersResult.data;
+    if (profilesCount.error) console.error('Error fetching profiles count:', profilesCount.error);
+    if (productsCount.error) console.error('Error fetching products count:', productsCount.error);
+    if (recentProducts.error) console.error('Error fetching recent products:', recentProducts.error);
+    if (recentUsers.error) console.error('Error fetching recent users:', recentUsers.error);
+
+    const userCount = profilesCount.count || 0;
+    const productCount = productsCount.count || 0;
+    const productsData = recentProducts.data || [];
+    const usersData = recentUsers.data || [];
 
     // Product trends
     const currentProducts = productsData?.filter(p => new Date(p.created_at) >= thirtyDaysAgo).length || 0;
@@ -468,21 +473,13 @@ export async function getInventory(authorId?: string) {
       }
 
       // Explicitly select columns to avoid schema cache issues with '*'
+      // Use simpler selection first to avoid potential 400s with joins
+      const columns = 'id, title, author_id, price, sale_price, stock_quantity, category_id, image_url, description, is_active, slug, created_at';
+      
       let query = supabase
         .from('products')
         .select(`
-          id, 
-          title, 
-          author_id, 
-          price, 
-          sale_price, 
-          stock_quantity, 
-          category_id, 
-          image_url, 
-          description, 
-          is_active, 
-          slug, 
-          created_at,
+          ${columns},
           category:categories(name)
         `)
         .order('created_at', { ascending: false });
@@ -495,7 +492,7 @@ export async function getInventory(authorId?: string) {
 
       if (error) {
         // Fallback for products table schema cache issue
-        if (error.code === 'PGRST204' || error.message?.includes('column') || error.message?.includes('cache')) {
+        if (error.code === 'PGRST204' || error.message?.includes('column') || error.message?.includes('cache') || (error as any).status === 400) {
           console.warn('Advanced product columns missing from cache, falling back to core columns');
           const { data: fallbackData, error: fallbackError } = await supabase
             .from('products')
@@ -503,7 +500,12 @@ export async function getInventory(authorId?: string) {
             .order('created_at', { ascending: false });
           
           if (fallbackError) throw fallbackError;
-          return fallbackData || [];
+          
+          return (fallbackData || []).map(item => ({
+            ...item,
+            author_id: null,
+            category: { name: 'Uncategorized' }
+          }));
         }
         console.error('Error fetching inventory:', error);
         throw error;
@@ -923,48 +925,55 @@ export async function getBanners() {
 }
 
 export async function getPromos() {
-  try {
-    await verifyAdmin();
-    // Fetch from promos table with explicit columns
-    const columns = 'id, code, discount_type, discount_value, min_order_amount, usage_count, usage_limit, is_active, expires_at, created_at';
-    let { data, error } = await supabase
-      .from('promos')
-      .select(columns)
-      .order('created_at', { ascending: false });
+  return withRetry(async () => {
+    try {
+      await verifyAdmin();
+      // Fetch from promos table with explicit columns
+      // Reduced column set to most reliable ones first
+      const columns = 'id, code, discount_type, discount_value, min_order_amount, is_active, expires_at, created_at, start_at, status';
+      let { data, error } = await supabase
+        .from('promos')
+        .select(columns)
+        .order('created_at', { ascending: false });
 
-    if (error) {
-      if (error.code === 'PGRST204' || error.message?.includes('column') || error.message?.includes('cache')) {
-        console.warn('Advanced promo columns missing, falling back to core');
-        const { data: fallbackData, error: fallbackError } = await supabase
-          .from('promos')
-          .select('id, code, is_active')
-          .order('created_at', { ascending: false });
-        if (fallbackError) throw fallbackError;
-        return (fallbackData || []).map(p => ({
-          ...p,
-          discount_type: 'percentage',
-          discount_value: 0,
-          is_active: (p as any).is_active ?? true
-        }));
+      if (error) {
+        if (error.code === 'PGRST204' || error.message?.includes('column') || error.message?.includes('cache') || (error as any).status === 400) {
+          console.warn('Advanced promo columns missing, falling back to core');
+          const { data: fallbackData, error: fallbackError } = await supabase
+            .from('promos')
+            .select('id, code, discount_type, discount_value, is_active, created_at')
+            .order('created_at', { ascending: false });
+          
+          if (fallbackError) throw fallbackError;
+          
+          return (fallbackData || []).map(p => ({
+            ...p,
+            status: (p as any).is_active ? 'active' : 'inactive',
+            type: p.discount_type,
+            value: p.discount_value,
+            title: p.code
+          }));
+        }
+        throw error;
       }
-      throw error;
-    }
-    
-    // Normalize data for UI if needed
-    const normalizedData = (data || []).map(p => ({
-      ...p,
-      title: p.code, // Use code as title if title is missing
-      status: p.is_active ? 'active' : 'inactive',
-      type: p.discount_type,
-      value: p.discount_value,
-      end_date: p.expires_at
-    }));
+      
+      // Normalize data for UI
+      const normalizedData = (data || []).map(p => ({
+        ...p,
+        title: p.code,
+        status: p.status || (p.is_active ? 'active' : 'inactive'),
+        type: p.discount_type,
+        value: p.discount_value,
+        end_date: p.expires_at,
+        start_date: (p as any).start_at
+      }));
 
-    return normalizedData;
-  } catch (err) {
-    console.error('Promos fetch failed:', err);
-    return [];
-  }
+      return normalizedData;
+    } catch (err) {
+      console.error('Promos fetch failed:', err);
+      return [];
+    }
+  });
 }
 
 /**
@@ -1376,7 +1385,10 @@ export async function getSiteSettings() {
           .from('site_settings')
           .select('id, site_name, contact_email')
           .maybeSingle();
-        if (fallbackError) throw fallbackError;
+        if (fallbackError) {
+          console.error('Site Settings fallback also failed:', fallbackError);
+          return {};
+        }
         siteData = fallbackData as any;
       } else {
         throw siteError;
