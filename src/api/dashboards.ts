@@ -295,7 +295,16 @@ export async function getShippingZones() {
       if (error) {
         // If it's a "column not found" error (PGRST204 or message includes column name), 
         // try a minimal set of columns that we know exist from the early schema.
-        if (error.code === 'PGRST204' || error.message?.includes('column') || error.message?.includes('cache')) {
+        const isSchemaError = 
+          error.code === 'PGRST204' || 
+          error.code === 'PGRST205' || 
+          error.code === 'PGRST100' || 
+          error.message?.includes('column') || 
+          error.message?.includes('cache') || 
+          (error as any).status === 404 ||
+          (error as any).status === 400;
+
+        if (isSchemaError) {
           console.warn('Advanced shipping columns missing from cache, falling back to core columns');
           const { data: fallbackData, error: fallbackError } = await supabase
             .from('shipping_zones')
@@ -357,11 +366,11 @@ async function getAllRecords(table: string, orderBy: string = 'created_at') {
       if (table === 'shipping_zones') {
         query = supabase
           .from(table)
-          .select('id, name, price, rate, base_rate, estimated_days, is_active, country_code, region, postal_codes, shipping_method, weight_surcharge, volume_surcharge, county');
+          .select('id, name, is_active');
       } else if (table === 'profiles') {
         query = supabase
           .from(table)
-          .select('id, full_name, email, role, avatar_url, bio, created_at');
+          .select('id, full_name, email, role, avatar_url, created_at');
       } else if (table === 'cms_content') {
         query = supabase
           .from(table)
@@ -396,7 +405,16 @@ async function getAllRecords(table: string, orderBy: string = 'created_at') {
 
       if (error) {
         // Handle schema cache issues
-        if (error.code === 'PGRST204' || error.message?.includes('column') || error.message?.includes('cache')) {
+        const isSchemaError = 
+          error.code === 'PGRST204' || 
+          error.code === 'PGRST205' || 
+          error.code === 'PGRST100' || 
+          error.message?.includes('column') || 
+          error.message?.includes('cache') || 
+          status === 404 ||
+          (error as any).status === 400;
+
+        if (isSchemaError) {
           console.warn(`Advanced columns missing for ${table}, falling back to core`);
           const { data: fallbackData, error: fallbackError } = await supabase
             .from(table)
@@ -408,7 +426,7 @@ async function getAllRecords(table: string, orderBy: string = 'created_at') {
         }
 
         // Handle table not found
-        if (status === 404 || error.code === 'PGRST116' || error.message?.includes('not found')) {
+        if (status === 404 || (error as any).status === 404 || error.code === 'PGRST116' || error.message?.includes('not found')) {
           console.warn(`Table ${table} not found, returning empty list`);
           return [];
         }
