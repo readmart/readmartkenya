@@ -89,8 +89,9 @@ export async function getGlobalAnalytics() {
       // Fallback to active orders if transactions table fails
     }
 
-    const currentOrders = orders?.filter(o => new Date(o.created_at) >= thirtyDaysAgo) || [];
-    const previousOrders = orders?.filter(o => new Date(o.created_at) < thirtyDaysAgo) || [];
+    // Filter paid orders for accurate count (webhook verified)
+    const currentPaidOrders = orders?.filter(o => o.is_paid === true && new Date(o.created_at) >= thirtyDaysAgo) || [];
+    const previousPaidOrders = orders?.filter(o => o.is_paid === true && new Date(o.created_at) < thirtyDaysAgo) || [];
 
     // Revenue from actual completed transactions (webhooks)
     const currentTx = transactions?.filter(t => new Date(t.created_at) >= thirtyDaysAgo) || [];
@@ -107,7 +108,7 @@ export async function getGlobalAnalytics() {
     }, 0);
 
     const revenueTrend = calculateTrend(currentRevenue, previousRevenue);
-    const ordersTrend = calculateTrend(currentOrders.length, previousOrders.length);
+    const ordersTrend = calculateTrend(currentPaidOrders.length, previousPaidOrders.length);
 
     // Group sales data by day for the trajectory chart based on completed transactions
     const salesByDay: Record<string, number> = {};
@@ -125,9 +126,9 @@ export async function getGlobalAnalytics() {
       .sort((a, b) => a.created_at.localeCompare(b.created_at));
 
     // 4. Detailed Metrics: AOV, Order Status, Low Stock
-    const aov = currentOrders.length > 0 ? currentRevenue / currentOrders.length : 0;
+    const aov = currentPaidOrders.length > 0 ? currentRevenue / currentPaidOrders.length : 0;
     
-    const orderStatusCount = currentOrders.reduce((acc: Record<string, number>, curr) => {
+    const orderStatusCount = currentPaidOrders.reduce((acc: Record<string, number>, curr) => {
       const status = curr.status || 'unknown';
       acc[status] = (acc[status] || 0) + 1;
       return acc;
@@ -147,7 +148,8 @@ export async function getGlobalAnalytics() {
       const { count, error: clubError } = await supabase
         .from('book_club_memberships')
         .select('id', { count: 'exact', head: true })
-        .eq('is_active', true);
+        .eq('is_active', true)
+        .eq('status', 'paid'); // Ensure only paid memberships are counted
       
       if (clubError) throw clubError;
       clubMembersCount = count || 0;
@@ -216,7 +218,7 @@ export async function getGlobalAnalytics() {
 
     return {
       totalRevenue: currentRevenue,
-      totalOrders: currentOrders.length,
+      totalOrders: currentPaidOrders.length,
       totalUsers: userCount || 0,
       totalProducts: productCount || 0,
       revenueTrend,
@@ -966,16 +968,15 @@ export async function getAuthorSalesReport(authorId: string) {
       .from('order_items')
       .select(`
         *,
-        order:orders(*),
+        order:orders!inner(*),
         product:products!inner(*)
       `)
-      .eq('product.author_id', authorId);
+      .eq('product.author_id', authorId)
+      .eq('order.is_paid', true); // Only fetch paid orders
     
     if (error) throw error;
 
-    // Filter to only include paid items (webhook verified)
-    const paidData = (data || []).filter((item: any) => item.order?.is_paid === true);
-    return paidData;
+    return data || [];
   } catch (err) {
     console.error('Author Sales Report fetch failed:', err);
     return [];
@@ -991,9 +992,10 @@ export async function getPartnerPayouts(partnerId: string) {
       .from('fulfillment_ledger')
       .select(`
         *,
-        order:orders(*)
+        order:orders!inner(*)
       `)
       .eq('partner_id', partnerId)
+      .eq('order.is_paid', true) // Only fetch payouts for paid orders
       .order('created_at', { ascending: false });
 
     if (error) throw error;

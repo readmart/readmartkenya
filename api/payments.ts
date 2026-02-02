@@ -6,6 +6,7 @@ import {
   initiateK2StkPush,
   getK2TransactionStatus,
   registerK2Webhook,
+  listK2Webhooks,
   getK2CallbackUrl,
   K2_EVENT_TYPES,
   getK2Token,
@@ -882,6 +883,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           callbackUrl,
           results 
         });
+      } catch (err) {
+        return serverError(res, err);
+      }
+    }
+
+    // --- LIST WEBHOOKS (ADMIN ONLY) ---
+    if (action === 'list-webhooks' || url.includes('list-webhooks')) {
+      try {
+        const token = req.headers.authorization?.split(' ')[1] || '';
+        const { data: userData } = await supabase.auth.getUser(token);
+        const user = userData?.user;
+        if (!user) return unauthorized(res);
+
+        const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single();
+        if (profile?.role !== 'admin' && profile?.role !== 'founder') return unauthorized(res);
+
+        const webhooks = await listK2Webhooks();
+        return json(res, 200, webhooks);
       } catch (err) {
         return serverError(res, err);
       }

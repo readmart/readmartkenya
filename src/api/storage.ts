@@ -39,11 +39,16 @@ export async function uploadProductImage(file: File, options: UploadOptions = {}
 
   return withRetry(async () => {
     console.log(`[Storage] Uploading to products: ${filePath} (${file.size} bytes)`);
+    
+    // Explicitly handle content type to avoid binary/octet-stream issues
+    const contentType = file.type || 'image/jpeg';
+    
     const { data, error } = await supabase.storage
       .from('products')
       .upload(filePath, file, {
         cacheControl: '3600',
         upsert: true,
+        contentType,
         // @ts-ignore
         onUploadProgress: options.onProgress
       });
@@ -80,11 +85,16 @@ export async function uploadProfileImage(file: File, options: UploadOptions = {}
 
   return withRetry(async () => {
     console.log(`[Storage] Uploading profile image: ${filePath} (${file.size} bytes)`);
+    
+    // Explicitly handle content type
+    const contentType = file.type || 'image/jpeg';
+    
     const { data, error } = await supabase.storage
       .from('site_assets')
       .upload(filePath, file, {
         cacheControl: '3600',
         upsert: true,
+        contentType,
         // @ts-ignore
         onUploadProgress: options.onProgress
       });

@@ -7,9 +7,12 @@ const getK2Env = () => {
   return isProduction ? 'production' : 'sandbox';
 };
 
-export const getK2BaseUrl = () => getK2Env() === 'production' 
-  ? 'https://api.kopokopo.com' 
-  : 'https://sandbox.kopokopo.com';
+export const getK2BaseUrl = () => {
+  if (process.env.KOPOKOPO_BASE_URL) return process.env.KOPOKOPO_BASE_URL.replace(/\/$/, '');
+  return getK2Env() === 'production' 
+    ? 'https://api.kopokopo.com' 
+    : 'https://sandbox.kopokopo.com';
+};
 
 export const getK2AuthUrl = () => getK2BaseUrl();
 
@@ -259,6 +262,39 @@ export const registerK2Webhook = async (eventType: string, callbackUrl: string, 
   return await response.json();
 };
 
+/**
+ * Lists all active K2 webhook subscriptions
+ */
+export const listK2Webhooks = async () => {
+  const token = await getK2Token();
+  const baseUrl = getK2BaseUrl();
+
+  const commonHeaders: Record<string, string> = {
+    'Authorization': `Bearer ${token}`,
+    'Accept': 'application/json',
+    'User-Agent': 'ReadMart/1.0.0 (https://readmartke.com)'
+  };
+
+  const response = await fetchWithBackoff(`${baseUrl}/api/v1/webhook_subscriptions`, {
+    method: 'GET',
+    headers: commonHeaders
+  });
+
+  if (!response.ok) {
+    if (response.status === 404) {
+      const fallbackResponse = await fetchWithBackoff(`${baseUrl}/api/v1/webhook-subscriptions`, {
+        method: 'GET',
+        headers: commonHeaders
+      });
+      if (fallbackResponse.ok) return await fallbackResponse.json();
+    }
+    const errorText = await response.text();
+    throw new Error(`Failed to list K2 webhooks (Status ${response.status}): ${errorText}`);
+  }
+
+  return await response.json();
+};
+
 export const K2_EVENT_TYPES = {
   STK_PUSH_SUCCESS: 'incoming_payment',
   BUYGOODS_RECEIVED: 'buygoods_transaction_received',
@@ -391,11 +427,11 @@ export const getK2TransactionStatus = async (transactionId: string) => {
 };
 
 export const verifyK2Signature = (payload: any, signature: string) => {
-  // Try Webhook Secret first, then Client Secret, then API Key
+  // Try Webhook Secret first, then API Key, then Client Secret
   const secret = (
     process.env.KOPOKOPO_WEBHOOK_SECRET || 
-    process.env.KOPOKOPO_CLIENT_SECRET || 
     process.env.KOPOKOPO_API_KEY || 
+    process.env.KOPOKOPO_CLIENT_SECRET || 
     ''
   ).trim();
   
