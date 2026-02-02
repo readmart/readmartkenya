@@ -77,33 +77,43 @@ export async function getGlobalAnalytics() {
     const usersTrend = calculateTrend(currentUsers, previousUsers);
 
     // 3. Process revenue and order trends
+    // Use the 'transactions' table for actual paid revenue from webhooks
+    const { data: transactions, error: txError } = await supabase
+      .from('transactions')
+      .select('*')
+      .eq('status', 'completed')
+      .gte('created_at', sixtyDaysAgo.toISOString());
+
+    if (txError) {
+      console.error('Database Error (Transactions):', txError);
+      // Fallback to active orders if transactions table fails
+    }
+
     const currentOrders = orders?.filter(o => new Date(o.created_at) >= thirtyDaysAgo) || [];
     const previousOrders = orders?.filter(o => new Date(o.created_at) < thirtyDaysAgo) || [];
 
-    // Revenue from active transactions (excluding cancelled/failed/refunded)
-    const EXCLUDED_STATUSES = ['cancelled', 'failed', 'refunded'];
-    const activeOrders = currentOrders.filter(o => !EXCLUDED_STATUSES.includes((o.status || 'pending').toLowerCase()));
-    
-    const currentRevenue = activeOrders.reduce((acc, curr) => {
-      const val = Number(curr.total_amount);
+    // Revenue from actual completed transactions (webhooks)
+    const currentTx = transactions?.filter(t => new Date(t.created_at) >= thirtyDaysAgo) || [];
+    const previousTx = transactions?.filter(t => new Date(t.created_at) < thirtyDaysAgo) || [];
+
+    const currentRevenue = currentTx.reduce((acc, curr) => {
+      const val = Number(curr.amount);
       return acc + (isNaN(val) ? 0 : val);
     }, 0);
     
-    const previousRevenue = previousOrders
-      .filter(o => !EXCLUDED_STATUSES.includes((o.status || 'pending').toLowerCase()))
-      .reduce((acc, curr) => {
-        const val = Number(curr.total_amount);
-        return acc + (isNaN(val) ? 0 : val);
-      }, 0);
+    const previousRevenue = previousTx.reduce((acc, curr) => {
+      const val = Number(curr.amount);
+      return acc + (isNaN(val) ? 0 : val);
+    }, 0);
 
     const revenueTrend = calculateTrend(currentRevenue, previousRevenue);
     const ordersTrend = calculateTrend(currentOrders.length, previousOrders.length);
 
-    // Group sales data by day for the trajectory chart
+    // Group sales data by day for the trajectory chart based on completed transactions
     const salesByDay: Record<string, number> = {};
-    activeOrders.forEach(order => {
-      const day = new Date(order.created_at).toISOString().split('T')[0];
-      const val = Number(order.total_amount);
+    currentTx.forEach(tx => {
+      const day = new Date(tx.created_at).toISOString().split('T')[0];
+      const val = Number(tx.amount);
       salesByDay[day] = (salesByDay[day] || 0) + (isNaN(val) ? 0 : val);
     });
 
@@ -166,7 +176,10 @@ export async function getGlobalAnalytics() {
 
       unifiedData?.forEach(item => {
         const orderStatus = (item.orders as any)?.status?.toLowerCase() || 'pending';
-        if (['cancelled', 'failed', 'refunded'].includes(orderStatus)) return;
+        const isPaid = (item.orders as any)?.is_paid === true;
+        
+        // Only count revenue from paid orders (webhook verified)
+        if (!isPaid || ['cancelled', 'failed', 'refunded'].includes(orderStatus)) return;
 
         const snapshot = item.product_snapshot as any;
         const pid = snapshot?.id || 'unknown';
@@ -639,7 +652,10 @@ export async function getEvents() {
     }
 
     if (error) throw error;
-    return data || [];
+    
+    // Filter to only include paid items (webhook verified)
+    const paidData = (data || []).filter((item: any) => item.order?.is_paid === true);
+    return paidData;
   } catch (err) {
     console.error('Events fetch failed:', err);
     return [];
@@ -956,7 +972,10 @@ export async function getAuthorSalesReport(authorId: string) {
       .eq('product.author_id', authorId);
     
     if (error) throw error;
-    return data || [];
+
+    // Filter to only include paid items (webhook verified)
+    const paidData = (data || []).filter((item: any) => item.order?.is_paid === true);
+    return paidData;
   } catch (err) {
     console.error('Author Sales Report fetch failed:', err);
     return [];
