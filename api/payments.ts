@@ -623,6 +623,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         } else {
           // Default to M-Pesa STK Push
           try {
+            // Generate dynamic callback URL based on current host if possible
+            const host = req.headers.host || 'readmartke.com';
+            const protocol = host.includes('localhost') ? 'http' : 'https';
+            const dynamicCallbackUrl = `${protocol}://${host}/api/kopokopo/webhook?orderId=${finalOrderId}`;
+            
+            console.log(`Using callback URL: ${dynamicCallbackUrl}`);
+
             k2Result = await initiateK2StkPush({
               phone,
               amount,
@@ -630,6 +637,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               firstName,
               lastName,
               email,
+              callbackUrl: dynamicCallbackUrl
             });
             console.log('K2 STK Push Result:', JSON.stringify(k2Result));
           } catch (stkError: any) {
@@ -710,7 +718,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           }
           
           if (isK2Error) {
-             return json(res, 502, { 
+             return json(res, 503, { 
               error: 'Payment Provider Error', 
               message: err.message,
               code: 'PROVIDER_ERROR'

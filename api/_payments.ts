@@ -64,7 +64,8 @@ let cachedToken: { token: string; expiry: number } | null = null;
  */
 async function fetchWithBackoff(url: string, options: any, retries = 3, backoff = 1000) {
   try {
-    const response = await fetchWithTimeout(url, options);
+    // Increase timeout to 15s for K2 operations
+    const response = await fetchWithTimeout(url, options, 15000);
     
     if (response.status === 429 && retries > 0) {
       console.warn(`Rate limited (429) on ${url}. Retrying in ${backoff}ms...`);
@@ -170,6 +171,8 @@ export const initiateK2StkPush = async (params: K2StkPushRequest) => {
       callback_url: params.callbackUrl || getK2CallbackUrl(params.orderId),
     },
   };
+
+  console.log('Initiating K2 STK Push with payload:', JSON.stringify(payload, null, 2));
 
   const response = await fetchWithBackoff(`${getK2BaseUrl()}/api/v1/incoming_payments`, {
     method: 'POST',

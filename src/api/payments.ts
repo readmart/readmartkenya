@@ -27,7 +27,12 @@ export async function initiatePayment(orderId: string, phoneNumber: string, amou
       let errorMessage = 'Failed to initiate payment';
       try {
         const error = JSON.parse(text);
-        errorMessage = error.error || error.message || errorMessage;
+        // Combine error and message for more detail
+        if (error.error && error.message) {
+          errorMessage = `${error.error}: ${error.message}`;
+        } else {
+          errorMessage = error.error || error.message || errorMessage;
+        }
       } catch (e) {
         // Not a JSON error, maybe HTML?
         if (text.includes('A server error occurred')) {
