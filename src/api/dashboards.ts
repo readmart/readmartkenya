@@ -1307,20 +1307,26 @@ export async function createRecord(table: string, record: any) {
           
           // Improved regex to prioritize the column name over the table name
           // The error message usually says: Could not find the 'column_name' column of 'table_name' ...
-          const match = error.message.match(/['"]([^'"]+)['"] column/) || error.message.match(/column ['"]([^'"]+)['"]/);
+          const match = error.message.match(/['"]([^'"]+)['"] column/) || 
+                        error.message.match(/column ['"]([^'"]+)['"]/) ||
+                        error.message.match(/column ([^ ]+) does not exist/);
           
           if (match && match[1]) {
-            const missingCol = match[1];
+            let missingCol = match[1];
+            
             // If the match is the table name, try to find the column name elsewhere in the message
             if (missingCol === table) {
-              const alternativeMatch = error.message.match(/['"]([^'"]+)['"] column/);
-              if (alternativeMatch && alternativeMatch[1]) {
-                const realMissingCol = alternativeMatch[1];
-                console.warn(`Detected missing column ${realMissingCol} in ${table} (table name was matched first)`);
-                delete currentRecord[realMissingCol];
-                throw error;
+              // Try to find another quoted string that is NOT the table name
+              const allMatches = error.message.matchAll(/['"]([^'"]+)['"]/g);
+              for (const m of allMatches) {
+                if (m[1] !== table) {
+                  missingCol = m[1];
+                  break;
+                }
               }
-            } else {
+            }
+            
+            if (missingCol !== table) {
               console.warn(`Column ${missingCol} missing in ${table}, filtering and retrying...`);
               delete currentRecord[missingCol];
               throw error; 
@@ -1404,19 +1410,24 @@ export async function updateRecord(table: string, id: string, updates: any) {
             (error.message?.includes('column') && 
              (error.message?.includes('not found') || error.message?.includes('cache')))) {
           
-          const match = error.message.match(/['"]([^'"]+)['"] column/) || error.message.match(/column ['"]([^'"]+)['"]/);
+          const match = error.message.match(/['"]([^'"]+)['"] column/) || 
+                        error.message.match(/column ['"]([^'"]+)['"]/) ||
+                        error.message.match(/column ([^ ]+) does not exist/);
           
           if (match && match[1]) {
-            const missingCol = match[1];
+            let missingCol = match[1];
+            
             if (missingCol === table) {
-              const alternativeMatch = error.message.match(/['"]([^'"]+)['"] column/);
-              if (alternativeMatch && alternativeMatch[1]) {
-                const realMissingCol = alternativeMatch[1];
-                console.warn(`Detected missing column ${realMissingCol} in ${table} (table name was matched first)`);
-                delete currentUpdates[realMissingCol];
-                throw error;
+              const allMatches = error.message.matchAll(/['"]([^'"]+)['"]/g);
+              for (const m of allMatches) {
+                if (m[1] !== table) {
+                  missingCol = m[1];
+                  break;
+                }
               }
-            } else {
+            }
+            
+            if (missingCol !== table) {
               console.warn(`Column ${missingCol} missing in ${table}, filtering and retrying...`);
               delete currentUpdates[missingCol];
               throw error;
@@ -1592,15 +1603,28 @@ export async function createProduct(product: any) {
       if (error.code === 'PGRST204' || 
           (error.message?.includes('column') && 
            (error.message?.includes('not found') || error.message?.includes('cache')))) {
-        // Handle different error formats:
-        // 1. "column 'name' not found"
-        // 2. "Could not find the 'name' column... in the schema cache"
-        const match = error.message.match(/column ['"](.+)['"]/) || error.message.match(/['"](.+)['"] column/);
+        
+        const match = error.message.match(/['"]([^'"]+)['"] column/) || 
+                      error.message.match(/column ['"]([^'"]+)['"]/) ||
+                      error.message.match(/column ([^ ]+) does not exist/);
+        
         if (match && match[1]) {
-          const missingCol = match[1];
-          console.warn(`Column ${missingCol} missing in products, filtering and retrying...`);
-          delete currentData[missingCol];
-          throw error; // Trigger retry
+          let missingCol = match[1];
+          if (missingCol === 'products') {
+            const allMatches = error.message.matchAll(/['"]([^'"]+)['"]/g);
+            for (const m of allMatches) {
+              if (m[1] !== 'products') {
+                missingCol = m[1];
+                break;
+              }
+            }
+          }
+
+          if (missingCol !== 'products') {
+            console.warn(`Column ${missingCol} missing in products, filtering and retrying...`);
+            delete currentData[missingCol];
+            throw error; // Trigger retry
+          }
         }
       }
       throw error;
@@ -1675,15 +1699,28 @@ export async function updateProduct(id: string, product: any) {
       if (error.code === 'PGRST204' || 
           (error.message?.includes('column') && 
            (error.message?.includes('not found') || error.message?.includes('cache')))) {
-        // Handle different error formats:
-        // 1. "column 'name' not found"
-        // 2. "Could not find the 'name' column... in the schema cache"
-        const match = error.message.match(/column ['"](.+)['"]/) || error.message.match(/['"](.+)['"] column/);
+        
+        const match = error.message.match(/['"]([^'"]+)['"] column/) || 
+                      error.message.match(/column ['"]([^'"]+)['"]/) ||
+                      error.message.match(/column ([^ ]+) does not exist/);
+        
         if (match && match[1]) {
-          const missingCol = match[1];
-          console.warn(`Column ${missingCol} missing in products, filtering and retrying...`);
-          delete currentData[missingCol];
-          throw error; // Trigger retry
+          let missingCol = match[1];
+          if (missingCol === 'products') {
+            const allMatches = error.message.matchAll(/['"]([^'"]+)['"]/g);
+            for (const m of allMatches) {
+              if (m[1] !== 'products') {
+                missingCol = m[1];
+                break;
+              }
+            }
+          }
+
+          if (missingCol !== 'products') {
+            console.warn(`Column ${missingCol} missing in products, filtering and retrying...`);
+            delete currentData[missingCol];
+            throw error; // Trigger retry
+          }
         }
       }
       throw error;
