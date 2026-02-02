@@ -9,10 +9,13 @@ BEGIN
   EXECUTE 'ALTER PUBLICATION supabase_realtime ADD TABLE public.profiles';
   EXECUTE 'ALTER PUBLICATION supabase_realtime ADD TABLE public.cms_content';
   EXECUTE 'ALTER PUBLICATION supabase_realtime ADD TABLE public.shipping_zones';
+  EXECUTE 'ALTER PUBLICATION supabase_realtime ADD TABLE public.products';
+  EXECUTE 'ALTER PUBLICATION supabase_realtime ADD TABLE public.events';
   
   -- Communication Tables
   EXECUTE 'ALTER PUBLICATION supabase_realtime ADD TABLE public.contact_messages';
   EXECUTE 'ALTER PUBLICATION supabase_realtime ADD TABLE public.newsletter_subscriptions';
+  EXECUTE 'ALTER PUBLICATION supabase_realtime ADD TABLE public.audit_logs';
   
   -- Application/Partnership Tables
   EXECUTE 'ALTER PUBLICATION supabase_realtime ADD TABLE public.author_applications';
