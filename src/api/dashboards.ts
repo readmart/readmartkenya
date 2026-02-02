@@ -1309,32 +1309,17 @@ export async function createRecord(table: string, record: any) {
           throw new Error(`Table ${table} does not exist`);
         }
 
-        // Handle missing columns (PGRST204) or schema cache errors or not-null violations
+        // Handle missing columns (PGRST204) or schema cache errors
         if (error.code === 'PGRST204' || 
-            error.code === '23502' || // NOT NULL violation
             (error.message?.includes('column') && 
-             (error.message?.includes('not found') || error.message?.includes('cache') || error.message?.includes('violates not-null')))) {
+             (error.message?.includes('not found') || error.message?.includes('cache')))) {
           
-          // Improved regex to prioritize the column name over the table name
           const match = error.message.match(/['"]([^'"]+)['"] column/) || 
                         error.message.match(/column ['"]([^'"]+)['"]/) ||
-                        error.message.match(/column ([^ ]+) does not exist/) ||
-                        error.message.match(/column ["']([^"']+)["'] of relation/);
+                        error.message.match(/column ([^ ]+) does not exist/);
           
           if (match && match[1]) {
             let missingCol = match[1];
-            
-            // If the match is the table name, try to find the column name elsewhere in the message
-            if (missingCol === table) {
-              // Try to find another quoted string that is NOT the table name
-              const allMatches = error.message.matchAll(/['"]([^'"]+)['"]/g);
-              for (const m of allMatches) {
-                if (m[1] !== table) {
-                  missingCol = m[1];
-                  break;
-                }
-              }
-            }
             
             if (missingCol !== table) {
               console.warn(`Column ${missingCol} missing in ${table}, filtering and retrying...`);
@@ -1342,6 +1327,12 @@ export async function createRecord(table: string, record: any) {
               throw error; 
             }
           }
+        }
+
+        // Handle NOT NULL violations (23502) - Don't delete, just log and fail
+        if (error.code === '23502' || error.message?.includes('violates not-null')) {
+          console.error(`NOT NULL violation in ${table}:`, error.message);
+          throw error; // Don't retry by deleting the column
         }
         throw error;
       }
