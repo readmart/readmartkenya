@@ -7,6 +7,7 @@ DO $$
 BEGIN
   -- Core Tables
   EXECUTE 'ALTER PUBLICATION supabase_realtime ADD TABLE public.profiles';
+  EXECUTE 'ALTER PUBLICATION supabase_realtime ADD TABLE public.orders';
   EXECUTE 'ALTER PUBLICATION supabase_realtime ADD TABLE public.cms_content';
   EXECUTE 'ALTER PUBLICATION supabase_realtime ADD TABLE public.shipping_zones';
   EXECUTE 'ALTER PUBLICATION supabase_realtime ADD TABLE public.products';
