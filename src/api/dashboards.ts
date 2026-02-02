@@ -850,6 +850,15 @@ export async function initializeCampaign(campaign: any) {
     status: 'draft'
   };
 
+  // If the database has 'type' but we're sending 'discount_type',
+  // and it's NOT NULL, we should copy the value.
+  if (campaignData.discount_type && !campaignData.type) {
+    campaignData.type = campaignData.discount_type;
+  }
+  if (campaignData.discount_value !== undefined && campaignData.value === undefined) {
+    campaignData.value = campaignData.discount_value;
+  }
+
   return createRecord('promos', campaignData);
 }
 
@@ -1300,16 +1309,17 @@ export async function createRecord(table: string, record: any) {
           throw new Error(`Table ${table} does not exist`);
         }
 
-        // Handle missing columns (PGRST204) or schema cache errors
+        // Handle missing columns (PGRST204) or schema cache errors or not-null violations
         if (error.code === 'PGRST204' || 
+            error.code === '23502' || // NOT NULL violation
             (error.message?.includes('column') && 
-             (error.message?.includes('not found') || error.message?.includes('cache')))) {
+             (error.message?.includes('not found') || error.message?.includes('cache') || error.message?.includes('violates not-null')))) {
           
           // Improved regex to prioritize the column name over the table name
-          // The error message usually says: Could not find the 'column_name' column of 'table_name' ...
           const match = error.message.match(/['"]([^'"]+)['"] column/) || 
                         error.message.match(/column ['"]([^'"]+)['"]/) ||
-                        error.message.match(/column ([^ ]+) does not exist/);
+                        error.message.match(/column ([^ ]+) does not exist/) ||
+                        error.message.match(/column ["']([^"']+)["'] of relation/);
           
           if (match && match[1]) {
             let missingCol = match[1];
