@@ -707,12 +707,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         if (isProduction) {
           // In production, we don't use demo mode
-          console.error(`Production Payment Error [${finalOrderId}]:`, err.message);
+          console.error(`Production Payment Error [${finalOrderId}]:`, err.message, err.stack);
           
           if (isConfigError) {
             return json(res, 503, { 
-              error: 'Payment Service Unavailable', 
-              message: 'The payment system is currently being configured. Please try again later or contact support.',
+              error: 'Payment Configuration Error', 
+              message: err.message,
               code: 'CONFIG_ERROR'
             });
           }
@@ -725,7 +725,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             });
           }
 
-          return serverError(res, err);
+          return json(res, 500, {
+            error: 'Internal Server Error',
+            message: err.message || 'An unexpected error occurred during payment initiation',
+            code: 'SERVER_ERROR'
+          });
         }
 
         if (isConfigError || isK2Error || err.message.includes('failed')) {

@@ -62,22 +62,31 @@ let cachedToken: { token: string; expiry: number } | null = null;
 /**
  * Enhanced fetch with exponential backoff for 429 errors
  */
-async function fetchWithBackoff(url: string, options: any, retries = 3, backoff = 1000) {
+async function fetchWithBackoff(url: string, options: any, retries = 1, backoff = 500) {
+  const startTime = Date.now();
   try {
-    // Increase timeout to 15s for K2 operations
-    const response = await fetchWithTimeout(url, options, 15000);
+    // 10s timeout is safer for Vercel functions (default is 10s or 15s)
+    const timeout = 10000;
+    console.log(`[K2 Request] ${options.method || 'GET'} ${url} (Timeout: ${timeout}ms)`);
+    
+    const response = await fetchWithTimeout(url, options, timeout);
+    const duration = Date.now() - startTime;
+    console.log(`[K2 Response] ${response.status} ${url} (${duration}ms)`);
     
     if (response.status === 429 && retries > 0) {
-      console.warn(`Rate limited (429) on ${url}. Retrying in ${backoff}ms...`);
+      console.warn(`[K2 Rate Limited] 429 on ${url}. Retrying in ${backoff}ms...`);
       await new Promise(resolve => setTimeout(resolve, backoff));
       return fetchWithBackoff(url, options, retries - 1, backoff * 2);
     }
     
     return response;
-  } catch (error) {
-    if (retries > 0) {
-      await new Promise(resolve => setTimeout(resolve, backoff));
-      return fetchWithBackoff(url, options, retries - 1, backoff * 2);
+  } catch (error: any) {
+    const duration = Date.now() - startTime;
+    console.error(`[K2 Error] ${error.name}: ${error.message} on ${url} after ${duration}ms`);
+    
+    if (retries > 0 && (error.name === 'AbortError' || error.message.includes('timeout'))) {
+      console.warn(`[K2 Retry] Retrying after timeout on ${url}...`);
+      return fetchWithBackoff(url, options, retries - 1, backoff);
     }
     throw error;
   }
@@ -115,7 +124,14 @@ export const getK2Token = async () => {
   if (!response.ok) {
     const errorText = await response.text();
     console.error(`K2 Token Error (Status ${response.status}):`, errorText);
-    throw new Error(`K2 Token Error (Status ${response.status}): ${errorText}`);
+    
+    let detailedError = errorText;
+    try {
+      const json = JSON.parse(errorText);
+      detailedError = json.error_description || json.message || json.error || errorText;
+    } catch (e) {}
+
+    throw new Error(`K2 Token Error (Status ${response.status}): ${detailedError}`);
   }
 
   const data = (await response.json()) as { expires_in?: number; access_token: string };
