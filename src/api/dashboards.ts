@@ -436,10 +436,7 @@ export async function getInventory(authorId?: string) {
         await verifyAdmin();
       }
 
-      // Explicitly select columns to avoid schema cache issues with '*'
-      // Use simpler selection first to avoid potential 400s with joins
-      const columns = '*';
-      
+      // Use select('*') for schema resilience
       let query = supabase
         .from('products')
         .select(`
