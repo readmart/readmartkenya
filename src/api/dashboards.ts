@@ -29,7 +29,7 @@ export async function getGlobalAnalytics() {
     // Selecting only required columns for security and performance
     const { data: orders, error: ordersError } = await supabase
       .from('orders')
-      .select('total_amount, created_at, status')
+      .select('*')
       .gte('created_at', sixtyDaysAgo.toISOString());
 
     if (ordersError) {
@@ -125,7 +125,7 @@ export async function getGlobalAnalytics() {
 
     const { data: lowStockProducts, error: lowStockError } = await supabase
       .from('products')
-      .select('id, title, stock_quantity')
+      .select('*')
       .lt('stock_quantity', 10)
       .limit(10);
 
@@ -154,10 +154,8 @@ export async function getGlobalAnalytics() {
       const { data: unifiedData, error: unifiedError } = await supabase
         .from('order_items')
         .select(`
-          product_snapshot, 
-          quantity, 
-          price_at_purchase, 
-          orders!inner(created_at, status)
+          *,
+          orders!inner(*)
         `)
         .filter('orders.created_at', 'gte', thirtyDaysAgo.toISOString());
 
@@ -289,61 +287,27 @@ export async function sendAbandonedCartReminders() {
 export async function getShippingZones() {
   return withRetry(async () => {
     try {
-      // Explicitly select columns to avoid schema cache issues with '*'
-      // We list all columns we expect. If some are missing from the cache, 
-      // PostgREST will return 400.
+      // Use select('*') for robustness against schema changes
       const { data, error } = await supabase
         .from('shipping_zones')
-        .select('id, name, price, estimated_days, is_active, country_code, region, postal_codes, shipping_method, weight_surcharge, volume_surcharge, county')
+        .select('*')
         .order('name');
 
       if (error) {
-        // If it's a "column not found" error (PGRST204 or message includes column name), 
-        // try a minimal set of columns that we know exist from the early schema.
-        const isSchemaError = 
-          error.code === 'PGRST204' || 
-          error.code === 'PGRST205' || 
-          error.code === 'PGRST100' || 
-          error.message?.includes('column') || 
-          error.message?.includes('cache') || 
-          (error as any).status === 404 ||
-          (error as any).status === 400;
-
-        if (isSchemaError) {
-          console.warn('Advanced shipping columns missing from cache, falling back to core columns');
-          const { data: fallbackData, error: fallbackError } = await supabase
-            .from('shipping_zones')
-            .select('id, name, is_active')
-            .order('name');
-          
-          if (fallbackError) throw fallbackError;
-          
-          return (fallbackData || []).map(zone => ({
-            ...zone,
-            price: (zone as any).price ?? 0,
-            country_code: 'KE',
-            estimated_days: 3,
-            shipping_method: 'Standard',
-            region: '',
-            postal_codes: '',
-            weight_surcharge: 0,
-            volume_surcharge: 0,
-            county: ''
-          }));
-        }
         throw error;
       }
       
       // Normalize the data to ensure 'price' is always present and other fields have defaults
       const normalizedData = (data || []).map(zone => {
-        const price = zone.price ?? 0;
+        // Handle different column names for price (legacy support)
+        const price = (zone as any).price ?? (zone as any).rate ?? (zone as any).base_rate ?? 0;
         return {
           ...zone,
-          country_code: zone.country_code || 'KE',
-          estimated_days: zone.estimated_days || 3,
-          shipping_method: zone.shipping_method || 'Standard',
-          weight_surcharge: zone.weight_surcharge || 0,
-          volume_surcharge: zone.volume_surcharge || 0,
+          country_code: (zone as any).country_code || 'KE',
+          estimated_days: (zone as any).estimated_days || 3,
+          shipping_method: (zone as any).shipping_method || 'Standard',
+          weight_surcharge: (zone as any).weight_surcharge || 0,
+          volume_surcharge: (zone as any).volume_surcharge || 0,
           price
         };
       });
@@ -371,7 +335,7 @@ async function getAllRecords(table: string, orderBy: string = 'created_at') {
       if (table === 'shipping_zones') {
         query = supabase
           .from(table)
-          .select('id, name, is_active');
+          .select('*');
       } else if (table === 'profiles') {
         query = supabase
           .from(table)
@@ -379,31 +343,31 @@ async function getAllRecords(table: string, orderBy: string = 'created_at') {
       } else if (table === 'cms_content') {
         query = supabase
           .from(table)
-          .select('id, type, title, content, image_url, is_active, metadata, created_at');
+          .select('*');
       } else if (table === 'newsletter_subscriptions') {
         query = supabase
           .from(table)
-          .select('id, email, status, created_at');
+          .select('*');
       } else if (table === 'partnership_applications') {
         query = supabase
           .from(table)
-          .select('id, contact_person, email, business_name, status, created_at');
+          .select('*');
       } else if (table === 'author_applications') {
         query = supabase
           .from(table)
-          .select('id, full_name, email, status, created_at');
+          .select('*');
       } else if (table === 'contact_messages') {
         query = supabase
           .from(table)
-          .select('id, name, email, subject, message, status, created_at');
+          .select('*');
       } else if (table === 'audit_logs') {
         query = supabase
           .from(table)
-          .select('id, user_id, action, entity_type, entity_id, created_at');
+          .select('*');
       } else {
         query = supabase
           .from(table)
-          .select('id, created_at');
+          .select('*');
       }
 
       const { data, error, status } = await query.order(orderBy, { ascending: false });
@@ -474,12 +438,12 @@ export async function getInventory(authorId?: string) {
 
       // Explicitly select columns to avoid schema cache issues with '*'
       // Use simpler selection first to avoid potential 400s with joins
-      const columns = 'id, title, author_id, price, sale_price, stock_quantity, category_id, image_url, description, is_active, slug, created_at';
+      const columns = '*';
       
       let query = supabase
         .from('products')
         .select(`
-          ${columns},
+          *,
           category:categories(name)
         `)
         .order('created_at', { ascending: false });
@@ -491,22 +455,6 @@ export async function getInventory(authorId?: string) {
       const { data, error } = await query;
 
       if (error) {
-        // Fallback for products table schema cache issue
-        if (error.code === 'PGRST204' || error.message?.includes('column') || error.message?.includes('cache') || (error as any).status === 400) {
-          console.warn('Advanced product columns missing from cache, falling back to core columns');
-          const { data: fallbackData, error: fallbackError } = await supabase
-            .from('products')
-            .select('id, title, price, stock_quantity, is_active, created_at')
-            .order('created_at', { ascending: false });
-          
-          if (fallbackError) throw fallbackError;
-          
-          return (fallbackData || []).map(item => ({
-            ...item,
-            author_id: null,
-            category: { name: 'Uncategorized' }
-          }));
-        }
         console.error('Error fetching inventory:', error);
         throw error;
       }
@@ -551,26 +499,10 @@ export async function getOrders(partnerId?: string) {
         const { data: orders, error } = await supabase
           .from('orders')
           .select(`
-            id,
-            user_id,
-            total_amount,
-            subtotal_amount,
-            shipping_amount,
-            tax_amount,
-            status,
-            payment_method,
-            shipping_address,
-            shipping_zone_id,
-            created_at,
+            *,
             profiles(full_name, email),
             order_items(
-              id,
-              order_id,
-              product_id,
-              quantity,
-              price,
-              price_at_purchase,
-              product_snapshot,
+              *,
               product:products(id, title, image_url)
             )
           `)
@@ -590,26 +522,10 @@ export async function getOrders(partnerId?: string) {
         const { data: orders, error } = await supabase
           .from('orders')
           .select(`
-            id,
-            user_id,
-            total_amount,
-            subtotal_amount,
-            shipping_amount,
-            tax_amount,
-            status,
-            payment_method,
-            shipping_address,
-            shipping_zone_id,
-            created_at,
+            *,
             profiles(full_name, email),
             order_items(
-              id,
-              order_id,
-              product_id,
-              quantity,
-              price,
-              price_at_purchase,
-              product_snapshot,
+              *,
               product:products(id, title, image_url)
             )
           `)
@@ -685,24 +601,14 @@ export async function getCMSContent() {
 export async function getClubs() {
   try {
     await verifyAdmin();
-    const columns = 'id, type, title, content, image_url, is_active, metadata, created_at';
+    // Use select('*') for schema resilience
     let { data, error, status } = await supabase
       .from('cms_content')
-      .select(columns)
+      .select('*')
       .eq('type', 'book_club')
       .order('created_at', { ascending: false });
 
     if (error) {
-      if (error.code === 'PGRST204' || error.message?.includes('column') || error.message?.includes('cache')) {
-        console.warn('Advanced cms_content columns missing, falling back to core');
-        const { data: fallbackData, error: fallbackError } = await supabase
-          .from('cms_content')
-          .select('id, title, is_active')
-          .eq('type', 'book_club')
-          .order('created_at', { ascending: false });
-        if (fallbackError) throw fallbackError;
-        return fallbackData || [];
-      }
       if (status === 404 || error.code === 'PGRST116') return [];
       throw error;
     }
@@ -716,23 +622,11 @@ export async function getClubs() {
 export async function getEvents() {
   try {
     await verifyAdmin();
-    // Prefer the new events table
-    const eventColumns = 'id, title, description, event_date, location, image_url, is_active, created_at';
+    // Prefer the new events table, use * for schema resilience
     let { data, error, status } = await supabase
       .from('events')
-      .select(eventColumns)
+      .select('*')
       .order('event_date', { ascending: false });
-
-    if (error) {
-      if (error.code === 'PGRST204' || error.message?.includes('column') || error.message?.includes('cache')) {
-        console.warn('Advanced events columns missing, falling back to core');
-        const { data: fallbackData, error: fallbackError } = await supabase
-          .from('events')
-          .select('id, title, event_date')
-          .order('event_date', { ascending: false });
-        if (!fallbackError) return fallbackData || [];
-      }
-    }
 
     if (!error && data) return data;
     
@@ -740,7 +634,7 @@ export async function getEvents() {
     if (status === 404 || error?.code === 'PGRST116') {
       const { data: legacyData, error: legacyError } = await supabase
         .from('cms_content')
-        .select('id, type, title, content, image_url, is_active, metadata, created_at')
+        .select('*')
         .eq('type', 'event')
         .order('created_at', { ascending: false });
 
@@ -783,22 +677,14 @@ export async function updateEvent(id: string, updates: any) {
 export async function getAgreements() {
   try {
     await verifyAdmin();
-    const columns = 'id, partner_id, type, status, content, metadata, created_at, signed_at, expires_at';
+    // Use select('*') for the main table, explicit relation selection is still needed
+    // but less brittle if main columns change
     let { data, error, status } = await supabase
       .from('agreements')
-      .select(`${columns}, partner:profiles(full_name, email)`)
+      .select(`*, partner:profiles(full_name, email)`)
       .order('created_at', { ascending: false });
 
     if (error) {
-      if (error.code === 'PGRST204' || error.message?.includes('column') || error.message?.includes('cache')) {
-        console.warn('Advanced agreements columns missing, falling back to core');
-        const { data: fallbackData, error: fallbackError } = await supabase
-          .from('agreements')
-          .select('id, partner_id, status, created_at')
-          .order('created_at', { ascending: false });
-        if (fallbackError) throw fallbackError;
-        return fallbackData || [];
-      }
       if (status === 404 || error.code === 'PGRST116') return [];
       throw error;
     }
@@ -814,24 +700,13 @@ export async function getAgreements() {
  */
 export async function getUserAgreements(userId: string) {
   try {
-    const columns = 'id, partner_id, type, status, content, metadata, created_at, signed_at, expires_at';
     let { data, error, status } = await supabase
       .from('agreements')
-      .select(columns)
+      .select('*')
       .eq('partner_id', userId)
       .order('created_at', { ascending: false });
 
     if (error) {
-      if (error.code === 'PGRST204' || error.message?.includes('column') || error.message?.includes('cache')) {
-        console.warn('Advanced user agreements columns missing, falling back to core');
-        const { data: fallbackData, error: fallbackError } = await supabase
-          .from('agreements')
-          .select('id, partner_id, status, created_at')
-          .eq('partner_id', userId)
-          .order('created_at', { ascending: false });
-        if (fallbackError) throw fallbackError;
-        return fallbackData || [];
-      }
       if (status === 404 || error.code === 'PGRST116') return [];
       throw error;
     }
@@ -897,24 +772,13 @@ export async function updateAgreementStatus(agreementId: string, status: 'approv
 export async function getBanners() {
   try {
     await verifyAdmin();
-    const columns = 'id, type, title, content, image_url, is_active, metadata, created_at';
     let { data, error } = await supabase
       .from('cms_content')
-      .select(columns)
+      .select('*')
       .eq('type', 'banner')
       .order('created_at', { ascending: false });
 
     if (error) {
-      if (error.code === 'PGRST204' || error.message?.includes('column') || error.message?.includes('cache')) {
-        console.warn('Advanced banner columns missing, falling back to core');
-        const { data: fallbackData, error: fallbackError } = await supabase
-          .from('cms_content')
-          .select('id, title, is_active')
-          .eq('type', 'banner')
-          .order('created_at', { ascending: false });
-        if (fallbackError) throw fallbackError;
-        return fallbackData || [];
-      }
       throw error;
     }
     return data || [];
@@ -928,42 +792,22 @@ export async function getPromos() {
   return withRetry(async () => {
     try {
       await verifyAdmin();
-      // Fetch from promos table with explicit columns
-      // Reduced column set to most reliable ones first
-      const columns = 'id, code, discount_type, discount_value, min_order_amount, is_active, expires_at, created_at, start_at, status';
+      // Fetch from promos table using select('*') to avoid 400 errors if specific columns are missing
+      // This is more robust against schema mismatches (e.g. missing discount_type)
       let { data, error } = await supabase
         .from('promos')
-        .select(columns)
+        .select('*')
         .order('created_at', { ascending: false });
 
-      if (error) {
-        if (error.code === 'PGRST204' || error.message?.includes('column') || error.message?.includes('cache') || (error as any).status === 400) {
-          console.warn('Advanced promo columns missing, falling back to core');
-          const { data: fallbackData, error: fallbackError } = await supabase
-            .from('promos')
-            .select('id, code, discount_type, discount_value, is_active, created_at')
-            .order('created_at', { ascending: false });
-          
-          if (fallbackError) throw fallbackError;
-          
-          return (fallbackData || []).map(p => ({
-            ...p,
-            status: (p as any).is_active ? 'active' : 'inactive',
-            type: p.discount_type,
-            value: p.discount_value,
-            title: p.code
-          }));
-        }
-        throw error;
-      }
+      if (error) throw error;
       
-      // Normalize data for UI
+      // Normalize data for UI with safe defaults
       const normalizedData = (data || []).map(p => ({
         ...p,
         title: p.code,
         status: p.status || (p.is_active ? 'active' : 'inactive'),
-        type: p.discount_type,
-        value: p.discount_value,
+        type: p.discount_type || 'percentage',
+        value: p.discount_value || 0,
         end_date: p.expires_at,
         start_date: (p as any).start_at
       }));
@@ -1020,26 +864,15 @@ export async function updateCampaignStatus(promoId: string, status: string, note
 export async function getPromoMetrics(promoId: string) {
   try {
     await verifyAdmin();
-    const columns = 'id, promo_id, metric_type, value, metadata, recorded_at';
+    // Use select('*') for schema resilience
     let { data, error } = await supabase
       .from('promo_metrics')
-      .select(columns)
+      .select('*')
       .eq('promo_id', promoId)
       .order('recorded_at', { ascending: false });
 
     if (error) {
-      if (error.code === 'PGRST204' || error.message?.includes('column') || error.message?.includes('cache')) {
-        console.warn('Advanced promo metrics columns missing, falling back to core');
-        const { data: fallbackData, error: fallbackError } = await supabase
-          .from('promo_metrics')
-          .select('id, promo_id, value, recorded_at')
-          .eq('promo_id', promoId)
-          .order('recorded_at', { ascending: false });
-        if (fallbackError) throw fallbackError;
-        data = fallbackData as any;
-      } else {
-        throw error;
-      }
+      throw error;
     }
     return data || [];
   } catch (err) {
@@ -1051,26 +884,15 @@ export async function getPromoMetrics(promoId: string) {
 export async function getPromoAuditLogs(promoId: string) {
   try {
     await verifyAdmin();
-    const columns = 'id, promo_id, actor_id, action, previous_state, new_state, created_at';
+    // Use select('*') for schema resilience but include relation
     let { data, error } = await supabase
       .from('promo_audit_logs')
-      .select(`${columns}, actor:profiles(full_name)`)
+      .select(`*, actor:profiles(full_name)`)
       .eq('promo_id', promoId)
       .order('created_at', { ascending: false });
 
     if (error) {
-      if (error.code === 'PGRST204' || error.message?.includes('column') || error.message?.includes('cache')) {
-        console.warn('Advanced promo audit logs columns missing, falling back to core');
-        const { data: fallbackData, error: fallbackError } = await supabase
-          .from('promo_audit_logs')
-          .select('id, promo_id, action, created_at')
-          .eq('promo_id', promoId)
-          .order('created_at', { ascending: false });
-        if (fallbackError) throw fallbackError;
-        data = fallbackData as any;
-      } else {
-        throw error;
-      }
+      throw error;
     }
     return data || [];
   } catch (err) {
@@ -1086,7 +908,7 @@ export async function calculateImpact(promoId: string) {
     // For now, we'll fetch current utilization and order data
     const { data: promo, error } = await supabase
       .from('promos')
-      .select('id, utilization_count, discount_value')
+      .select('*')
       .eq('id', promoId)
       .maybeSingle();
     
@@ -1131,8 +953,8 @@ export async function getAuthorSalesReport(authorId: string) {
       .from('order_items')
       .select(`
         *,
-        order:orders(status, created_at),
-        product:products!inner(title, author_id)
+        order:orders(*),
+        product:products!inner(*)
       `)
       .eq('product.author_id', authorId);
     
@@ -1153,7 +975,7 @@ export async function getPartnerPayouts(partnerId: string) {
       .from('fulfillment_ledger')
       .select(`
         *,
-        order:orders(customer_name, status)
+        order:orders(*)
       `)
       .eq('partner_id', partnerId)
       .order('created_at', { ascending: false });
@@ -1177,8 +999,8 @@ export async function getAuthorReviews(authorId: string) {
       .from('reviews')
       .select(`
         *,
-        product:products!inner(title, author_id),
-        profile:profiles(full_name, avatar_url)
+        product:products!inner(*),
+        profile:profiles(*)
       `)
       .eq('product.author_id', authorId)
       .order('created_at', { ascending: false });
@@ -1217,25 +1039,15 @@ export async function getAuthors() {
 export async function getProtocolAgreements() {
   try {
     await verifyAdmin();
-    const columns = 'id, title, content, is_active, created_at';
+    // Use select('*') for schema resilience
     let { data, error, status } = await supabase
       .from('partnership_agreements')
-      .select(columns)
+      .select('*')
       .order('created_at', { ascending: false });
 
     if (error) {
-      if (error.code === 'PGRST204' || error.message?.includes('column') || error.message?.includes('cache')) {
-        console.warn('Advanced protocol agreements columns missing, falling back to core');
-        const { data: fallbackData, error: fallbackError } = await supabase
-          .from('partnership_agreements')
-          .select('id, title, created_at')
-          .order('created_at', { ascending: false });
-        if (fallbackError) throw fallbackError;
-        data = fallbackData as any;
-      } else {
-        if (status === 404 || error.code === 'PGRST116') return [];
-        throw error;
-      }
+      if (status === 404 || error.code === 'PGRST116') return [];
+      throw error;
     }
     
     // Normalize for UI if needed (renaming title to name)
@@ -1372,10 +1184,10 @@ export async function getSiteSettings() {
   try {
     await verifyAdmin();
     // Fetch basic settings first - no joins to avoid 400 errors if schema is out of sync
-    const columns = 'id, site_name, contact_email, contact_phone, secondary_phone, whatsapp_link, author_of_the_day_id, author_of_the_day_books, updated_at, tax_rate';
+    // Use select('*') for schema resilience
     let { data: siteData, error: siteError } = await supabase
       .from('site_settings')
-      .select(columns)
+      .select('*')
       .maybeSingle();
 
     if (siteError) {
@@ -1396,8 +1208,12 @@ export async function getSiteSettings() {
     }
     if (!siteData) return {};
 
-    // Sanitize dummy numbers
-    const sanitizedData: any = { ...siteData };
+    // Sanitize dummy numbers and provide defaults for missing columns
+    const sanitizedData: any = { 
+      tax_rate: 16.00,
+      default_currency: 'KES',
+      ...siteData 
+    };
     const dummyPattern = /700 000 000|700000000/;
     
     if (sanitizedData.contact_phone && dummyPattern.test(sanitizedData.contact_phone)) {
@@ -1531,16 +1347,16 @@ export async function updateRecord(table: string, id: string, updates: any) {
           // Then try to get the rest with explicit columns for common tables
           let fullDataQuery;
           if (table === 'products') {
-            fullDataQuery = supabase.from(table).select('id, title, price, stock_quantity, is_active').eq('id', id).maybeSingle();
+            fullDataQuery = supabase.from(table).select('*').eq('id', id).maybeSingle();
           } else if (table === 'profiles') {
-            fullDataQuery = supabase.from(table).select('id, full_name, email, role').eq('id', id).maybeSingle();
+            fullDataQuery = supabase.from(table).select('*').eq('id', id).maybeSingle();
           } else if (table === 'orders') {
-            fullDataQuery = supabase.from(table).select('id, status, total_amount, user_id').eq('id', id).maybeSingle();
+            fullDataQuery = supabase.from(table).select('*').eq('id', id).maybeSingle();
           } else if (table === 'site_settings') {
-            fullDataQuery = supabase.from(table).select('id, site_name, contact_email').eq('id', id).maybeSingle();
+            fullDataQuery = supabase.from(table).select('*').eq('id', id).maybeSingle();
           } else {
             // For unknown tables, we use a very minimal set
-            fullDataQuery = supabase.from(table).select('id, created_at').eq('id', id).maybeSingle();
+            fullDataQuery = supabase.from(table).select('*').eq('id', id).maybeSingle();
           }
           
           const { data: fullData } = await fullDataQuery;
@@ -1621,16 +1437,16 @@ export async function deleteRecord(table: string, id: string) {
         // Then try to get the rest with explicit columns for common tables
         let fullDataQuery;
         if (table === 'products') {
-          fullDataQuery = supabase.from(table).select('id, title, price, stock_quantity, is_active').eq('id', id).maybeSingle();
+          fullDataQuery = supabase.from(table).select('*').eq('id', id).maybeSingle();
         } else if (table === 'profiles') {
-          fullDataQuery = supabase.from(table).select('id, full_name, email, role').eq('id', id).maybeSingle();
+          fullDataQuery = supabase.from(table).select('*').eq('id', id).maybeSingle();
         } else if (table === 'orders') {
-          fullDataQuery = supabase.from(table).select('id, status, total_amount, user_id').eq('id', id).maybeSingle();
+          fullDataQuery = supabase.from(table).select('*').eq('id', id).maybeSingle();
         } else if (table === 'site_settings') {
-          fullDataQuery = supabase.from(table).select('id, site_name, contact_email').eq('id', id).maybeSingle();
+          fullDataQuery = supabase.from(table).select('*').eq('id', id).maybeSingle();
         } else {
           // For unknown tables, we use a very minimal set
-          fullDataQuery = supabase.from(table).select('id, created_at').eq('id', id).maybeSingle();
+          fullDataQuery = supabase.from(table).select('*').eq('id', id).maybeSingle();
         }
         
         const { data: fullData } = await fullDataQuery;

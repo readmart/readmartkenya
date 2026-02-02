@@ -70,27 +70,60 @@ export default function FounderDashboard() {
     fetchAllData();
 
     // Set up Realtime synchronization for critical tables
-    const channel = supabase
-      .channel('founder_dashboard_sync')
+    // Split into multiple channels to prevent one failure from breaking all subscriptions
+    
+    // 1. Core Data (Orders, Products, Profiles)
+    const coreChannel = supabase
+      .channel('founder_dashboard_core')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => fetchAllData())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'products' }, () => fetchAllData())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => fetchAllData())
+      .subscribe((status) => {
+        if (status === 'CHANNEL_ERROR') {
+          console.warn('Realtime Error (Core): Failed to subscribe to orders/products/profiles');
+        }
+      });
+
+    // 2. Content & Settings (CMS, Shipping)
+    const contentChannel = supabase
+      .channel('founder_dashboard_content')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'cms_content' }, () => fetchAllData())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'shipping_zones' }, () => fetchAllData())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'contact_messages' }, () => fetchAllData())
+      .subscribe((status) => {
+        if (status === 'CHANNEL_ERROR') {
+          console.warn('Realtime Error (Content): Failed to subscribe to cms_content/shipping_zones');
+        }
+      });
+
+    // 3. Applications & Agreements
+    const appsChannel = supabase
+      .channel('founder_dashboard_apps')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'author_applications' }, () => fetchAllData())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'partnership_applications' }, () => fetchAllData())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'partnership_agreements' }, () => fetchAllData())
+      .subscribe((status) => {
+        if (status === 'CHANNEL_ERROR') {
+          console.warn('Realtime Error (Apps): Failed to subscribe to applications/agreements');
+        }
+      });
+
+    // 4. Communications
+    const commsChannel = supabase
+      .channel('founder_dashboard_comms')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'contact_messages' }, () => fetchAllData())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'newsletter_subscriptions' }, () => fetchAllData())
       .subscribe((status) => {
-        if (status !== 'SUBSCRIBED') {
-          console.warn('Founder Dashboard Realtime subscription status:', status);
+        if (status === 'CHANNEL_ERROR') {
+          console.warn('Realtime Error (Comms): Failed to subscribe to messages/subscriptions');
         }
       });
 
     return () => {
       setIsMounted(false);
-      supabase.removeChannel(channel);
+      supabase.removeChannel(coreChannel);
+      supabase.removeChannel(contentChannel);
+      supabase.removeChannel(appsChannel);
+      supabase.removeChannel(commsChannel);
     };
   }, []);
 

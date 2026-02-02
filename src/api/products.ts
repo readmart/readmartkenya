@@ -1,7 +1,7 @@
 import { supabase } from '@/lib/supabase/client';
 
 const PRODUCT_COLUMNS = 'id, title, description, price, sale_price, image_url, category_id, stock_quantity, is_active, is_featured, created_at, slug';
-const CORE_PRODUCT_COLUMNS = 'id, title, price, sale_price, image_url, is_active, stock_quantity';
+const CORE_PRODUCT_COLUMNS = 'id, title, price, sale_price, is_active, stock_quantity';
 
 /**
  * Fetch products with optional filters with hardening

@@ -48,7 +48,7 @@ export async function createOrder(orderData: OrderData) {
   const { data: order, error: orderError } = await supabase
     .from('orders')
     .insert(orderInsertData)
-    .select('id, subtotal_amount, shipping_amount, total_amount, status, payment_method, shipping_address, created_at, tax_amount')
+    .select('*')
     .maybeSingle();
 
   if (orderError) {
@@ -110,23 +110,9 @@ export async function getOrder(orderId: string) {
   const query = supabase
     .from('orders')
     .select(`
-      id, 
-      user_id, 
-      subtotal_amount, 
-      shipping_amount, 
-      total_amount, 
-      status, 
-      payment_method, 
-      shipping_address, 
-      created_at, 
-      payment_id,
-      payment_status,
+      *,
       items:order_items(
-        id, 
-        product_id, 
-        quantity, 
-        price, 
-        product_snapshot,
+        *,
         product:products(id, title, image_url, type, metadata)
       )
     `)
