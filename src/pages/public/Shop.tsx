@@ -36,6 +36,7 @@ export default function Shop() {
         const mappedProducts = productsData.map((p: any) => ({
           ...p,
           category: p.category?.name || 'Uncategorized',
+          author: p.metadata?.author || 'Unknown Author',
           rating: p.metadata?.rating || 0
         }));
         setProducts(mappedProducts);

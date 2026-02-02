@@ -1,6 +1,6 @@
 import { supabase } from '@/lib/supabase/client';
 
-const PRODUCT_COLUMNS = 'id, title, description, price, sale_price, image_url, category_id, stock_quantity, is_active, is_featured, created_at, slug';
+const PRODUCT_COLUMNS = 'id, title, description, price, sale_price, image_url, category_id, stock_quantity, is_active, is_featured, created_at, slug, metadata, type';
 const CORE_PRODUCT_COLUMNS = 'id, title, price, sale_price, is_active, stock_quantity';
 
 /**

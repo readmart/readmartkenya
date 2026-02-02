@@ -33,7 +33,7 @@ export default function Home() {
         setBanners(cms.filter((item: any) => item.type === 'banner' && item.is_active));
 
         // Fetch latest books
-        const productColumns = 'id, title, price, sale_price, image_url, category_id, stock_quantity, author_id, type, metadata, created_at';
+        const productColumns = 'id, title, price, sale_price, image_url, category_id, stock_quantity, type, metadata, created_at';
         let { data: latestBooks, error: latestBooksError } = await supabase
           .from('products')
           .select(`${productColumns}, category:categories(name)`)
@@ -63,6 +63,7 @@ export default function Home() {
           const mappedBooks = latestBooks.map(book => ({
             ...book,
             category: (book.category as any)?.name || 'Uncategorized',
+            author: (book as any).metadata?.author || 'Unknown Author',
             rating: (book as any).metadata?.rating || 0
           }));
           setFeaturedBooks(mappedBooks);
