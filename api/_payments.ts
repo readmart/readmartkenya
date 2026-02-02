@@ -114,7 +114,7 @@ export const getK2Token = async () => {
   if (!response.ok) {
     const errorText = await response.text();
     console.error(`K2 Token Error (Status ${response.status}):`, errorText);
-    throw new Error(`Failed to get K2 token (Status ${response.status}). Please check your credentials.`);
+    throw new Error(`K2 Token Error (Status ${response.status}): ${errorText}`);
   }
 
   const data = (await response.json()) as { expires_in?: number; access_token: string };
@@ -176,7 +176,7 @@ export const initiateK2StkPush = async (params: K2StkPushRequest) => {
     headers: {
       'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/json',
-      'X-Api-Key': apiKey,
+      'Accept': 'application/json',
       'User-Agent': 'ReadMart/1.0.0 (https://readmartke.com)'
     },
     body: JSON.stringify(payload),
@@ -185,7 +185,14 @@ export const initiateK2StkPush = async (params: K2StkPushRequest) => {
   if (!response.ok) {
     const errorText = await response.text();
     console.error(`K2 STK Push API Error (Status ${response.status}):`, errorText);
-    throw new Error(`K2 STK Push failed (Status ${response.status}). This could be due to invalid phone number or API issues.`);
+    
+    let parsedError = errorText;
+    try {
+      const jsonError = JSON.parse(errorText);
+      parsedError = jsonError.message || jsonError.error || jsonError.description || errorText;
+    } catch (e) {}
+    
+    throw new Error(`K2 STK Push Error (Status ${response.status}): ${parsedError}`);
   }
 
   const location = response.headers.get('location');

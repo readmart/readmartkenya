@@ -712,7 +712,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           if (isK2Error) {
              return json(res, 502, { 
               error: 'Payment Provider Error', 
-              message: 'We are having trouble communicating with our payment provider. Please try again in a few moments.',
+              message: err.message,
               code: 'PROVIDER_ERROR'
             });
           }
