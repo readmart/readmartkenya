@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { supabase, json, badRequest, serverError, unauthorized } from './_utils.js';
+import { contactHandler } from './_contact.js';
 import { sendEmail, renderNewsletterConfirmationEmail } from './_email.js';
 import crypto from 'crypto';
 
@@ -12,7 +13,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).end();
   }
 
+  const { action } = req.query;
+
   try {
+    if (action === 'contact') {
+      return contactHandler(req, res);
+    }
+
     if (req.method === 'POST') {
       const { email } = req.body;
       if (!email) return badRequest(res, 'Email is required');

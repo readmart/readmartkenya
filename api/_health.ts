@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { supabase, json, serverError } from './_utils.js';
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+export async function healthHandler(req: VercelRequest, res: VercelResponse) {
   try {
     // Check DB connection
     const { error } = await supabase.from('profiles').select('count', { count: 'exact', head: true });

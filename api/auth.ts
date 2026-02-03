@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { json, badRequest, serverError, unauthorized, logAction } from './_utils.js';
+import { healthHandler } from './_health.js';
 import { SignJWT, jwtVerify } from 'jose';
 
 const JWT_SECRET = new TextEncoder().encode(
@@ -18,6 +19,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const { action } = req.query;
 
   try {
+    if (action === 'health') {
+      return healthHandler(req, res);
+    }
+
     if (action === 'create-session' && req.method === 'POST') {
       const { userId, email } = req.body;
       if (!userId || !email) return badRequest(res, 'Missing userId or email');

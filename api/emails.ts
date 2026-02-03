@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { supabase, json, serverError, badRequest } from './_utils.js';
+import { remindersHandler } from './_reminders.js';
 
 /**
  * Resend Webhook Handler
@@ -18,7 +19,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return json(res, 405, { error: 'Method not allowed' });
   }
 
+  const { action } = req.query;
+
   try {
+    if (action === 'reminders') {
+      return remindersHandler(req, res);
+    }
+
     const payload = req.body;
     
     // Resend webhooks follow a specific structure

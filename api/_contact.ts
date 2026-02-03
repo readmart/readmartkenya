@@ -2,15 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { supabase, json, badRequest, serverError, logAction } from './_utils.js';
 import { sendEmail, renderContactNotificationEmail } from './_email.js';
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
-
+export async function contactHandler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
     return json(res, 405, { error: 'Method not allowed' });
   }

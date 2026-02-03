@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { supabase, json, badRequest, serverError } from './_utils.js';
+import { ebooksHandler } from './_ebooks.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -10,7 +11,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).end();
   }
 
+  const { action } = req.query;
+
   try {
+    if (action === 'ebooks') {
+      return ebooksHandler(req, res);
+    }
+
     if (req.method === 'GET') {
       const { id, category, featured } = req.query;
 
