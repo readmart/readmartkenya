@@ -9,6 +9,7 @@ export interface CMSContent {
   link_url: string | null;
   is_active: boolean;
   metadata: any;
+  published_at?: string;
   created_at: string;
 }
 

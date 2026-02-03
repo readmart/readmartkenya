@@ -89,7 +89,7 @@ export default function Events() {
                       </div>
                       <div>
                         <p className="text-xs font-black uppercase tracking-widest text-muted-foreground">Date</p>
-                        <p className="font-bold">{new Date(event.published_at).toLocaleDateString()}</p>
+                        <p className="font-bold">{new Date(event.published_at || event.created_at).toLocaleDateString()}</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-4">

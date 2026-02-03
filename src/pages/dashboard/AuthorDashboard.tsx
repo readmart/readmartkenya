@@ -9,7 +9,6 @@ import {
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { useCurrency } from '@/contexts/CurrencyContext';
 import { useAuth } from '@/contexts/AuthContext';
-import { Link } from 'react-router-dom';
 import { 
   getAuthorSalesReport, 
   getInventory, 

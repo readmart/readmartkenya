@@ -1095,10 +1095,9 @@ function NewsletterView({ data, onUpdate }: any) {
 }
 
 // --- Payouts View ---
-function PayoutsView({ data, onUpdate, isDisbursing, onDisburse, formatPrice }: any) {
+function PayoutsView({ data, isDisbursing, onDisburse, formatPrice }: any) {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
-  const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
   const filteredData = useMemo(() => {
@@ -1111,8 +1110,7 @@ function PayoutsView({ data, onUpdate, isDisbursing, onDisburse, formatPrice }: 
     });
   }, [data, searchTerm, statusFilter]);
 
-  const totalPages = Math.ceil(filteredData.length / itemsPerPage);
-  const currentItems = filteredData.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+  const currentItems = filteredData.slice(0, itemsPerPage);
 
   const pendingAmount = data
     .filter((p: any) => p.payout_status === 'pending')
@@ -5266,66 +5264,73 @@ function AgreementsView({ partnerships, authors, protocols, onUpdate }: any) {
     }, {});
   }, [protocols]);
 
-  const ApplicationCard = ({ app, table, type }: any) => (
-    <div className="p-6 bg-slate-50 rounded-[32px] border border-slate-100 space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="font-black text-slate-900 text-lg">{app.company_name || app.organization || app.full_name}</p>
-          <p className="text-xs font-bold text-slate-400">{app.email}</p>
+  const getAppName = (app: any) => app.business_name || app.company_name || app.organization || app.full_name || app.contact_person || 'Unnamed Entity';
+
+  const ApplicationCard = ({ app, table, type }: any) => {
+    const appName = getAppName(app);
+    return (
+      <div className="p-6 bg-slate-50 rounded-[32px] border border-slate-100 space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="font-black text-slate-900 text-lg">
+              {appName}
+            </p>
+            <p className="text-xs font-bold text-slate-400">{app.email}</p>
+          </div>
+          <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border ${getStatusColor(app.status)}`}>
+            {getStatusLabel(app.status)}
+          </span>
         </div>
-        <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border ${getStatusColor(app.status)}`}>
-          {getStatusLabel(app.status)}
-        </span>
-      </div>
 
-      <div className="flex gap-2">
-        <button 
-          onClick={() => setSelectedApp({ ...app, _table: table, _type: type })}
-          className="flex-1 flex items-center justify-center gap-2 bg-white text-slate-900 py-3 rounded-xl font-bold text-xs hover:bg-slate-900 hover:text-white transition-all shadow-sm border border-slate-100"
-        >
-          <Eye className="w-4 h-4" />
-          View Details
-        </button>
-        
-        {app.status === 'pending' && (
-          <label className={`flex-1 flex items-center justify-center gap-2 bg-primary text-white py-3 rounded-xl font-bold text-xs hover:opacity-90 transition-all shadow-lg shadow-primary/20 cursor-pointer ${isUploading ? 'opacity-50 cursor-not-allowed' : ''}`}>
-            {isUploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileUp className="w-4 h-4" />}
-            {isUploading ? 'Uploading...' : 'Upload Agreement'}
-            <input 
-              type="file" 
-              className="hidden" 
-              accept=".pdf,.docx" 
-              disabled={isUploading}
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) handleUploadAgreement(table, app.id, file, app.full_name, app.user_id);
-              }}
-            />
-          </label>
-        )}
-
-        {app.status === 'agreement_confirming' && (
+        <div className="flex gap-2">
           <button 
-            onClick={() => handleStatusUpdate(table, app.id, 'activating', app.full_name, app.user_id)}
-            className="flex-1 flex items-center justify-center gap-2 bg-indigo-600 text-white py-3 rounded-xl font-bold text-xs hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-600/20"
+            onClick={() => setSelectedApp({ ...app, _table: table, _type: type })}
+            className="flex-1 flex items-center justify-center gap-2 bg-white text-slate-900 py-3 rounded-xl font-bold text-xs hover:bg-slate-900 hover:text-white transition-all shadow-sm border border-slate-100"
           >
-            <CheckCircle className="w-4 h-4" />
-            Process Activation
+            <Eye className="w-4 h-4" />
+            View Details
           </button>
-        )}
+          
+          {app.status === 'pending' && (
+            <label className={`flex-1 flex items-center justify-center gap-2 bg-primary text-white py-3 rounded-xl font-bold text-xs hover:opacity-90 transition-all shadow-lg shadow-primary/20 cursor-pointer ${isUploading ? 'opacity-50 cursor-not-allowed' : ''}`}>
+              {isUploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileUp className="w-4 h-4" />}
+              {isUploading ? 'Uploading...' : 'Upload Agreement'}
+              <input 
+                type="file" 
+                className="hidden" 
+                accept=".pdf,.docx" 
+                disabled={isUploading}
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) handleUploadAgreement(table, app.id, file, appName, app.user_id);
+                }}
+              />
+            </label>
+          )}
 
-        {app.status === 'activating' && (
-          <button 
-            onClick={() => handleStatusUpdate(table, app.id, 'completed', app.full_name, app.user_id)}
-            className="flex-1 flex items-center justify-center gap-2 bg-green-600 text-white py-3 rounded-xl font-bold text-xs hover:bg-green-700 transition-all shadow-lg shadow-green-600/20"
-          >
-            <Sparkles className="w-4 h-4" />
-            Final Activation
-          </button>
-        )}
+          {app.status === 'agreement_confirming' && (
+            <button 
+              onClick={() => handleStatusUpdate(table, app.id, 'activating', appName, app.user_id)}
+              className="flex-1 flex items-center justify-center gap-2 bg-indigo-600 text-white py-3 rounded-xl font-bold text-xs hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-600/20"
+            >
+              <CheckCircle className="w-4 h-4" />
+              Process Activation
+            </button>
+          )}
+
+          {app.status === 'activating' && (
+            <button 
+              onClick={() => handleStatusUpdate(table, app.id, 'completed', appName, app.user_id)}
+              className="flex-1 flex items-center justify-center gap-2 bg-green-600 text-white py-3 rounded-xl font-bold text-xs hover:bg-green-700 transition-all shadow-lg shadow-green-600/20"
+            >
+              <Sparkles className="w-4 h-4" />
+              Final Activation
+            </button>
+          )}
+        </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   return (
     <div className="space-y-8 pb-20">

@@ -21,7 +21,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { 
-  getBookClubDetails, 
+  getBookClub, 
   getClubMembers, 
   getClubBooks, 
   getClubDiscussions,
@@ -50,7 +50,7 @@ const ClubDetails: React.FC = () => {
     try {
       setLoading(true);
       const [clubDetails, clubMembers, clubBooks, clubDiscussions] = await Promise.all([
-        getBookClubDetails(id!),
+        getBookClub(id!),
         getClubMembers(id!),
         getClubBooks(id!),
         getClubDiscussions(id!)

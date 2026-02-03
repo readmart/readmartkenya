@@ -384,7 +384,7 @@ export default function BookClub() {
                       <Lightbulb className="w-6 h-6" />
                     </div>
                     <span className="text-xs font-black text-muted-foreground uppercase tracking-widest">
-                      {new Date(insight.published_at).toLocaleDateString()}
+                      {new Date(insight.published_at || insight.created_at).toLocaleDateString()}
                     </span>
                   </div>
                   <h3 className="text-3xl font-black mb-4 tracking-tight group-hover:text-primary transition-colors">
@@ -477,7 +477,7 @@ export default function BookClub() {
                     <div className="space-y-3 mb-8">
                       <div className="flex items-center gap-3 text-sm font-bold text-muted-foreground">
                         <Calendar className="w-4 h-4 text-primary" />
-                        <span>{new Date(event.published_at).toLocaleDateString()}</span>
+                        <span>{new Date(event.published_at || event.created_at).toLocaleDateString()}</span>
                       </div>
                       <div className="flex items-center gap-3 text-sm font-bold text-muted-foreground">
                         <Clock className="w-4 h-4 text-primary" />
