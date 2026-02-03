@@ -24,6 +24,7 @@ DROP POLICY IF EXISTS "Public profiles are viewable by everyone." ON public.prof
 
 -- 4. Create a more restrictive policy for the main profiles table
 -- Users can see their own full profile, and admins/founders can see everything.
+DROP POLICY IF EXISTS "Profiles are viewable by owner or admin" ON public.profiles;
 CREATE POLICY "Profiles are viewable by owner or admin" ON public.profiles
     FOR SELECT USING (
         auth.uid() = id 
