@@ -74,34 +74,53 @@ export default function FounderDashboard() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return;
 
-      // 1. Core & Content Data
+      // 1. Core Data
       const coreChannel = supabase
-        .channel('founder_dashboard_main')
+        .channel('founder_dashboard_core')
         .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => fetchAllData())
         .on('postgres_changes', { event: '*', schema: 'public', table: 'products' }, () => fetchAllData())
         .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => fetchAllData())
+        .subscribe((status) => {
+          if (status === 'CHANNEL_ERROR') {
+            console.warn('Realtime Error (Core): Failed to subscribe to orders/products/profiles');
+          }
+        });
+
+      // 2. Content Data
+      const contentChannel = supabase
+        .channel('founder_dashboard_content')
         .on('postgres_changes', { event: '*', schema: 'public', table: 'cms_content' }, () => fetchAllData())
         .on('postgres_changes', { event: '*', schema: 'public', table: 'shipping_zones' }, () => fetchAllData())
         .subscribe((status) => {
           if (status === 'CHANNEL_ERROR') {
-            console.warn('Realtime Error (Main): Failed to subscribe to core tables');
+            console.warn('Realtime Error (Content): Failed to subscribe to cms_content/shipping_zones');
           }
         });
 
-      // 2. Applications & Comms
-      const sideChannel = supabase
-        .channel('founder_dashboard_side')
+      // 3. Applications & Agreements
+      const appsChannel = supabase
+        .channel('founder_dashboard_apps')
         .on('postgres_changes', { event: '*', schema: 'public', table: 'author_applications' }, () => fetchAllData())
         .on('postgres_changes', { event: '*', schema: 'public', table: 'partnership_applications' }, () => fetchAllData())
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'partnership_agreements' }, () => fetchAllData())
+        .subscribe((status) => {
+          if (status === 'CHANNEL_ERROR') {
+            console.warn('Realtime Error (Apps): Failed to subscribe to applications/agreements');
+          }
+        });
+
+      // 4. Communications & Subscriptions
+      const commsChannel = supabase
+        .channel('founder_dashboard_comms')
         .on('postgres_changes', { event: '*', schema: 'public', table: 'contact_messages' }, () => fetchAllData())
         .on('postgres_changes', { event: '*', schema: 'public', table: 'newsletter_subscriptions' }, () => fetchAllData())
         .subscribe((status) => {
           if (status === 'CHANNEL_ERROR') {
-            console.warn('Realtime Error (Side): Failed to subscribe to side tables');
+            console.warn('Realtime Error (Comms): Failed to subscribe to messages/subscriptions');
           }
         });
 
-      return [coreChannel, sideChannel];
+      return [coreChannel, contentChannel, appsChannel, commsChannel];
     };
 
     let channels: any[] = [];
