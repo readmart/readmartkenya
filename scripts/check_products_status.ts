@@ -16,7 +16,73 @@ if (!supabaseUrl || !supabaseKey) {
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 async function checkProducts() {
-  console.log('--- Checking Categories ---');
+  console.log('\n--- Checking Tables ---');
+  const { data: tables, error: tableErr } = await supabase
+    .rpc('exec_sql', { sql_query: "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'" });
+  
+  if (tableErr) {
+    console.error('Error fetching tables (rpc failed):', tableErr.message);
+    // Fallback: try to select from them directly to see if they exist
+    const checkTable = async (name: string) => {
+      const { error } = await supabase.from(name).select('id').limit(1);
+      console.log(`Table '${name}' exists: ${!error || error.code !== '42P01'}`);
+    };
+    await checkTable('cms_content');
+    await checkTable('clubs');
+    await checkTable('club_members');
+    await checkTable('book_clubs');
+    await checkTable('book_club_members');
+    await checkTable('book_club_memberships');
+    await checkTable('categories');
+    await checkTable('products');
+  } else {
+    console.log('Tables in public schema:');
+    tables.forEach((t: any) => console.log(`- ${t.table_name}`));
+  }
+
+  console.log('\n--- Checking CMS Content Columns ---');
+  const { data: cmsCols, error: cmsColErr } = await supabase
+    .from('cms_content')
+    .select('*')
+    .limit(1);
+  
+  if (cmsColErr) {
+    console.error('Error fetching cms_content:', cmsColErr.message);
+  } else if (cmsCols && cmsCols.length > 0) {
+    console.log('cms_content columns:', Object.keys(cmsCols[0]));
+  } else {
+    console.log('cms_content table is empty, cannot determine columns from select *');
+  }
+
+  console.log('\n--- Checking Clubs Columns ---');
+  const { data: clubsCols, error: clubsColErr } = await supabase
+    .from('clubs')
+    .select('*')
+    .limit(1);
+  
+  if (clubsColErr) {
+    console.error('Error fetching clubs:', clubsColErr.message);
+  } else if (clubsCols && clubsCols.length > 0) {
+    console.log('clubs columns:', Object.keys(clubsCols[0]));
+  } else {
+    console.log('clubs table is empty');
+  }
+
+  console.log('\n--- Checking Club Members Columns ---');
+  const { data: membersCols, error: membersColErr } = await supabase
+    .from('club_members')
+    .select('*')
+    .limit(1);
+  
+  if (membersColErr) {
+    console.error('Error fetching club_members:', membersColErr.message);
+  } else if (membersCols && membersCols.length > 0) {
+    console.log('club_members columns:', Object.keys(membersCols[0]));
+  } else {
+    console.log('club_members table is empty');
+  }
+
+  console.log('\n--- Checking Categories ---');
   const { data: categories, error: catErr } = await supabase
     .from('categories')
     .select('*');

@@ -35,11 +35,13 @@ export default function AuthorDashboard() {
   const [settings, setSettings] = useState<any>(null);
   const [categories, setCategories] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isMounted, setIsMounted] = useState(false);
+  const [shouldRenderChart, setShouldRenderChart] = useState(false);
   const [isUploadingProfile, setIsUploadingProfile] = useState(false);
 
   useEffect(() => {
-    setIsMounted(true);
+    // Component mount logic
+    const timer = setTimeout(() => setShouldRenderChart(true), 200);
+    return () => clearTimeout(timer);
   }, []);
 
   const handleProfileImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -352,9 +354,9 @@ export default function AuthorDashboard() {
               </div>
             </div>
             <div className="h-[400px] w-full relative">
-              {isMounted && (
-                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0} debounce={50}>
-                  <BarChart data={performanceData}>
+              {shouldRenderChart && (
+                <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={performanceData}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.1)" />
                     <XAxis dataKey="month" stroke="rgba(255,255,255,0.5)" />
                     <YAxis stroke="rgba(255,255,255,0.5)" />

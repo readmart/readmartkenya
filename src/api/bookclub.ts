@@ -66,71 +66,57 @@ export async function getMyBookClubs() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return [];
 
-  const clubColumns = 'id, name, description, genre, image_url, is_public, meeting_frequency, meeting_format, meeting_platform, is_active, created_at';
   let { data, error } = await supabase
-    .from('book_club_members')
+    .from('book_club_memberships')
     .select(`
       club_id,
-      role,
       status,
-      book_clubs (${clubColumns})
+      club:cms_content(id, title, content, image_url, metadata, is_active, created_at)
     `)
     .eq('user_id', user.id)
     .eq('status', 'active');
 
-  if (error) {
-    if (error.code === 'PGRST204' || error.message?.includes('column') || error.message?.includes('cache')) {
-      console.warn('Advanced book club columns missing from cache, falling back to core columns');
-      const { data: fallbackData, error: fallbackError } = await supabase
-        .from('book_club_members')
-        .select(`
-          club_id,
-          role,
-          status,
-          book_clubs (id, name, is_active)
-        `)
-        .eq('user_id', user.id)
-        .eq('status', 'active');
-      
-      if (fallbackError) throw fallbackError;
-      data = fallbackData as any;
-    } else {
-      throw error;
-    }
-  }
+  if (error) throw error;
 
-  return (data || []).map(item => ({
-    ...(item.book_clubs as any),
-    my_role: item.role,
-    my_status: item.status
-  }));
+  return (data || []).map(m => {
+    const club = Array.isArray(m.club) ? m.club[0] : m.club;
+    return {
+      club_id: m.club_id,
+      role: 'member', // Default since book_club_memberships doesn't have role
+      status: m.status,
+      book_club: club ? {
+        id: club.id,
+        name: club.title,
+        description: club.content,
+        image_url: club.image_url,
+        is_active: club.is_active,
+        created_at: club.created_at,
+        metadata: club.metadata
+      } : null
+    };
+  });
 }
 
-export async function getBookClubDetails(clubId: string) {
-  const clubColumns = 'id, name, description, genre, image_url, is_public, require_approval, meeting_frequency, meeting_format, meeting_platform, created_by, is_active, metadata, created_at, updated_at';
+export async function getBookClub(id: string) {
   let { data, error } = await supabase
-    .from('book_clubs')
-    .select(clubColumns)
-    .eq('id', clubId)
+    .from('cms_content')
+    .select('id, title, content, image_url, metadata, is_active, created_at')
+    .eq('id', id)
+    .eq('type', 'book_club')
     .maybeSingle();
 
-  if (error) {
-    if (error.code === 'PGRST204' || error.message?.includes('column') || error.message?.includes('cache')) {
-      console.warn('Advanced book club columns missing from cache, falling back to core columns');
-      const { data: fallbackData, error: fallbackError } = await supabase
-        .from('book_clubs')
-        .select('id, name, description, is_active')
-        .eq('id', clubId)
-        .maybeSingle();
-      
-      if (fallbackError) throw fallbackError;
-      data = fallbackData as any;
-    } else {
-      throw error;
-    }
-  }
+  if (error) throw error;
+  if (!data) return null;
 
-  return data;
+  return {
+    id: data.id,
+    name: data.title,
+    description: data.content,
+    image_url: data.image_url,
+    is_active: data.is_active,
+    created_at: data.created_at,
+    metadata: data.metadata
+  } as unknown as BookClub;
 }
 
 export async function createBookClub(clubData: Partial<BookClub>) {

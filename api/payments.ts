@@ -260,30 +260,31 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               if (isClubMembership && clubId) {
                 console.log(`Activating club membership for user ${userId} in club ${clubId}`);
                 
-                // Update club_members table
+                // Update book_club_memberships table
                 try {
-                  const { error: clubError } = await supabase.from('club_members').upsert({
+                  const { error: clubError } = await supabase.from('book_club_memberships').upsert({
                     user_id: userId,
                     club_id: clubId,
-                    payment_status: 'paid',
                     status: 'active',
+                    is_active: true,
                     joined_at: new Date().toISOString()
                   }, { onConflict: 'user_id, club_id' });
 
                   if (clubError) {
                     if (clubError.code === 'PGRST204' || clubError.message?.includes('cache')) {
-                      console.warn('Club members schema cache issue, retrying minimal upsert');
-                      await supabase.from('club_members').upsert({
+                      console.warn('Book club memberships schema cache issue, retrying minimal upsert');
+                      await supabase.from('book_club_memberships').upsert({
                         user_id: userId,
                         club_id: clubId,
-                        status: 'active'
+                        status: 'active',
+                        is_active: true
                       }, { onConflict: 'user_id, club_id' });
                     } else {
                       throw clubError;
                     }
                   }
                 } catch (e) {
-                  console.error('Failed to update club membership:', e);
+                  console.error('Failed to update book club membership:', e);
                 }
 
                 // Create notification
@@ -772,21 +773,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               if (type === 'club_membership' && metadata?.club_id) {
                 console.log(`Demo mode: Activating club membership for user ${user.id} in club ${metadata.club_id}`);
                 try {
-                  const { error: clubDemoError } = await supabase.from('club_members').upsert({
+                  const { error: clubDemoError } = await supabase.from('book_club_memberships').upsert({
                     user_id: user.id,
                     club_id: metadata.club_id,
-                    payment_status: 'paid',
                     status: 'active',
+                    is_active: true,
                     joined_at: new Date().toISOString()
                   }, { onConflict: 'user_id, club_id' });
 
                   if (clubDemoError) {
                     if (clubDemoError.code === 'PGRST204' || clubDemoError.message?.includes('cache')) {
-                      console.warn('Club members schema cache issue in demo mode, retrying');
-                      await supabase.from('club_members').upsert({
+                      console.warn('Book club memberships schema cache issue in demo mode, retrying');
+                      await supabase.from('book_club_memberships').upsert({
                         user_id: user.id,
                         club_id: metadata.club_id,
-                        status: 'active'
+                        status: 'active',
+                        is_active: true
                       }, { onConflict: 'user_id, club_id' });
                     }
                   }

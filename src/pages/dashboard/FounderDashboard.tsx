@@ -63,67 +63,54 @@ export default function FounderDashboard() {
   });
 
   // Fetch all required data
-  const [isMounted, setIsMounted] = useState(false);
-
+  
   useEffect(() => {
-    setIsMounted(true);
     fetchAllData();
 
     // Set up Realtime synchronization for critical tables
-    // Split into multiple channels to prevent one failure from breaking all subscriptions
+    // Consolidated into fewer channels for better stability
     
-    // 1. Core Data (Orders, Products, Profiles)
-    const coreChannel = supabase
-      .channel('founder_dashboard_core')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => fetchAllData())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'products' }, () => fetchAllData())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => fetchAllData())
-      .subscribe((status) => {
-        if (status === 'CHANNEL_ERROR') {
-          console.warn('Realtime Error (Core): Failed to subscribe to orders/products/profiles');
-        }
-      });
+    const setupSubscriptions = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
 
-    // 2. Content & Settings (CMS, Shipping)
-    const contentChannel = supabase
-      .channel('founder_dashboard_content')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'cms_content' }, () => fetchAllData())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'shipping_zones' }, () => fetchAllData())
-      .subscribe((status) => {
-        if (status === 'CHANNEL_ERROR') {
-          console.warn('Realtime Error (Content): Failed to subscribe to cms_content/shipping_zones');
-        }
-      });
+      // 1. Core & Content Data
+      const coreChannel = supabase
+        .channel('founder_dashboard_main')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => fetchAllData())
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'products' }, () => fetchAllData())
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => fetchAllData())
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'cms_content' }, () => fetchAllData())
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'shipping_zones' }, () => fetchAllData())
+        .subscribe((status) => {
+          if (status === 'CHANNEL_ERROR') {
+            console.warn('Realtime Error (Main): Failed to subscribe to core tables');
+          }
+        });
 
-    // 3. Applications & Agreements
-    const appsChannel = supabase
-      .channel('founder_dashboard_apps')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'author_applications' }, () => fetchAllData())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'partnership_applications' }, () => fetchAllData())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'partnership_agreements' }, () => fetchAllData())
-      .subscribe((status) => {
-        if (status === 'CHANNEL_ERROR') {
-          console.warn('Realtime Error (Apps): Failed to subscribe to applications/agreements');
-        }
-      });
+      // 2. Applications & Comms
+      const sideChannel = supabase
+        .channel('founder_dashboard_side')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'author_applications' }, () => fetchAllData())
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'partnership_applications' }, () => fetchAllData())
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'contact_messages' }, () => fetchAllData())
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'newsletter_subscriptions' }, () => fetchAllData())
+        .subscribe((status) => {
+          if (status === 'CHANNEL_ERROR') {
+            console.warn('Realtime Error (Side): Failed to subscribe to side tables');
+          }
+        });
 
-    // 4. Communications
-    const commsChannel = supabase
-      .channel('founder_dashboard_comms')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'contact_messages' }, () => fetchAllData())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'newsletter_subscriptions' }, () => fetchAllData())
-      .subscribe((status) => {
-        if (status === 'CHANNEL_ERROR') {
-          console.warn('Realtime Error (Comms): Failed to subscribe to messages/subscriptions');
-        }
-      });
+      return [coreChannel, sideChannel];
+    };
+
+    let channels: any[] = [];
+    setupSubscriptions().then(subs => {
+      if (subs) channels = subs;
+    });
 
     return () => {
-      setIsMounted(false);
-      supabase.removeChannel(coreChannel);
-      supabase.removeChannel(contentChannel);
-      supabase.removeChannel(appsChannel);
-      supabase.removeChannel(commsChannel);
+      channels.forEach(ch => supabase.removeChannel(ch));
     };
   }, []);
 
@@ -244,7 +231,7 @@ export default function FounderDashboard() {
 
   const renderActiveTab = () => {
     switch (activeTab) {
-      case 'analytics': return <AnalyticsView data={data.analytics} formatPrice={formatPrice} isMounted={isMounted} />;
+      case 'analytics': return <AnalyticsView data={data.analytics} formatPrice={formatPrice} />;
       case 'inventory': return (
         <InventoryView 
           data={data.inventory} 
@@ -1060,8 +1047,15 @@ function NewsletterView({ data, onUpdate }: any) {
 
 // --- View Components ---
 
-function AnalyticsView({ data, formatPrice, isMounted }: any) {
+function AnalyticsView({ data, formatPrice }: any) {
   if (!data) return null;
+
+  const [shouldRenderChart, setShouldRenderChart] = useState(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setShouldRenderChart(true), 100);
+    return () => clearTimeout(timer);
+  }, []);
 
   const stats = [
     { label: 'Total Revenue', value: formatPrice(data.totalRevenue), trend: data.revenueTrend, icon: DollarSign, color: 'bg-green-500' },
@@ -1124,8 +1118,8 @@ function AnalyticsView({ data, formatPrice, isMounted }: any) {
             </div>
           </div>
           <div className="h-[400px] w-full relative">
-            {isMounted && (
-              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0} debounce={50}>
+            {shouldRenderChart && (
+              <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={data.salesData}>
                   <defs>
                     <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
@@ -1160,8 +1154,8 @@ function AnalyticsView({ data, formatPrice, isMounted }: any) {
         <div className="bg-white p-10 rounded-[40px] border border-slate-100 shadow-sm">
           <h3 className="text-xl font-black tracking-tighter uppercase mb-10">Category Saturation</h3>
           <div className="h-[400px] w-full relative">
-            {isMounted && (
-              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0} debounce={50}>
+            {shouldRenderChart && (
+              <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
                     data={data.categoryStats}
@@ -5567,8 +5561,18 @@ function PromosView({ data, onUpdate }: any) {
   const [isAuditModalOpen, setIsAuditModalOpen] = useState(false);
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
   const [isMetricsModalOpen, setIsMetricsModalOpen] = useState(false);
+  const [shouldRenderModalChart, setShouldRenderModalChart] = useState(false);
   const [selectedMetrics, setSelectedMetrics] = useState<any[]>([]);
   const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    if (isMetricsModalOpen) {
+      const timer = setTimeout(() => setShouldRenderModalChart(true), 300);
+      return () => clearTimeout(timer);
+    } else {
+      setShouldRenderModalChart(false);
+    }
+  }, [isMetricsModalOpen]);
 
   useEffect(() => {
     setIsMounted(true);
@@ -5857,7 +5861,7 @@ function PromosView({ data, onUpdate }: any) {
 
       {/* Audit Logs Modal */}
       <AnimatePresence>
-        {isMounted && isAuditModalOpen && (
+        {isAuditModalOpen && (
           <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setIsAuditModalOpen(false)} className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" />
             <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} className="relative bg-white w-full max-w-3xl rounded-[40px] shadow-2xl overflow-hidden max-h-[80vh] flex flex-col">
@@ -5892,7 +5896,7 @@ function PromosView({ data, onUpdate }: any) {
 
       {/* Metrics & Performance Modal */}
       <AnimatePresence>
-        {isMounted && isMetricsModalOpen && (
+        {isMetricsModalOpen && (
           <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setIsMetricsModalOpen(false)} className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" />
             <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} className="relative bg-white w-full max-w-4xl rounded-[40px] shadow-2xl overflow-hidden max-h-[80vh] flex flex-col">
@@ -5913,8 +5917,8 @@ function PromosView({ data, onUpdate }: any) {
                 ) : (
                   <div className="space-y-8">
                     <div className="h-64 relative">
-                      {isMounted && (
-                        <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0} debounce={50}>
+                      {shouldRenderModalChart && (
+                        <ResponsiveContainer width="100%" height="100%">
                         <AreaChart data={selectedMetrics}>
                           <defs>
                             <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">

@@ -9,7 +9,6 @@ export interface CMSContent {
   link_url: string | null;
   is_active: boolean;
   metadata: any;
-  published_at: string;
   created_at: string;
 }
 
@@ -178,27 +177,24 @@ export async function getWishlist() {
  */
 export async function getAvailableBookClubs(): Promise<BookClub[]> {
   try {
-    const columns = 'id, name, description, image_url, founder_id, membership_price, is_active, created_at, metadata';
     let { data, error } = await supabase
-      .from('clubs')
-      .select(columns)
-      .eq('is_active', true);
+      .from('cms_content')
+      .select('id, title, content, image_url, is_active, metadata, created_at')
+      .eq('type', 'book_club');
 
-    if (error) {
-      if (error.code === 'PGRST204' || error.message?.includes('column') || error.message?.includes('cache')) {
-        console.warn('Advanced club columns missing from cache, falling back to core columns');
-        const { data: fallbackData, error: fallbackError } = await supabase
-          .from('clubs')
-          .select('id, name, is_active')
-          .eq('is_active', true);
-        
-        if (fallbackError) throw fallbackError;
-        data = fallbackData as any;
-      } else {
-        throw error;
-      }
-    }
-    return (data as BookClub[]) || [];
+    if (error) throw error;
+
+    return (data || []).map(item => ({
+      id: item.id,
+      name: item.title,
+      description: item.content,
+      image_url: item.image_url,
+      founder_id: item.metadata?.founder_id || null,
+      membership_price: item.metadata?.membership_price || 0,
+      is_active: item.is_active !== false,
+      created_at: item.created_at,
+      metadata: item.metadata
+    })) as BookClub[];
   } catch (error) {
     console.warn('Clubs fetch failed, returning empty list');
     return [];
@@ -210,29 +206,27 @@ export async function getAvailableBookClubs(): Promise<BookClub[]> {
  */
 export async function getBookClubById(id: string): Promise<BookClub | null> {
   try {
-    const columns = 'id, name, description, image_url, founder_id, membership_price, is_active, created_at, metadata';
     let { data, error } = await supabase
-      .from('clubs')
-      .select(columns)
+      .from('cms_content')
+      .select('id, title, content, image_url, is_active, metadata, created_at')
       .eq('id', id)
+      .eq('type', 'book_club')
       .maybeSingle();
 
-    if (error) {
-      if (error.code === 'PGRST204' || error.message?.includes('column') || error.message?.includes('cache')) {
-        console.warn('Advanced club columns missing from cache, falling back to core columns');
-        const { data: fallbackData, error: fallbackError } = await supabase
-          .from('clubs')
-          .select('id, name, is_active')
-          .eq('id', id)
-          .maybeSingle();
-        
-        if (fallbackError) throw fallbackError;
-        data = fallbackData as any;
-      } else {
-        throw error;
-      }
-    }
-    return data as BookClub;
+    if (error) throw error;
+    if (!data) return null;
+
+    return {
+      id: data.id,
+      name: data.title,
+      description: data.content,
+      image_url: data.image_url,
+      founder_id: data.metadata?.founder_id || null,
+      membership_price: data.metadata?.membership_price || 0,
+      is_active: data.is_active !== false,
+      created_at: data.created_at,
+      metadata: data.metadata
+    } as BookClub;
   } catch (error) {
     return null;
   }
@@ -249,7 +243,7 @@ export async function joinBookClub(clubId: string): Promise<BookClubMembership> 
   try {
     // Check for existing membership (One-Club Policy)
     const { data: existing } = await supabase
-      .from('club_members')
+      .from('book_club_memberships')
       .select('id')
       .eq('user_id', user.id)
       .eq('status', 'active')
@@ -260,35 +254,23 @@ export async function joinBookClub(clubId: string): Promise<BookClubMembership> 
     }
 
     const { data, error } = await supabase
-      .from('club_members')
+      .from('book_club_memberships')
       .upsert({ 
         user_id: user.id, 
         club_id: clubId, 
         status: 'active',
-        payment_status: 'unpaid' // Default to unpaid until payment flow is integrated
+        is_active: true
       })
-      .select('id, user_id, club_id, status, payment_status')
+      .select('id, user_id, club_id, status')
       .single();
 
-    if (error) {
-      if (error.code === 'PGRST204' || error.message?.includes('cache')) {
-        console.warn('Club join cache issue, retrying');
-        const { data: retryData, error: retryError } = await supabase
-          .from('club_members')
-          .upsert({ 
-            user_id: user.id, 
-            club_id: clubId, 
-            status: 'active'
-          })
-          .select('id')
-          .single();
-        
-        if (retryError) throw retryError;
-        return retryData as unknown as BookClubMembership;
-      }
-      throw error;
-    }
-    return data as unknown as BookClubMembership;
+    if (error) throw error;
+    
+    return {
+      ...data,
+      payment_status: 'paid', // Default for now
+      joined_at: new Date().toISOString()
+    } as unknown as BookClubMembership;
   } catch (error: any) {
     throw new Error(error.message || 'Failed to join book club');
   }
@@ -303,7 +285,7 @@ export async function leaveBookClub(clubId: string): Promise<boolean> {
 
   try {
     const { error } = await supabase
-      .from('club_members')
+      .from('book_club_memberships')
       .delete()
       .eq('user_id', user.id)
       .eq('club_id', clubId);
@@ -323,37 +305,37 @@ export async function getUserMembership(): Promise<BookClubMembership | null> {
   if (!user) return null;
 
   try {
-    const clubColumns = 'id, name, description, image_url, founder_id, membership_price, is_active, created_at';
     let { data, error } = await supabase
-      .from('club_members')
+      .from('book_club_memberships')
       .select(`
-        id, user_id, club_id, status, joined_at, expires_at, payment_status,
-        club:clubs(${clubColumns})
+        id, user_id, club_id, status, created_at, expires_at,
+        club:cms_content(id, title, content, image_url, metadata)
       `)
       .eq('user_id', user.id)
       .eq('status', 'active')
       .maybeSingle();
 
-    if (error) {
-      if (error.code === 'PGRST204' || error.message?.includes('column') || error.message?.includes('cache')) {
-        console.warn('Advanced membership columns missing from cache, falling back to core columns');
-        const { data: fallbackData, error: fallbackError } = await supabase
-          .from('club_members')
-          .select(`
-            id, user_id, club_id, status,
-            club:clubs(id, name)
-          `)
-          .eq('user_id', user.id)
-          .eq('status', 'active')
-          .maybeSingle();
-        
-        if (fallbackError) throw fallbackError;
-        data = fallbackData as any;
-      } else {
-        throw error;
-      }
-    }
-    return data as unknown as BookClubMembership;
+    if (error) throw error;
+    if (!data) return null;
+
+    const club = Array.isArray(data.club) ? data.club[0] : data.club;
+
+    return {
+      id: data.id,
+      user_id: data.user_id,
+      club_id: data.club_id,
+      status: data.status,
+      joined_at: data.created_at,
+      expires_at: data.expires_at,
+      payment_status: 'paid',
+      club: club ? {
+        id: club.id,
+        name: club.title,
+        description: club.content,
+        image_url: club.image_url,
+        metadata: club.metadata
+      } : undefined
+    } as unknown as BookClubMembership;
   } catch (error) {
     return null;
   }
@@ -364,7 +346,7 @@ export async function getUserMembership(): Promise<BookClubMembership | null> {
  */
 export async function getInsights(): Promise<CMSContent[]> {
   try {
-    const columns = 'id, type, title, content, image_url, link_url, is_active, metadata, published_at, created_at';
+    const columns = 'id, type, title, content, image_url, link_url, is_active, metadata, created_at';
     let { data, error } = await supabase
       .from('cms_content')
       .select(columns)
@@ -399,7 +381,7 @@ export async function getInsights(): Promise<CMSContent[]> {
  */
 export async function getEvents(): Promise<CMSContent[]> {
   try {
-    const columns = 'id, type, title, content, image_url, link_url, is_active, metadata, published_at, created_at';
+    const columns = 'id, type, title, content, image_url, link_url, is_active, metadata, created_at';
     let { data, error } = await supabase
       .from('cms_content')
       .select(columns)
@@ -435,17 +417,31 @@ export async function getEvents(): Promise<CMSContent[]> {
 export async function getRecentReviews(): Promise<Review[]> {
   try {
     const columns = 'id, user_id, product_id, rating, comment, created_at';
-    const profileColumns = 'full_name, avatar_url';
     const productColumns = 'title';
-    let { data, error } = await supabase
+    let data: any[] = [];
+    let { data: reviews, error } = await supabase
       .from('reviews')
       .select(`
         ${columns},
-        profile:profiles(${profileColumns}),
         product:products(${productColumns})
       `)
       .order('created_at', { ascending: false })
       .limit(10);
+
+    if (!error && reviews) {
+      // Manually fetch profiles from the secure public view
+      const userIds = [...new Set(reviews.map(r => r.user_id))];
+      const { data: profiles } = await supabase
+        .from('public_profiles')
+        .select('id, full_name, avatar_url')
+        .in('id', userIds);
+      
+      const profileMap = Object.fromEntries(profiles?.map(p => [p.id, p]) || []);
+      data = reviews.map(r => ({
+        ...r,
+        profile: profileMap[r.user_id] || null
+      }));
+    }
 
     if (error) {
       if (error.code === 'PGRST204' || error.message?.includes('column') || error.message?.includes('cache')) {
@@ -485,15 +481,27 @@ export async function getRecentReviews(): Promise<Review[]> {
 export async function getProductReviews(productId: string): Promise<Review[]> {
   try {
     const columns = 'id, user_id, product_id, rating, comment, created_at';
-    const profileColumns = 'full_name, avatar_url';
-    let { data, error } = await supabase
+    let data: any[] = [];
+    let { data: reviews, error } = await supabase
       .from('reviews')
-      .select(`
-        ${columns},
-        profile:profiles(${profileColumns})
-      `)
+      .select(columns)
       .eq('product_id', productId)
       .order('created_at', { ascending: false });
+
+    if (!error && reviews) {
+      // Manually fetch profiles from the secure public view
+      const userIds = [...new Set(reviews.map(r => r.user_id))];
+      const { data: profiles } = await supabase
+        .from('public_profiles')
+        .select('id, full_name, avatar_url')
+        .in('id', userIds);
+      
+      const profileMap = Object.fromEntries(profiles?.map(p => [p.id, p]) || []);
+      data = reviews.map(r => ({
+        ...r,
+        profile: profileMap[r.user_id] || null
+      }));
+    }
 
     if (error) {
       if (error.code === 'PGRST204' || error.message?.includes('column') || error.message?.includes('cache')) {
@@ -583,14 +591,26 @@ export async function getUserRSVPs(): Promise<EventRSVP[]> {
 export async function getEventRSVPs(eventId: string): Promise<(EventRSVP & { profile?: { full_name: string | null, email: string | null } })[]> {
   try {
     const columns = 'id, user_id, event_id, status, created_at';
-    const profileColumns = 'full_name, email';
-    let { data, error } = await supabase
+    let data: any[] = [];
+    let { data: rsvps, error } = await supabase
       .from('event_rsvps')
-      .select(`
-        ${columns},
-        profile:profiles(${profileColumns})
-      `)
+      .select(columns)
       .eq('event_id', eventId);
+
+    if (!error && rsvps) {
+      // Manually fetch profiles from the secure public view
+      const userIds = [...new Set(rsvps.map(r => r.user_id))];
+      const { data: profiles } = await supabase
+        .from('public_profiles')
+        .select('id, full_name, avatar_url')
+        .in('id', userIds);
+      
+      const profileMap = Object.fromEntries(profiles?.map(p => [p.id, p]) || []);
+      data = rsvps.map(r => ({
+        ...r,
+        profile: profileMap[r.user_id] || null
+      }));
+    }
 
     if (error) {
       if (error.code === 'PGRST204' || error.message?.includes('column') || error.message?.includes('cache')) {
@@ -623,16 +643,28 @@ export async function getEventRSVPs(eventId: string): Promise<(EventRSVP & { pro
 export async function getClubDiscussions(clubId: string): Promise<ClubDiscussion[]> {
   try {
     const columns = 'id, club_id, author_id, title, content, image_url, is_pinned, created_at';
-    const profileColumns = 'full_name, avatar_url';
-    let { data, error } = await supabase
+    let data: any[] = [];
+    let { data: discussions, error } = await supabase
       .from('club_discussions')
-      .select(`
-        ${columns},
-        author:profiles(${profileColumns})
-      `)
+      .select(columns)
       .eq('club_id', clubId)
       .order('is_pinned', { ascending: false })
       .order('created_at', { ascending: false });
+
+    if (!error && discussions) {
+      // Manually fetch profiles from the secure public view
+      const authorIds = [...new Set(discussions.map(d => d.author_id))];
+      const { data: profiles } = await supabase
+        .from('public_profiles')
+        .select('id, full_name, avatar_url')
+        .in('id', authorIds);
+      
+      const profileMap = Object.fromEntries(profiles?.map(p => [p.id, p]) || []);
+      data = discussions.map(d => ({
+        ...d,
+        author: profileMap[d.author_id] || null
+      }));
+    }
 
     if (error) {
       if (error.code === 'PGRST204' || error.message?.includes('column') || error.message?.includes('cache')) {

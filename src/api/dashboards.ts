@@ -149,7 +149,7 @@ export async function getGlobalAnalytics() {
         .from('book_club_memberships')
         .select('id', { count: 'exact', head: true })
         .eq('is_active', true)
-        .eq('status', 'paid'); // Ensure only paid memberships are counted
+        .in('status', ['active', 'paid']); // Count both active and paid memberships
       
       if (clubError) throw clubError;
       clubMembersCount = count || 0;

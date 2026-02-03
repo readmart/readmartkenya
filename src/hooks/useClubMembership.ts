@@ -30,34 +30,17 @@ export function useClubMembership(clubId?: string) {
     async function checkMembership() {
       try {
         let { data, error } = await supabase
-          .from('club_members')
-          .select('payment_status, status')
+          .from('book_club_memberships')
+          .select('status')
           .eq('club_id', clubId)
           .eq('user_id', currentUser.id)
           .maybeSingle();
 
-        if (error) {
-          if (error.code === 'PGRST204' || error.message?.includes('column') || error.message?.includes('cache')) {
-            console.warn('Club members schema cache issue, falling back to core');
-            const { data: fallbackData, error: fallbackError } = await supabase
-              .from('club_members')
-              .select('status')
-              .eq('club_id', clubId)
-              .eq('user_id', currentUser.id)
-              .maybeSingle();
-            
-            if (fallbackError) throw fallbackError;
-            data = fallbackData as any;
-          } else {
-            throw error;
-          }
-        }
+        if (error) throw error;
 
-        // status check is primary, payment_status check is secondary (and might be missing in fallback)
         const isActive = data?.status === 'active';
-        const isPaid = !data || !('payment_status' in data) || data.payment_status === 'paid' || data.payment_status === null;
-
-        if (data && isActive && isPaid) {
+        
+        if (data && isActive) {
           setIsMember(true);
         } else {
           setIsMember(false);

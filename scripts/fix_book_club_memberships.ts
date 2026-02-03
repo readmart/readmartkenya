@@ -16,63 +16,82 @@ if (!supabaseUrl || !supabaseServiceKey) {
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 async function fixBookClubMemberships() {
-  console.log('Fixing book_club_memberships table...');
+  console.log('Fixing book club tables (clubs, club_members, book_club_memberships)...');
 
   const sql = `
-  -- 1. Ensure book_club_memberships table exists and has the status column
-  DO $$ 
-  BEGIN
-    -- Create table if it doesn't exist (fallback)
-    IF NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'book_club_memberships') THEN
-      CREATE TABLE public.book_club_memberships (
-        id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
-        user_id uuid REFERENCES public.profiles(id) ON DELETE CASCADE NOT NULL,
-        club_id uuid REFERENCES public.cms_content(id) ON DELETE CASCADE,
-        tier text DEFAULT 'basic' CHECK (tier IN ('basic', 'premium', 'vip')),
-        status text DEFAULT 'pending',
-        expires_at timestamp with time zone,
-        is_active boolean DEFAULT true,
-        created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL,
-        UNIQUE(user_id, club_id)
-      );
-    ELSE
-      -- Add status column if it's missing
-      IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'book_club_memberships' AND column_name = 'status') THEN
-        ALTER TABLE public.book_club_memberships ADD COLUMN status text DEFAULT 'pending';
-      END IF;
-    END IF;
-  END $$;
+  -- 1. Create clubs table if it doesn't exist
+  CREATE TABLE IF NOT EXISTS public.clubs (
+    id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+    name text NOT NULL,
+    description text,
+    image_url text,
+    founder_id uuid REFERENCES public.profiles(id) ON DELETE SET NULL,
+    membership_price numeric DEFAULT 0,
+    is_active boolean DEFAULT true,
+    metadata jsonb DEFAULT '{}'::jsonb,
+    created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
+  );
 
-  -- 2. Enable RLS
+  -- 2. Create club_members table if it doesn't exist
+  CREATE TABLE IF NOT EXISTS public.club_members (
+    id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+    user_id uuid REFERENCES public.profiles(id) ON DELETE CASCADE NOT NULL,
+    club_id uuid REFERENCES public.clubs(id) ON DELETE CASCADE NOT NULL,
+    status text DEFAULT 'active' CHECK (status IN ('active', 'pending', 'expired', 'cancelled')),
+    payment_status text DEFAULT 'unpaid' CHECK (payment_status IN ('paid', 'unpaid', 'pending')),
+    joined_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL,
+    expires_at timestamp with time zone,
+    UNIQUE(user_id, club_id)
+  );
+
+  -- 3. Ensure book_club_memberships table exists (legacy support)
+  CREATE TABLE IF NOT EXISTS public.book_club_memberships (
+    id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+    user_id uuid REFERENCES public.profiles(id) ON DELETE CASCADE NOT NULL,
+    club_id uuid REFERENCES public.cms_content(id) ON DELETE CASCADE,
+    tier text DEFAULT 'basic' CHECK (tier IN ('basic', 'premium', 'vip')),
+    status text DEFAULT 'pending',
+    expires_at timestamp with time zone,
+    is_active boolean DEFAULT true,
+    created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL,
+    UNIQUE(user_id, club_id)
+  );
+
+  -- 4. Enable RLS
+  ALTER TABLE public.clubs ENABLE ROW LEVEL SECURITY;
+  ALTER TABLE public.club_members ENABLE ROW LEVEL SECURITY;
   ALTER TABLE public.book_club_memberships ENABLE ROW LEVEL SECURITY;
 
-  -- 3. Ensure policies exist for admins/founders to view all memberships
-  DO $$ 
-  BEGIN
-    IF NOT EXISTS (
-        SELECT 1 FROM pg_policies 
-        WHERE tablename = 'book_club_memberships' AND policyname = 'Admins can view all memberships'
-    ) THEN
-        CREATE POLICY "Admins can view all memberships" ON public.book_club_memberships
-            FOR SELECT USING (
-                EXISTS (
-                    SELECT 1 FROM public.profiles 
-                    WHERE id = auth.uid() 
-                    AND role IN ('admin', 'founder')
-                )
-            );
-    END IF;
+  -- 5. RLS Policies for clubs
+  DROP POLICY IF EXISTS "Clubs are viewable by everyone" ON public.clubs;
+  CREATE POLICY "Clubs are viewable by everyone" ON public.clubs
+    FOR SELECT USING (is_active = true);
 
-    IF NOT EXISTS (
-        SELECT 1 FROM pg_policies 
-        WHERE tablename = 'book_club_memberships' AND policyname = 'Users can view their own membership'
-    ) THEN
-        CREATE POLICY "Users can view their own membership" ON public.book_club_memberships
-            FOR SELECT USING (auth.uid() = user_id);
-    END IF;
-  END $$;
+  -- 6. RLS Policies for club_members
+  DROP POLICY IF EXISTS "Users can view their own club memberships" ON public.club_members;
+  CREATE POLICY "Users can view their own club memberships" ON public.club_members
+    FOR SELECT USING (auth.uid() = user_id);
 
-  -- 4. Notify PostgREST to reload schema
+  DROP POLICY IF EXISTS "Users can join clubs" ON public.club_members;
+  CREATE POLICY "Users can join clubs" ON public.club_members
+    FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+  -- 7. RLS Policies for book_club_memberships
+  DROP POLICY IF EXISTS "Admins can view all memberships" ON public.book_club_memberships;
+  CREATE POLICY "Admins can view all memberships" ON public.book_club_memberships
+    FOR SELECT USING (
+      EXISTS (
+        SELECT 1 FROM public.profiles 
+        WHERE id = auth.uid() 
+        AND role IN ('admin', 'founder')
+      )
+    );
+
+  DROP POLICY IF EXISTS "Users can view their own membership" ON public.book_club_memberships;
+  CREATE POLICY "Users can view their own membership" ON public.book_club_memberships
+    FOR SELECT USING (auth.uid() = user_id);
+
+  -- 8. Notify PostgREST to reload schema
   NOTIFY pgrst, 'reload schema';
   `;
 

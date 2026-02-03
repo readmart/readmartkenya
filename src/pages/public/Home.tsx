@@ -105,10 +105,10 @@ export default function Home() {
           }
 
           if (settings?.author_of_the_day_id) {
-            // Fetch profile separately
+            // Fetch profile separately from the secure public view
             const profileData = await withRetry(async () => {
               const { data, error } = await supabase
-                .from('profiles')
+                .from('public_profiles')
                 .select('id, full_name, avatar_url, bio')
                 .eq('id', (settings as any).author_of_the_day_id)
                 .maybeSingle();
