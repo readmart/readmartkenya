@@ -34,17 +34,30 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // --- WEBHOOK ENDPOINT ---
     if (action === 'webhook' || query.webhook === 'true' || url.includes('webhook')) {
       if (method !== 'POST') return json(res, 405, { error: 'Method not allowed' });
-      
-      const signature = (req.headers['x-kopokopo-signature'] || req.headers['x-k2-signature']) as string;
+
+      // KopoKopo signs the raw JSON request body with HMAC-SHA256 using the API key.
+      const signature =
+        (req.headers['x-kopokopo-signature'] as string | undefined) ||
+        (req.headers['x-k2-signature'] as string | undefined) ||
+        (req.headers['x-kopokopo-signature'.toLowerCase()] as string | undefined) ||
+        null;
+
       const payload = req.body;
+      const bodyString =
+        typeof payload === 'string' ? payload : JSON.stringify(payload ?? {});
       const queryOrderId = req.query.orderId as string;
       
       console.log('--- Webhook Received ---', JSON.stringify(payload));
       
-      if (!verifyK2Signature(payload, signature)) {
+      const debugWebhooks = !isProduction && process.env.K2_WEBHOOK_DEBUG === 'true';
+
+      if (!verifyK2Signature(bodyString, signature)) {
         console.error('Invalid K2 signature');
-        // In production, we MUST reject this.
-        if (isProduction) return json(res, 401, { error: 'Invalid signature' });
+        // In production, we MUST reject this. In non-prod we only allow bypass
+        // when explicitly enabled for debugging.
+        if (isProduction || !debugWebhooks) {
+          return json(res, 401, { error: 'Invalid signature' });
+        }
       }
 
       const webhookData = extractK2WebhookData(payload);
@@ -55,6 +68,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       
       if (queryOrderId) console.log(`Found OrderId ${queryOrderId} in query parameters`);
       if (webhookData.orderId) console.log(`Found OrderId ${webhookData.orderId} in webhook metadata`);
+
+      // High-level audit log for incoming K2 webhook
+      await logAction(req, null, 'k2_webhook_received', 'payments', {
+        eventType,
+        webhookEventId,
+        transactionId,
+        orderId,
+        status,
+      });
 
       // Determine if this is a transaction event or a reversal
       const isTransactionEvent = [
@@ -87,6 +109,50 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       console.log(`Processing ${eventType}: OrderId=${orderId}, Success=${webhookData.isSuccess}, Status=${status}, Transaction=${transactionId}, WebhookEventId=${webhookEventId}`);
       
+      // --- B2C PAYOUT HANDLING ---
+      if (eventType === K2_EVENT_TYPES.B2C_PAYMENT_SUCCESS || 
+          eventType === K2_EVENT_TYPES.B2C_PAYMENT_FAILED || 
+          eventType === 'payment_result') {
+        
+        console.log(`Processing B2C payout result: ${status} for transaction ${transactionId}`);
+        
+        // Extract fulfillment_id from metadata if available
+        const fulfillmentId = payload.data?.attributes?.metadata?.fulfillment_id || 
+                            payload.data?.attributes?.metadata?.fulfillment_ledger_id;
+        
+        if (fulfillmentId) {
+          const isSuccess = status === 'Sent' || eventType === K2_EVENT_TYPES.B2C_PAYMENT_SUCCESS;
+          const finalPayoutStatus = isSuccess ? 'paid' : 'failed';
+          
+          try {
+            const { error: updateError } = await supabase
+              .from('fulfillment_ledger')
+              .update({ 
+                payout_status: finalPayoutStatus,
+                metadata: { 
+                  ...(payload.data?.attributes?.metadata || {}), 
+                  webhook_event_id: webhookEventId,
+                  k2_transaction_id: transactionId,
+                  updated_at: new Date().toISOString()
+                }
+              })
+              .eq('id', fulfillmentId);
+            
+            if (updateError) {
+              console.error(`Failed to update fulfillment ledger ${fulfillmentId}:`, updateError);
+            } else {
+              console.log(`Successfully updated fulfillment ledger ${fulfillmentId} to ${finalPayoutStatus}`);
+            }
+          } catch (e) {
+            console.error(`Exception updating fulfillment ledger ${fulfillmentId}:`, e);
+          }
+        } else {
+          console.warn('B2C payout webhook received but no fulfillment_id found in metadata');
+        }
+        
+        return json(res, 200, { received: true });
+      }
+
       // Handle SMS Notification Result (Asynchronous result of sendK2SmsNotification)
       if (eventType === 'transaction_sms_notification') {
         console.log(`K2 SMS Notification Result: ${status} for event ${webhookData.webhookEventId}`);
@@ -104,7 +170,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           const { data, error } = await supabase
             .from('transactions')
             .select('id')
-            .contains('metadata', { webhook_event_id: webhookEventId })
+            .eq('webhook_event_id', webhookEventId)
             .maybeSingle();
           existingProcessedEvent = data;
           processedError = error;
@@ -118,7 +184,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             const { data: retryData } = await supabase
               .from('transactions')
               .select('id')
-              .eq('payment_id', transactionId)
+              .eq('provider_reference', transactionId)
               .maybeSingle();
             existingProcessedEvent = retryData;
           } else {
@@ -166,7 +232,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         const isSuccess = webhookData.isSuccess;
         const actuallyPaid = isSuccess && !isReversalEvent;
-        const finalStatus = isReversalEvent ? 'reversed' : (isSuccess ? 'paid' : 'failed');
+        const paymentStatus = isReversalEvent ? 'refunded' : (isSuccess ? 'paid' : 'failed');
+        // For now we map refunds to a cancelled order with refunded payment_status.
+        const finalStatus = isReversalEvent ? 'cancelled' : (isSuccess ? 'paid' : 'failed');
         
         const isMembership = orderId.startsWith('MEMB-');
         
@@ -243,7 +311,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               }
             }
 
-            if (actuallyPaid && (membershipPayments?.length || 0) > 0) {
+            if (membershipPayments && membershipPayments.length > 0) {
               const payment = membershipPayments![0];
               const userId = payment.user_id;
 
@@ -345,12 +413,30 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                   link: '/account'
                 });
               }
+
+              // Log membership transaction for observability
+              try {
+                const { error: membTxError } = await supabase.from('transactions').insert([{
+                  order_id: null,
+                  user_id: userId,
+                  amount: amount || payment.amount,
+                  status: actuallyPaid ? 'completed' : (isReversalEvent ? 'failed' : 'failed'),
+                  provider_reference: transactionId,
+                  webhook_event_id: webhookEventId,
+                  metadata: { ...payload, order_id: orderId, type: 'membership_payment' }
+                }]);
+                if (membTxError) {
+                  console.error('Failed to log membership transaction:', membTxError);
+                }
+              } catch (e) {
+                console.error('Membership transaction logging exception:', e);
+              }
             }
           } else {
             console.log(`Updating order ${orderId} status to ${finalStatus}`);
             const updatePayload: any = { 
               status: finalStatus,
-              payment_status: finalStatus,
+              payment_status: paymentStatus,
               is_paid: actuallyPaid,
               payment_metadata: payload 
             };
@@ -399,9 +485,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                   order_id: order.id,
                   user_id: order.user_id,
                   amount: amount || (order as any).total_amount,
-                  status: actuallyPaid ? 'completed' : (isReversalEvent ? 'reversed' : 'failed'),
+                  status: actuallyPaid ? 'completed' : (isReversalEvent ? 'failed' : 'failed'),
                   provider_reference: transactionId,
-                  metadata: { ...payload, webhook_event_id: webhookEventId }
+                  webhook_event_id: webhookEventId,
+                  metadata: { ...payload }
                 }]);
 
                 if (txError) {
@@ -897,6 +984,110 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           callbackUrl,
           results 
         });
+      } catch (err) {
+        return serverError(res, err);
+      }
+    }
+
+    // --- DISBURSE PAYOUTS (ADMIN ONLY) ---
+    if (action === 'disburse') {
+      try {
+        const token = req.headers.authorization?.split(' ')[1] || '';
+        const { data: userData } = await supabase.auth.getUser(token);
+        const user = userData?.user;
+        if (!user) return unauthorized(res);
+
+        const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single();
+        if (profile?.role !== 'admin' && profile?.role !== 'founder') return unauthorized(res);
+
+        // 1. Fetch pending payouts
+        const { data: payouts, error: payoutError } = await supabase
+          .from('fulfillment_ledger')
+          .select('*, profiles!partner_id(*)')
+          .eq('payout_status', 'pending')
+          .limit(10); // Process in small batches
+
+        if (payoutError) throw payoutError;
+        if (!payouts || payouts.length === 0) return json(res, 200, { message: 'No pending payouts' });
+
+        const results = [];
+
+        for (const payout of payouts) {
+          try {
+            const partner = (payout as any).profiles;
+            if (!partner) {
+              results.push({ id: payout.id, status: 'error', error: 'Partner profile not found' });
+              continue;
+            }
+
+            // 2. Get payment method
+            const { data: paymentMethod } = await supabase
+              .from('payment_methods')
+              .select('identifier')
+              .eq('user_id', partner.id)
+              .eq('type', 'mpesa')
+              .eq('is_default', true)
+              .maybeSingle();
+
+            if (!paymentMethod) {
+              results.push({ id: payout.id, status: 'error', error: 'No default M-Pesa payment method found' });
+              continue;
+            }
+
+            // 3. Ensure recipient exists in K2
+            let recipientId = partner.k2_recipient_id;
+            if (!recipientId) {
+              const recipientResult = await createK2PayRecipient({
+                type: 'mobile_wallet',
+                pay_recipient: {
+                  firstName: partner.full_name?.split(' ')[0] || 'Partner',
+                  lastName: partner.full_name?.split(' ').slice(1).join(' ') || 'User',
+                  email: partner.email,
+                  phone: paymentMethod.identifier,
+                  network: 'Safaricom'
+                }
+              });
+
+              if (recipientResult.success && recipientResult.location) {
+                recipientId = recipientResult.location.split('/').pop();
+                // Cache it
+                await supabase.from('profiles').update({ k2_recipient_id: recipientId } as any).eq('id', partner.id);
+              } else {
+                results.push({ id: payout.id, status: 'error', error: 'Failed to create K2 recipient: ' + recipientResult.error });
+                continue;
+              }
+            }
+
+            // 4. Initiate Payment
+            const paymentResult = await initiateK2Payment({
+              destination_type: 'mobile_wallet',
+              destination_reference: recipientId,
+              amount: { currency: 'KES', value: Number(payout.amount) },
+              description: `Payout for Order #${payout.order_id.slice(0,8)}`,
+              metadata: {
+                fulfillment_id: payout.id,
+                partner_id: partner.id
+              }
+            });
+
+            if (paymentResult.success) {
+              // Update status to processing
+              await supabase.from('fulfillment_ledger').update({ 
+                payout_status: 'processing',
+                metadata: { ...(payout.metadata as any || {}), k2_location: paymentResult.location }
+              }).eq('id', payout.id);
+              
+              results.push({ id: payout.id, status: 'success' });
+            } else {
+              results.push({ id: payout.id, status: 'error', error: paymentResult.error });
+            }
+
+          } catch (e: any) {
+            results.push({ id: payout.id, status: 'error', error: e.message });
+          }
+        }
+
+        return json(res, 200, { processed: results.length, details: results });
       } catch (err) {
         return serverError(res, err);
       }

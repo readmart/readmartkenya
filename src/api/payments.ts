@@ -62,7 +62,7 @@ export async function checkPaymentStatus(orderId: string) {
   try {
     let { data: order, error } = await supabase
       .from('orders')
-      .select('status, payment_id')
+      .select('status, payment_id, payment_status')
       .eq('id', orderId)
       .maybeSingle();
 
@@ -71,7 +71,7 @@ export async function checkPaymentStatus(orderId: string) {
         console.warn('Orders schema cache issue in checkPaymentStatus, falling back to core');
         const { data: fallbackOrder, error: fallbackError } = await supabase
           .from('orders')
-          .select('status')
+          .select('status, payment_status')
           .eq('id', orderId)
           .maybeSingle();
         

@@ -4,7 +4,7 @@ import {
   LayoutDashboard, Package, ShoppingCart, Users, 
   Settings, Image as ImageIcon, Truck, MessageSquare, 
   Users2, Calendar, FileText, Tag, Loader2, Plus, 
-  Search, Edit, Trash2, Mail, Eye,
+  Search, Edit, Trash2, Mail, Eye, CreditCard,
   CheckCircle, XCircle, AlertCircle, Sparkles,
   RefreshCw, Shield, Globe, Bell, DollarSign,
   TrendingUp, BarChart2, Briefcase, UserPlus,
@@ -29,7 +29,7 @@ import {
   getCMSContent, updateCMSContent, createCMSContent,
   sendAbandonedCartReminders, updateRecord, createRecord,
   getProtocolAgreements, createProtocolAgreement, updateProtocolAgreement, deleteProtocolAgreement,
-  deleteRecord
+  deleteRecord, getAllPayouts, disbursePayouts
 } from '@/api/dashboards';
 import { uploadSiteAsset, uploadProductImage, uploadEbookFile, uploadAgreementFile } from '@/api/storage';
 import { getEventRSVPs } from '@/api/community';
@@ -59,8 +59,26 @@ export default function FounderDashboard() {
     promos: [],
     cmsContent: [],
     newsletterSubscriptions: [],
-    protocols: []
+    protocols: [],
+    payouts: []
   });
+
+  const [isDisbursing, setIsDisbursing] = useState(false);
+
+  const handleDisburse = async () => {
+    if (!confirm('Are you sure you want to trigger disbursements for all pending payouts?')) return;
+    
+    setIsDisbursing(true);
+    try {
+      const result = await disbursePayouts();
+      toast.success(`Disbursement initiated for ${result.results?.length || 0} payouts`);
+      fetchAllData();
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to trigger disbursements');
+    } finally {
+      setIsDisbursing(false);
+    }
+  };
 
   // Fetch all required data
   
@@ -151,14 +169,15 @@ export default function FounderDashboard() {
         getPromos(),
         getCMSContent(),
         getNewsletterSubscriptions(),
-        getProtocolAgreements()
+        getProtocolAgreements(),
+        getAllPayouts()
       ]);
 
       const [
         analytics, inventory, orders, users, 
         settings, inquiries, partnerships, 
         authors, approvedAuthors, categories, shippingZones, promos,
-        cmsContent, newsletterSubscriptions, protocols
+        cmsContent, newsletterSubscriptions, protocols, payouts
       ] = results.map(res => res.status === 'fulfilled' ? res.value : null);
 
       setData({ 
@@ -187,7 +206,8 @@ export default function FounderDashboard() {
         promos: promos || [],
         cmsContent: cmsContent || [],
         newsletterSubscriptions: newsletterSubscriptions || [],
-        protocols: protocols || []
+        protocols: protocols || [],
+        payouts: payouts || []
       });
 
       if (results.some(res => res.status === 'rejected')) {
@@ -199,7 +219,7 @@ export default function FounderDashboard() {
           'getGlobalAnalytics', 'getInventory', 'getOrders', 'getAllUsers', 
           'getSiteSettings', 'getInquiries', 'getPartnerships', 'getAuthors', 
           'getApprovedAuthors', 'getCategories', 'getShippingZones', 'getPromos',
-          'getCMSContent', 'getNewsletterSubscriptions', 'getProtocolAgreements'
+          'getCMSContent', 'getNewsletterSubscriptions', 'getProtocolAgreements', 'getAllPayouts'
         ];
 
         failedIndices.forEach(idx => {
@@ -246,6 +266,7 @@ export default function FounderDashboard() {
     { id: 'agreements', label: 'Agreements', icon: FileText },
     { id: 'promos', label: 'Promos', icon: Tag },
     { id: 'newsletter', label: 'Newsletter', icon: Mail },
+    { id: 'payouts', label: 'Payouts', icon: CreditCard },
   ];
 
   const renderActiveTab = () => {
@@ -303,6 +324,15 @@ export default function FounderDashboard() {
       );
       case 'promos': return <PromosView data={data.promos} onUpdate={fetchAllData} />;
       case 'newsletter': return <NewsletterView data={data.newsletterSubscriptions} onUpdate={fetchAllData} />;
+      case 'payouts': return (
+        <PayoutsView 
+          data={data.payouts} 
+          onUpdate={fetchAllData} 
+          isDisbursing={isDisbursing}
+          onDisburse={handleDisburse}
+          formatPrice={formatPrice}
+        />
+      );
       default: return null;
     }
   };
@@ -1059,6 +1089,158 @@ function NewsletterView({ data, onUpdate }: any) {
             </div>
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+// --- Payouts View ---
+function PayoutsView({ data, onUpdate, isDisbursing, onDisburse, formatPrice }: any) {
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
+
+  const filteredData = useMemo(() => {
+    return data.filter((p: any) => {
+      const matchesSearch = 
+        p.partner_id?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        p.order_id?.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesStatus = statusFilter === 'all' || p.payout_status === statusFilter;
+      return matchesSearch && matchesStatus;
+    });
+  }, [data, searchTerm, statusFilter]);
+
+  const totalPages = Math.ceil(filteredData.length / itemsPerPage);
+  const currentItems = filteredData.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+
+  const pendingAmount = data
+    .filter((p: any) => p.payout_status === 'pending')
+    .reduce((acc: number, p: any) => acc + Number(p.amount), 0);
+
+  return (
+    <div className="space-y-8">
+      <div className="flex justify-between items-end">
+        <div>
+          <h1 className="text-4xl font-black tracking-tighter uppercase mb-2">Payout Management</h1>
+          <p className="text-slate-500 font-medium">Global royalty & commission disbursements</p>
+        </div>
+        <div className="flex items-center gap-4">
+          <div className="text-right px-6 py-3 bg-white rounded-2xl border border-slate-100 shadow-sm">
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Pending Total</p>
+            <p className="text-xl font-black text-primary">{formatPrice(pendingAmount)}</p>
+          </div>
+          <button
+            onClick={onDisburse}
+            disabled={isDisbursing || pendingAmount === 0}
+            className="h-14 px-8 bg-primary text-white rounded-2xl font-black uppercase tracking-widest text-xs flex items-center gap-3 hover:scale-105 active:scale-95 transition-all shadow-xl shadow-primary/20 disabled:opacity-50 disabled:scale-100"
+          >
+            {isDisbursing ? (
+              <Loader2 className="w-5 h-5 animate-spin" />
+            ) : (
+              <Zap className="w-5 h-5" />
+            )}
+            {isDisbursing ? 'Processing...' : 'Trigger Disbursements'}
+          </button>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-[40px] border border-slate-100 shadow-sm overflow-hidden">
+        <div className="p-8 border-b border-slate-50 flex flex-wrap items-center justify-between gap-6 bg-slate-50/30">
+          <div className="flex-1 min-w-[300px] relative group">
+            <Search className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 group-focus-within:text-primary transition-colors" />
+            <input 
+              type="text" 
+              placeholder="Search by Partner ID or Order ID..." 
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-14 pr-6 py-4 bg-white border border-slate-200 rounded-2xl outline-none focus:ring-4 focus:ring-primary/10 font-bold text-sm transition-all"
+            />
+          </div>
+          
+          <div className="flex items-center gap-3">
+            <Filter className="w-5 h-5 text-slate-400" />
+            <div className="flex bg-white p-1.5 rounded-2xl border border-slate-200 shadow-inner">
+              {['all', 'pending', 'processing', 'paid', 'failed'].map((status) => (
+                <button
+                  key={status}
+                  onClick={() => setStatusFilter(status)}
+                  className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                    statusFilter === status 
+                    ? 'bg-primary text-white shadow-lg shadow-primary/20' 
+                    : 'text-slate-400 hover:text-slate-900'
+                  }`}
+                >
+                  {status}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-left">
+            <thead>
+              <tr className="border-b border-slate-50">
+                <th className="px-8 py-6 text-[10px] font-black uppercase tracking-widest text-slate-400">Partner & Type</th>
+                <th className="px-8 py-6 text-[10px] font-black uppercase tracking-widest text-slate-400">Order Context</th>
+                <th className="px-8 py-6 text-[10px] font-black uppercase tracking-widest text-slate-400">Amount</th>
+                <th className="px-8 py-6 text-[10px] font-black uppercase tracking-widest text-slate-400">Status</th>
+                <th className="px-8 py-6 text-[10px] font-black uppercase tracking-widest text-slate-400">Timeline</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-50">
+              {currentItems.map((p: any) => (
+                <tr key={p.id} className="group hover:bg-slate-50/50 transition-colors">
+                  <td className="px-8 py-6">
+                    <div>
+                      <p className="font-black text-sm text-slate-900 truncate max-w-[150px]">{p.partner_id}</p>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{p.type}</p>
+                    </div>
+                  </td>
+                  <td className="px-8 py-6">
+                    <div>
+                      <p className="font-bold text-sm text-slate-600">Order #{p.order_id?.slice(-8)}</p>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Commission: {p.commission_rate}%</p>
+                    </div>
+                  </td>
+                  <td className="px-8 py-6">
+                    <span className="font-black text-sm text-slate-900">{formatPrice(p.amount)}</span>
+                  </td>
+                  <td className="px-8 py-6">
+                    <span className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-tighter ${
+                      p.payout_status === 'paid' ? 'bg-green-100 text-green-600' : 
+                      p.payout_status === 'processing' ? 'bg-blue-100 text-blue-600' :
+                      p.payout_status === 'failed' ? 'bg-red-100 text-red-600' :
+                      'bg-orange-100 text-orange-600'
+                    }`}>
+                      {p.payout_status}
+                    </span>
+                  </td>
+                  <td className="px-8 py-6">
+                    <div className="flex items-center gap-2 text-slate-500">
+                      <Clock className="w-4 h-4" />
+                      <span className="font-bold text-sm">{new Date(p.created_at).toLocaleDateString()}</span>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+              {filteredData.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="px-8 py-32 text-center">
+                    <div className="max-w-xs mx-auto">
+                      <div className="w-20 h-20 bg-slate-50 rounded-[32px] flex items-center justify-center mx-auto mb-6">
+                        <CreditCard className="w-10 h-10 text-slate-200" />
+                      </div>
+                      <h3 className="font-black uppercase tracking-tighter text-slate-900 text-lg mb-2">No Payouts Found</h3>
+                      <p className="text-slate-400 text-sm font-bold">No payout records match your filters.</p>
+                    </div>
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );

@@ -1019,6 +1019,90 @@ export async function getAuthorPayouts(authorId: string) {
   return getPartnerPayouts(authorId);
 }
 
+/**
+ * Fetch payment methods for a user (Author/Partner)
+ */
+export async function getPaymentMethods(userId: string) {
+  try {
+    const { data, error } = await supabase
+      .from('payment_methods')
+      .select('*')
+      .eq('user_id', userId);
+
+    if (error) throw error;
+    return data || [];
+  } catch (err) {
+    console.error('Payment Methods fetch failed:', err);
+    return [];
+  }
+}
+
+export async function addPaymentMethod(method: any) {
+  try {
+    const session = await verifyRole(['author', 'partner', 'admin', 'founder']);
+    if (session.user.id === 'dev-id') {
+      // For dev bypass, we need to handle the mock ID
+      // but in real world, we want to use the actual session user ID
+    }
+    
+    const { data, error } = await supabase
+      .from('payment_methods')
+      .insert([{ ...method, user_id: method.user_id || session.user.id }])
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  } catch (err) {
+    console.error('Add Payment Method failed:', err);
+    throw err;
+  }
+}
+
+export async function deletePaymentMethod(methodId: string) {
+  try {
+    const session = await verifyRole(['author', 'partner', 'admin', 'founder']);
+    const { error } = await supabase
+      .from('payment_methods')
+      .delete()
+      .eq('id', methodId)
+      .eq('user_id', session.user.id);
+
+    if (error) throw error;
+    return true;
+  } catch (err) {
+    console.error('Delete Payment Method failed:', err);
+    throw err;
+  }
+}
+
+export async function setDefaultPaymentMethod(methodId: string) {
+  try {
+    const session = await verifyRole(['author', 'partner', 'admin', 'founder']);
+    
+    // Reset all to false first
+    await supabase
+      .from('payment_methods')
+      .update({ is_default: false })
+      .eq('user_id', session.user.id);
+
+    // Set new default
+    const { data, error } = await supabase
+      .from('payment_methods')
+      .update({ is_default: true })
+      .eq('id', methodId)
+      .eq('user_id', session.user.id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  } catch (err) {
+    console.error('Set Default Payment Method failed:', err);
+    throw err;
+  }
+}
+
 export async function getAuthorReviews(authorId: string) {
   try {
     await verifyRole(['author', 'admin', 'founder']);
@@ -1087,6 +1171,58 @@ export async function getProtocolAgreements() {
   } catch (err) {
     console.error('Protocol Agreements fetch failed:', err);
     return [];
+  }
+}
+
+/**
+ * Fetch all payouts for admin review
+ */
+export async function getAllPayouts() {
+  try {
+    await verifyAdmin();
+    const { data, error } = await supabase
+      .from('fulfillment_ledger')
+      .select(`
+        *,
+        partner:profiles!partner_id(*),
+        order:orders!inner(*)
+      `)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return data || [];
+  } catch (err) {
+    console.error('All Payouts fetch failed:', err);
+    return [];
+  }
+}
+
+/**
+ * Trigger disbursement process
+ */
+export async function disbursePayouts() {
+  try {
+    await verifyAdmin();
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) throw new Error('No session');
+
+    const response = await fetch('/api/payments?action=disburse', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${session.access_token}`,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      const err = await response.json();
+      throw new Error(err.message || 'Disbursement failed');
+    }
+
+    return await response.json();
+  } catch (err) {
+    console.error('Disbursement trigger failed:', err);
+    throw err;
   }
 }
 

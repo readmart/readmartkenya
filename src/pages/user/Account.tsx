@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   User, Package, Heart, Settings, LogOut, 
@@ -32,7 +33,8 @@ const mockOrders = [
 ];
 
 export default function Account() {
-  const [activeTab, setActiveTab] = useState('profile');
+  const [searchParams] = useSearchParams();
+  const [activeTab, setActiveTab] = useState(searchParams.get('tab') || 'profile');
   const [ebooks, setEbooks] = useState<any[]>([]);
   const [isLoadingEbooks, setIsLoadingEbooks] = useState(false);
   const { user, profile, logout, isPartner, isAuthor, updateProfile } = useAuth();

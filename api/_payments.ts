@@ -3,14 +3,52 @@ import { fetchWithTimeout } from './_utils.js';
 
 const getK2Env = () => {
   if (process.env.KOPOKOPO_ENV) return process.env.KOPOKOPO_ENV;
-  const isProduction = process.env.VERCEL_ENV === 'production' || process.env.NODE_ENV === 'production';
+  const isProduction =
+    process.env.VERCEL_ENV === 'production' || process.env.NODE_ENV === 'production';
   return isProduction ? 'production' : 'sandbox';
 };
 
+const isProd = () =>
+  process.env.VERCEL_ENV === 'production' || process.env.NODE_ENV === 'production';
+
+/**
+ * Ensure required K2 environment variables are present.
+ * In production this throws immediately with a clear message so we never
+ * attempt to hit KopoKopo with a half-configured setup.
+ */
+const assertK2Config = (context: string) => {
+  const missing: string[] = [];
+
+  const clientId = (process.env.KOPOKOPO_CLIENT_ID || '').trim();
+  const clientSecret = (process.env.KOPOKOPO_CLIENT_SECRET || '').trim();
+  const apiKey = (process.env.KOPOKOPO_API_KEY || '').trim();
+  const tillNumber = (process.env.KOPOKOPO_TILL_NUMBER || '').trim();
+
+  if (!clientId) missing.push('KOPOKOPO_CLIENT_ID');
+  if (!clientSecret) missing.push('KOPOKOPO_CLIENT_SECRET');
+  if (!apiKey) missing.push('KOPOKOPO_API_KEY');
+  if (!tillNumber) missing.push('KOPOKOPO_TILL_NUMBER');
+
+  if (missing.length > 0) {
+    const message = `K2 configuration error in ${context}: missing ${missing.join(
+      ', ',
+    )}. Please set these environment variables (see .env.example and DEPLOYMENT.md).`;
+
+    if (isProd()) {
+      // In production we fail fast – payments must be correctly configured.
+      throw new Error(message);
+    }
+
+    // In non-production we warn loudly but allow the caller to decide what to do.
+    console.warn(message);
+  }
+};
+
 export const getK2BaseUrl = () => {
-  if (process.env.KOPOKOPO_BASE_URL) return process.env.KOPOKOPO_BASE_URL.replace(/\/$/, '');
-  return getK2Env() === 'production' 
-    ? 'https://api.kopokopo.com' 
+  if (process.env.KOPOKOPO_BASE_URL)
+    return process.env.KOPOKOPO_BASE_URL.replace(/\/$/, '');
+  return getK2Env() === 'production'
+    ? 'https://api.kopokopo.com'
     : 'https://sandbox.kopokopo.com';
 };
 
@@ -93,6 +131,9 @@ async function fetchWithBackoff(url: string, options: any, retries = 1, backoff 
 }
 
 export const getK2Token = async () => {
+  // Validate base configuration up front
+  assertK2Config('getK2Token');
+
   if (cachedToken && cachedToken.expiry > Date.now()) {
     return cachedToken.token;
   }
@@ -101,8 +142,12 @@ export const getK2Token = async () => {
   const clientSecret = (process.env.KOPOKOPO_CLIENT_SECRET || '').trim();
 
   if (!clientId || !clientSecret) {
-    console.error('K2 Configuration Error: Missing KOPOKOPO_CLIENT_ID or KOPOKOPO_CLIENT_SECRET');
-    throw new Error('ReadMart Payments credentials (CLIENT_ID, CLIENT_SECRET) are not configured in environment variables');
+    const msg =
+      'ReadMart Payments credentials (KOPOKOPO_CLIENT_ID, KOPOKOPO_CLIENT_SECRET) are not configured in environment variables';
+    console.error('K2 Configuration Error:', msg);
+    const error: Error & { code?: string } = new Error(msg);
+    error.code = 'TOKEN_CONFIG_ERROR';
+    throw error;
   }
 
   const authUrl = `${getK2AuthUrl()}/oauth/token`;
@@ -124,14 +169,22 @@ export const getK2Token = async () => {
   if (!response.ok) {
     const errorText = await response.text();
     console.error(`K2 Token Error (Status ${response.status}):`, errorText);
-    
+
     let detailedError = errorText;
     try {
       const json = JSON.parse(errorText);
-      detailedError = json.error_description || json.message || json.error || errorText;
-    } catch (e) {}
+      detailedError =
+        json.error_description || json.message || json.error || errorText;
+    } catch (e) {
+      // fall through – non-JSON error body
+    }
 
-    throw new Error(`K2 Token Error (Status ${response.status}): ${detailedError}`);
+    const error: Error & { code?: string; status?: number } = new Error(
+      `K2 Token Error (Status ${response.status}): ${detailedError}`,
+    );
+    error.code = 'TOKEN_RESPONSE_ERROR';
+    error.status = response.status;
+    throw error;
   }
 
   const data = (await response.json()) as { expires_in?: number; access_token: string };
@@ -334,6 +387,9 @@ export const K2_EVENT_TYPES = {
   SETTLEMENT_COMPLETED: 'settlement_transfer_completed',
   M_PESA_PAYMENT_RECEIVED: 'm-pesa_payment_received',
   TRANSACTION_SMS_NOTIFICATION: 'transaction_sms_notification',
+  B2C_PAYMENT_SUCCESS: 'b2c_payment_success',
+  B2C_PAYMENT_FAILED: 'b2c_payment_failed',
+  PAYMENT_RESULT: 'payment_result'
 };
 
 /**
@@ -348,15 +404,60 @@ export const createK2PayRecipient = async (params: {
     const token = await getK2Token();
     const baseUrl = getK2BaseUrl();
 
+    // Normalize our internal payload shape to K2's expected JSON fields.
+    const pr = params.pay_recipient || {};
+    let body: any = { ...params };
+
+    if (params.type === 'mobile_wallet') {
+      body = {
+        type: 'mobile_wallet',
+        pay_recipient: {
+          first_name: pr.first_name || pr.firstName,
+          last_name: pr.last_name || pr.lastName,
+          email: pr.email,
+          phone_number: pr.phone_number || pr.phone,
+          network: pr.network,
+        },
+      };
+    } else if (params.type === 'bank_account') {
+      body = {
+        type: 'bank_account',
+        pay_recipient: {
+          account_name: pr.account_name || pr.accountName,
+          bank_branch_ref: pr.bank_branch_ref || pr.bankBranchRef,
+          account_number: pr.account_number || pr.accountNumber,
+          settlement_method: pr.settlement_method || pr.settlementMethod || 'RTS',
+        },
+      };
+    } else if (params.type === 'till') {
+      body = {
+        type: 'till',
+        pay_recipient: {
+          till_name: pr.till_name || pr.tillName,
+          till_number: pr.till_number || pr.tillNumber,
+        },
+      };
+    } else if (params.type === 'paybill') {
+      body = {
+        type: 'paybill',
+        pay_recipient: {
+          paybill_name: pr.paybill_name || pr.paybillName,
+          paybill_number: pr.paybill_number || pr.paybillNumber,
+          paybill_account_number:
+            pr.paybill_account_number || pr.paybillAccountNumber,
+        },
+      };
+    }
+
     const response = await fetch(`${baseUrl}/api/v1/pay_recipients`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
         'Authorization': `Bearer ${token}`,
-        'User-Agent': 'ReadMart/1.0.0 (https://readmartke.com)'
+        'User-Agent': 'ReadMart/1.0.0 (https://readmartke.com)',
       },
-      body: JSON.stringify(params)
+      body: JSON.stringify(body),
     });
 
     if (response.status === 201) {
@@ -452,28 +553,32 @@ export const getK2TransactionStatus = async (transactionId: string) => {
   return await response.json();
 };
 
-export const verifyK2Signature = (payload: any, signature: string) => {
-  // Try Webhook Secret first, then API Key, then Client Secret
+export const verifyK2Signature = (rawBody: string, signature: string | undefined | null) => {
+  // Per KopoKopo docs, the HMAC key MUST be the API key (or a dedicated webhook secret).
   const secret = (
-    process.env.KOPOKOPO_WEBHOOK_SECRET || 
-    process.env.KOPOKOPO_API_KEY || 
-    process.env.KOPOKOPO_CLIENT_SECRET || 
+    process.env.KOPOKOPO_WEBHOOK_SECRET || // preferred explicit secret
+    process.env.KOPOKOPO_API_KEY ||        // fallback to API key as documented
     ''
   ).trim();
-  
+
   if (!secret || !signature) {
-    console.warn('Missing KOPOKOPO_CLIENT_SECRET/API_KEY or signature for verification');
+    console.warn(
+      'Missing KOPOKOPO_API_KEY/KOPOKOPO_WEBHOOK_SECRET or signature for verification',
+    );
     return false;
   }
 
   try {
-    const bodyString = typeof payload === 'string' ? payload : JSON.stringify(payload);
-    const hash = crypto.createHmac('sha256', secret).update(bodyString).digest('hex');
-    
-    // Some versions use hex, some might use base64
-    if (hash === signature) return true;
-    
-    const hashBase64 = crypto.createHmac('sha256', secret).update(bodyString).digest('base64');
+    const bodyString = typeof rawBody === 'string' ? rawBody : JSON.stringify(rawBody);
+    const hashHex = crypto.createHmac('sha256', secret).update(bodyString).digest('hex');
+
+    // K2 examples use hex signatures; we support both hex and base64 just in case.
+    if (hashHex === signature) return true;
+
+    const hashBase64 = crypto
+      .createHmac('sha256', secret)
+      .update(bodyString)
+      .digest('base64');
     return hashBase64 === signature;
   } catch (err) {
     console.error('Signature verification error:', err);
