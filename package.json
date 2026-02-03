@@ -5,9 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "npm run monitor && tsc -b && vite build",
     "lint": "eslint .",
     "test": "vitest run",
+    "monitor": "tsx scripts/monitor-functions.ts",
     "preview": "vite preview",
     "bootstrap": "tsx scripts/bootstrap.ts"
   },
