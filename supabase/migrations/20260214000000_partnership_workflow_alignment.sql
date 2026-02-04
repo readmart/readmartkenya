@@ -23,20 +23,24 @@ ALTER TABLE public.partnership_applications ADD CONSTRAINT partnership_applicati
 -- 3. Ensure agreements table has a unique constraint for upserts
 DO $$ 
 BEGIN
-    IF NOT EXISTS (
-        SELECT 1 FROM pg_constraint 
-        WHERE conname = 'agreements_partner_id_type_key'
-    ) THEN
-        ALTER TABLE public.agreements 
-        ADD CONSTRAINT agreements_partner_id_type_key UNIQUE (partner_id, type);
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'agreements') THEN
+        IF NOT EXISTS (
+            SELECT 1 FROM pg_constraint 
+            WHERE conname = 'agreements_partner_id_type_key'
+        ) THEN
+            ALTER TABLE public.agreements 
+            ADD CONSTRAINT agreements_partner_id_type_key UNIQUE (partner_id, type);
+        END IF;
     END IF;
 END $$;
 
 -- 4. Add protocol_id to agreements table if it doesn't exist
 DO $$ 
 BEGIN
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'agreements' AND column_name = 'protocol_id') THEN
-        ALTER TABLE public.agreements ADD COLUMN protocol_id uuid REFERENCES public.partnership_agreements(id);
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'agreements') THEN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'agreements' AND column_name = 'protocol_id') THEN
+            ALTER TABLE public.agreements ADD COLUMN protocol_id uuid REFERENCES public.partnership_agreements(id);
+        END IF;
     END IF;
 END $$;
 
@@ -70,11 +74,16 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- 6. Apply the trigger
-DROP TRIGGER IF EXISTS tr_sync_agreement_status ON public.agreements;
-CREATE TRIGGER tr_sync_agreement_status
-    AFTER UPDATE OF status ON public.agreements
-    FOR EACH ROW
-    EXECUTE PROCEDURE public.sync_agreement_to_application();
+DO $$ 
+BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'agreements') THEN
+        DROP TRIGGER IF EXISTS tr_sync_agreement_status ON public.agreements;
+        CREATE TRIGGER tr_sync_agreement_status
+            AFTER UPDATE OF status ON public.agreements
+            FOR EACH ROW
+            EXECUTE PROCEDURE public.sync_agreement_to_application();
+    END IF;
+END $$;
 
 -- 7. Disable premature role update in applications approval trigger
 -- (We now wait for the agreement to be signed)

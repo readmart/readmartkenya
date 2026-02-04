@@ -44,7 +44,8 @@ END $$;
 -- 2. Profiles: Ensure admins can see all profiles for analytics
 DO $$ 
 BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'profiles' AND policyname = 'Admins can view all profiles') THEN
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'profiles') THEN
+        DROP POLICY IF EXISTS "Admins can view all profiles" ON public.profiles;
         CREATE POLICY "Admins can view all profiles" ON public.profiles
             FOR SELECT USING (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role IN ('admin', 'founder')));
     END IF;
@@ -53,12 +54,12 @@ END $$;
 -- 3. Orders: Add admin/founder policies
 DO $$ 
 BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'orders' AND policyname = 'Admins can view all orders') THEN
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'orders') THEN
+        DROP POLICY IF EXISTS "Admins can view all orders" ON public.orders;
         CREATE POLICY "Admins can view all orders" ON public.orders
             FOR SELECT USING (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role IN ('admin', 'founder')));
-    END IF;
-    
-    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'orders' AND policyname = 'Admins can manage all orders') THEN
+        
+        DROP POLICY IF EXISTS "Admins can manage all orders" ON public.orders;
         CREATE POLICY "Admins can manage all orders" ON public.orders
             FOR ALL USING (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role IN ('admin', 'founder')));
     END IF;
@@ -67,12 +68,12 @@ END $$;
 -- 4. Order Items: Add admin/founder policies
 DO $$ 
 BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'order_items' AND policyname = 'Admins can view all order items') THEN
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'order_items') THEN
+        DROP POLICY IF EXISTS "Admins can view all order items" ON public.order_items;
         CREATE POLICY "Admins can view all order items" ON public.order_items
             FOR SELECT USING (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role IN ('admin', 'founder')));
-    END IF;
 
-    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'order_items' AND policyname = 'Admins can manage all order items') THEN
+        DROP POLICY IF EXISTS "Admins can manage all order items" ON public.order_items;
         CREATE POLICY "Admins can manage all order items" ON public.order_items
             FOR ALL USING (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role IN ('admin', 'founder')));
     END IF;
@@ -196,9 +197,47 @@ BEGIN
 END $$;
 
 -- 7. Enable Realtime
-ALTER PUBLICATION supabase_realtime ADD TABLE public.products;
-ALTER PUBLICATION supabase_realtime ADD TABLE public.orders;
-ALTER PUBLICATION supabase_realtime ADD TABLE public.order_items;
-ALTER PUBLICATION supabase_realtime ADD TABLE public.promos;
+DO $$ 
+BEGIN
+    -- Products
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'products') THEN
+        IF NOT EXISTS (
+            SELECT 1 FROM pg_publication_tables 
+            WHERE pubname = 'supabase_realtime' AND schemaname = 'public' AND tablename = 'products'
+        ) THEN
+            ALTER PUBLICATION supabase_realtime ADD TABLE public.products;
+        END IF;
+    END IF;
+
+    -- Orders
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'orders') THEN
+        IF NOT EXISTS (
+            SELECT 1 FROM pg_publication_tables 
+            WHERE pubname = 'supabase_realtime' AND schemaname = 'public' AND tablename = 'orders'
+        ) THEN
+            ALTER PUBLICATION supabase_realtime ADD TABLE public.orders;
+        END IF;
+    END IF;
+
+    -- Order Items
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'order_items') THEN
+        IF NOT EXISTS (
+            SELECT 1 FROM pg_publication_tables 
+            WHERE pubname = 'supabase_realtime' AND schemaname = 'public' AND tablename = 'order_items'
+        ) THEN
+            ALTER PUBLICATION supabase_realtime ADD TABLE public.order_items;
+        END IF;
+    END IF;
+
+    -- Promos
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'promos') THEN
+        IF NOT EXISTS (
+            SELECT 1 FROM pg_publication_tables 
+            WHERE pubname = 'supabase_realtime' AND schemaname = 'public' AND tablename = 'promos'
+        ) THEN
+            ALTER PUBLICATION supabase_realtime ADD TABLE public.promos;
+        END IF;
+    END IF;
+END $$;
 
 COMMIT;

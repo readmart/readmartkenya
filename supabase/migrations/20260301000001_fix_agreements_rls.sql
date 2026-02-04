@@ -9,11 +9,20 @@ BEGIN;
 -- Allow users to update their own agreements (to sign them)
 DO $$ 
 BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'agreements' AND policyname = 'Users can update their own agreements') THEN
-        CREATE POLICY "Users can update their own agreements" ON public.agreements
-            FOR UPDATE TO authenticated
-            USING (auth.uid() = partner_id)
-            WITH CHECK (auth.uid() = partner_id);
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'agreements') THEN
+        IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'agreements' AND policyname = 'Users can update their own agreements') THEN
+            CREATE POLICY "Users can update their own agreements" ON public.agreements
+                FOR UPDATE TO authenticated
+                USING (auth.uid() = partner_id)
+                WITH CHECK (auth.uid() = partner_id);
+        END IF;
+
+        -- 3. Ensure admins can manage everything in agreements
+        DROP POLICY IF EXISTS "Founders can manage all agreements" ON public.agreements;
+        CREATE POLICY "Admins manage all agreements" ON public.agreements
+            FOR ALL TO authenticated
+            USING (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role IN ('admin', 'founder')))
+            WITH CHECK (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role IN ('admin', 'founder')));
     END IF;
 END $$;
 
@@ -42,12 +51,5 @@ CREATE POLICY "Users view own signed agreements" ON storage.objects
             EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role IN ('admin', 'founder'))
         )
     );
-
--- 3. Ensure admins can manage everything in agreements
-DROP POLICY IF EXISTS "Founders can manage all agreements" ON public.agreements;
-CREATE POLICY "Admins manage all agreements" ON public.agreements
-    FOR ALL TO authenticated
-    USING (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role IN ('admin', 'founder')))
-    WITH CHECK (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role IN ('admin', 'founder')));
 
 COMMIT;

@@ -45,42 +45,60 @@ DECLARE
     ];
 BEGIN
     FOREACH t IN ARRAY tables_to_fix LOOP
-        EXECUTE format('DROP POLICY IF EXISTS "Admins manage %I" ON public.%I', t, t);
-        EXECUTE format('CREATE POLICY "Admins manage %I" ON public.%I FOR ALL USING (public.is_admin_or_founder())', t, t);
+        IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = t) THEN
+            EXECUTE format('DROP POLICY IF EXISTS "Admins manage %I" ON public.%I', t, t);
+            EXECUTE format('CREATE POLICY "Admins manage %I" ON public.%I FOR ALL USING (public.is_admin_or_founder())', t, t);
+        END IF;
     END LOOP;
 END $$;
 
 -- 3. Specific User Policies (Self-Access)
+DO $$ 
+BEGIN
+    -- Agreements: Users can view and update (for signing) their own
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'agreements') THEN
+        DROP POLICY IF EXISTS "Users can view own agreements" ON public.agreements;
+        CREATE POLICY "Users can view own agreements" ON public.agreements FOR SELECT USING (auth.uid() = partner_id);
+        
+        DROP POLICY IF EXISTS "Users can update own agreements" ON public.agreements;
+        CREATE POLICY "Users can update own agreements" ON public.agreements FOR UPDATE USING (auth.uid() = partner_id);
+    END IF;
 
--- Agreements: Users can view and update (for signing) their own
-DROP POLICY IF EXISTS "Users can view own agreements" ON public.agreements;
-CREATE POLICY "Users can view own agreements" ON public.agreements FOR SELECT USING (auth.uid() = partner_id);
+    -- Applications: Users can view their own
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'author_applications') THEN
+        DROP POLICY IF EXISTS "Users can view own author apps" ON public.author_applications;
+        CREATE POLICY "Users can view own author apps" ON public.author_applications FOR SELECT USING (auth.uid() = user_id);
+    END IF;
 
-DROP POLICY IF EXISTS "Users can update own agreements" ON public.agreements;
-CREATE POLICY "Users can update own agreements" ON public.agreements FOR UPDATE USING (auth.uid() = partner_id);
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'partnership_applications') THEN
+        DROP POLICY IF EXISTS "Users can view own partner apps" ON public.partnership_applications;
+        CREATE POLICY "Users can view own partner apps" ON public.partnership_applications FOR SELECT USING (auth.uid() = user_id);
+    END IF;
 
--- Applications: Users can view their own
-DROP POLICY IF EXISTS "Users can view own author apps" ON public.author_applications;
-CREATE POLICY "Users can view own author apps" ON public.author_applications FOR SELECT USING (auth.uid() = user_id);
+    -- Transactions: Users can view their own
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'transactions') THEN
+        DROP POLICY IF EXISTS "Users can view own transactions" ON public.transactions;
+        CREATE POLICY "Users can view own transactions" ON public.transactions FOR SELECT USING (auth.uid() = user_id);
+    END IF;
 
-DROP POLICY IF EXISTS "Users can view own partner apps" ON public.partnership_applications;
-CREATE POLICY "Users can view own partner apps" ON public.partnership_applications FOR SELECT USING (auth.uid() = user_id);
+    -- Event RSVPs: Users can manage their own
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'event_rsvps') THEN
+        DROP POLICY IF EXISTS "Users can manage own rsvps" ON public.event_rsvps;
+        CREATE POLICY "Users can manage own rsvps" ON public.event_rsvps FOR ALL USING (auth.uid() = user_id);
+    END IF;
 
--- Transactions: Users can view their own
-DROP POLICY IF EXISTS "Users can view own transactions" ON public.transactions;
-CREATE POLICY "Users can view own transactions" ON public.transactions FOR SELECT USING (auth.uid() = user_id);
+    -- Club Discussions: Users can manage their own
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'club_discussions') THEN
+        DROP POLICY IF EXISTS "Users can manage own discussions" ON public.club_discussions;
+        CREATE POLICY "Users can manage own discussions" ON public.club_discussions FOR ALL USING (auth.uid() = author_id);
+    END IF;
 
--- Event RSVPs: Users can manage their own
-DROP POLICY IF EXISTS "Users can manage own rsvps" ON public.event_rsvps;
-CREATE POLICY "Users can manage own rsvps" ON public.event_rsvps FOR ALL USING (auth.uid() = user_id);
-
--- Club Discussions: Users can manage their own
-DROP POLICY IF EXISTS "Users can manage own discussions" ON public.club_discussions;
-CREATE POLICY "Users can manage own discussions" ON public.club_discussions FOR ALL USING (auth.uid() = author_id);
-
--- Book Club Memberships: Users can view their own
-DROP POLICY IF EXISTS "Users can view own memberships" ON public.book_club_memberships;
-CREATE POLICY "Users can view own memberships" ON public.book_club_memberships FOR SELECT USING (auth.uid() = user_id);
+    -- Book Club Memberships: Users can view their own
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'book_club_memberships') THEN
+        DROP POLICY IF EXISTS "Users can view own memberships" ON public.book_club_memberships;
+        CREATE POLICY "Users can view own memberships" ON public.book_club_memberships FOR SELECT USING (auth.uid() = user_id);
+    END IF;
+END $$;
 
 -- 4. Enable RLS on all tables (just in case)
 DO $$ 
@@ -109,7 +127,9 @@ DECLARE
     ];
 BEGIN
     FOREACH t IN ARRAY tables_to_enable LOOP
-        EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY', t);
+        IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = t) THEN
+            EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY', t);
+        END IF;
     END LOOP;
 END $$;
 

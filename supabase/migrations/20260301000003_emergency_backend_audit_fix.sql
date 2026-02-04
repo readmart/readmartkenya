@@ -22,18 +22,28 @@ CREATE TABLE IF NOT EXISTS public.newsletter_logs (
 ALTER TABLE public.newsletter_logs ENABLE ROW LEVEL SECURITY;
 
 -- Admins can view logs
-CREATE POLICY "Admins can view newsletter logs" ON public.newsletter_logs
-    FOR SELECT USING (
-        EXISTS (
-            SELECT 1 FROM public.profiles
-            WHERE profiles.id = auth.uid()
-            AND profiles.role IN ('admin', 'founder')
-        )
-    );
+DO $$ 
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'newsletter_logs' AND policyname = 'Admins can view newsletter logs') THEN
+        CREATE POLICY "Admins can view newsletter logs" ON public.newsletter_logs
+            FOR SELECT USING (
+                EXISTS (
+                    SELECT 1 FROM public.profiles
+                    WHERE profiles.id = auth.uid()
+                    AND profiles.role IN ('admin', 'founder')
+                )
+            );
+    END IF;
+END $$;
 
 -- Anyone can insert logs (for tracking)
-CREATE POLICY "Anyone can insert newsletter logs" ON public.newsletter_logs
-    FOR INSERT WITH CHECK (true);
+DO $$ 
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'newsletter_logs' AND policyname = 'Anyone can insert newsletter logs') THEN
+        CREATE POLICY "Anyone can insert newsletter logs" ON public.newsletter_logs
+            FOR INSERT WITH CHECK (true);
+    END IF;
+END $$;
 
 -- 1.1 Create missing audit_logs table
 CREATE TABLE IF NOT EXISTS public.audit_logs (
@@ -51,18 +61,28 @@ CREATE TABLE IF NOT EXISTS public.audit_logs (
 ALTER TABLE public.audit_logs ENABLE ROW LEVEL SECURITY;
 
 -- Admins can view audit logs
-CREATE POLICY "Admins can view audit logs" ON public.audit_logs
-    FOR SELECT USING (
-        EXISTS (
-            SELECT 1 FROM public.profiles
-            WHERE profiles.id = auth.uid()
-            AND profiles.role IN ('admin', 'founder')
-        )
-    );
+DO $$ 
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'audit_logs' AND policyname = 'Admins can view audit logs') THEN
+        CREATE POLICY "Admins can view audit logs" ON public.audit_logs
+            FOR SELECT USING (
+                EXISTS (
+                    SELECT 1 FROM public.profiles
+                    WHERE profiles.id = auth.uid()
+                    AND profiles.role IN ('admin', 'founder')
+                )
+            );
+    END IF;
+END $$;
 
 -- System/Authenticated can insert audit logs
-CREATE POLICY "Authenticated can insert audit logs" ON public.audit_logs
-    FOR INSERT WITH CHECK (auth.role() = 'authenticated');
+DO $$ 
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'audit_logs' AND policyname = 'Authenticated can insert audit logs') THEN
+        CREATE POLICY "Authenticated can insert audit logs" ON public.audit_logs
+            FOR INSERT WITH CHECK (auth.role() = 'authenticated');
+    END IF;
+END $$;
 
 -- 2. Fix promos table schema drift
 DO $$ 

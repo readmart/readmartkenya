@@ -692,17 +692,25 @@ export async function updateEvent(id: string, updates: any) {
 export async function getAgreements() {
   try {
     await verifyAdmin();
-    // Use select('*') for the main table, explicit relation selection is still needed
-    // but less brittle if main columns change
+    // Try fetching from 'agreements' (the main table for instances)
     let { data, error, status } = await supabase
       .from('agreements')
       .select(`*, partner:profiles(full_name, email)`)
       .order('created_at', { ascending: false });
 
-    if (error) {
-      if (status === 404 || error.code === 'PGRST116') return [];
-      throw error;
+    // Fallback if 'agreements' table is missing (using partnership_agreements templates as a last resort view)
+    if (error && (status === 404 || error.code === 'PGRST116')) {
+      console.warn('Agreements table missing, falling back to partnership_agreements templates');
+      const { data: fallbackData, error: fallbackError } = await supabase
+        .from('partnership_agreements')
+        .select('*')
+        .order('created_at', { ascending: false });
+      
+      if (fallbackError) return [];
+      return (fallbackData || []).map(p => ({ ...p, partner: { full_name: 'Template', email: 'N/A' } }));
     }
+
+    if (error) throw error;
     return data || [];
   } catch (err) {
     console.error('Agreements fetch failed:', err);
@@ -721,10 +729,13 @@ export async function getUserAgreements(userId: string) {
       .eq('partner_id', userId)
       .order('created_at', { ascending: false });
 
-    if (error) {
-      if (status === 404 || error.code === 'PGRST116') return [];
-      throw error;
+    // Fallback: If 'agreements' (instances) table missing, check if user has signed any template
+    // though usually agreements are the source of truth for individual users.
+    if (error && (status === 404 || error.code === 'PGRST116')) {
+      return [];
     }
+
+    if (error) throw error;
     return data || [];
   } catch (err) {
     console.error('User agreements fetch failed:', err);
@@ -736,52 +747,72 @@ export async function getUserAgreements(userId: string) {
  * Submit a signed agreement
  */
 export async function submitSignedAgreement(agreementId: string, signedUrl: string) {
-  // 1. Update the agreement record
-  // The trigger public.sync_agreement_to_application will handle 
-  // updating the application status and the user role automatically.
-  const { data: agreement, error: agreementError } = await supabase
-    .from('agreements')
-    .update({
-      signed_url: signedUrl,
-      signed_at: new Date().toISOString(),
-      status: 'signed'
-    })
-    .eq('id', agreementId)
-    .select()
-    .single();
+  try {
+    // 1. Update the agreement record
+    // The trigger public.sync_agreement_to_application will handle 
+    // updating the application status and the user role automatically.
+    const { data: agreement, error: agreementError, status } = await supabase
+      .from('agreements')
+      .update({
+        signed_url: signedUrl,
+        signed_at: new Date().toISOString(),
+        status: 'signed'
+      })
+      .eq('id', agreementId)
+      .select()
+      .single();
 
-  if (agreementError) throw agreementError;
-  return agreement;
+    if (agreementError) {
+      if (status === 404 || agreementError.code === 'PGRST116') {
+        throw new Error('Agreement record not found or table missing');
+      }
+      throw agreementError;
+    }
+    return agreement;
+  } catch (err: any) {
+    console.error('Submit signed agreement failed:', err);
+    throw err;
+  }
 }
 
 /**
  * Approve or reject an agreement (Founder only)
  */
 export async function updateAgreementStatus(agreementId: string, status: 'approved' | 'rejected', notes?: string) {
-  const session = await verifyAdmin();
-  const { data, error } = await supabase
-    .from('agreements')
-    .update({
-      status,
-      approved_at: status === 'approved' ? new Date().toISOString() : null,
-      approved_by: session?.user?.id,
-      description: notes // Using description as internal notes for rejection if needed
-    })
-    .eq('id', agreementId)
-    .select()
-    .single();
+  try {
+    const session = await verifyAdmin();
+    const { data, error, status: httpStatus } = await supabase
+      .from('agreements')
+      .update({
+        status,
+        approved_at: status === 'approved' ? new Date().toISOString() : null,
+        approved_by: session?.user?.id,
+        description: notes // Using description as internal notes for rejection if needed
+      })
+      .eq('id', agreementId)
+      .select()
+      .single();
 
-  if (error) throw error;
+    if (error) {
+      if (httpStatus === 404 || error.code === 'PGRST116') {
+        throw new Error('Agreement record not found or table missing');
+      }
+      throw error;
+    }
 
-  // If approved, ensure the user has the correct role privileges or status
-  if (status === 'approved' && data.partner_id) {
-    // We might want to update the profile or send a notification
-    await supabase.from('profiles').update({
-      role: data.type === 'author' ? 'author' : 'partner'
-    }).eq('id', data.partner_id);
+    // If approved, ensure the user has the correct role privileges or status
+    if (status === 'approved' && data.partner_id) {
+      // We might want to update the profile or send a notification
+      await supabase.from('profiles').update({
+        role: data.type === 'author' ? 'author' : 'partner'
+      }).eq('id', data.partner_id);
+    }
+
+    return data;
+  } catch (err: any) {
+    console.error('Update agreement status failed:', err);
+    throw err;
   }
-
-  return data;
 }
 
 export async function getBanners() {
