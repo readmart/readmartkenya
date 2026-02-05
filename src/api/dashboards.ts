@@ -1338,6 +1338,22 @@ export async function updateAuthorSubscription(id: string, updates: any) {
   }
 }
 
+export async function getPartnershipServices() {
+  try {
+    const { data, error } = await supabase
+      .from('partnership_services')
+      .select('*')
+      .eq('is_active', true)
+      .order('display_order', { ascending: true });
+
+    if (error) throw error;
+    return data || [];
+  } catch (err) {
+    console.error('Partnership Services fetch failed:', err);
+    return [];
+  }
+}
+
 export async function getPartnerships() {
   try {
     await verifyAdmin();

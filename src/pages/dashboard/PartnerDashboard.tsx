@@ -3,9 +3,9 @@ import { useState, useEffect, useMemo } from 'react';
 import { 
   Package, Truck, CheckCircle, 
   MapPin, DollarSign,
-  AlertCircle, ChevronRight, Search, Loader2,
+  AlertCircle, ChevronRight, Search, Loader2, Globe,
   FileCheck, MessageSquare, BookOpen, ExternalLink,
-  Zap, XCircle, Plus, Award, Shield
+  Zap, XCircle, Plus, Award, Shield, Briefcase
 } from 'lucide-react';
 import { useCurrency } from '@/contexts/CurrencyContext';
 import { useAuth } from '@/contexts/AuthContext';
@@ -15,7 +15,8 @@ import {
   getPaymentMethods,
   addPaymentMethod,
   deletePaymentMethod,
-  setDefaultPaymentMethod
+  setDefaultPaymentMethod,
+  getPartnershipServices
 } from '@/api/dashboards';
 import { toast } from 'sonner';
 import AgreementsSection from '@/components/dashboard/AgreementsSection';
@@ -26,6 +27,7 @@ export default function PartnerDashboard() {
   const [payouts, setPayouts] = useState<any[]>([]);
   const [assignments, setAssignments] = useState<any[]>([]);
   const [paymentMethods, setPaymentMethods] = useState<any[]>([]);
+  const [partnershipServices, setPartnershipServices] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isAddingMpesa, setIsAddingMpesa] = useState(false);
   const [newMpesaNumber, setNewMpesaNumber] = useState('');
@@ -41,14 +43,16 @@ export default function PartnerDashboard() {
     if (!user) return;
     setIsLoading(true);
     try {
-      const [payoutData, orders, methods] = await Promise.all([
+      const [payoutData, orders, methods, services] = await Promise.all([
         getPartnerPayouts(user.id),
         getOrders(user.id),
-        getPaymentMethods(user.id)
+        getPaymentMethods(user.id),
+        getPartnershipServices()
       ]);
       setPayouts(payoutData);
       setAssignments(orders);
       setPaymentMethods(methods || []);
+      setPartnershipServices(services || []);
     } catch (error) {
       toast.error('Failed to fetch dashboard data');
     } finally {
@@ -260,6 +264,56 @@ export default function PartnerDashboard() {
               {assignments.length === 0 && (
                 <div className="p-12 text-center text-muted-foreground">
                   No assignments found.
+                </div>
+              )}
+            </div>
+          </motion.div>
+
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="glass p-8 rounded-3xl"
+          >
+            <div className="flex items-center justify-between mb-8">
+              <div className="flex items-center gap-3">
+                <div className="p-3 rounded-2xl bg-primary/10 text-primary">
+                  <Award className="w-6 h-6" />
+                </div>
+                <h3 className="text-xl font-bold">Partnership Opportunities</h3>
+              </div>
+              <span className="text-xs font-bold text-primary px-3 py-1 bg-primary/10 rounded-full uppercase tracking-wider">
+                Active Now
+              </span>
+            </div>
+            
+            <div className="grid md:grid-cols-2 gap-4">
+              {partnershipServices.length > 0 ? (
+                partnershipServices.map((service) => (
+                  <div 
+                    key={service.id} 
+                    className="p-4 rounded-2xl bg-white/5 border border-white/10 hover:border-primary/30 transition-all group"
+                  >
+                    <div className="flex justify-between items-start mb-2">
+                      <div className="flex items-center gap-2">
+                        <div className="p-2 bg-primary/10 rounded-lg text-primary">
+                          {service.icon_name === 'Truck' && <Truck className="w-4 h-4" />}
+                          {service.icon_name === 'Zap' && <Zap className="w-4 h-4" />}
+                          {service.icon_name === 'Briefcase' && <Briefcase className="w-4 h-4" />}
+                          {service.icon_name === 'MessageSquare' && <MessageSquare className="w-4 h-4" />}
+                          {!['Truck', 'Zap', 'Briefcase', 'MessageSquare'].includes(service.icon_name) && <Globe className="w-4 h-4" />}
+                        </div>
+                        <h4 className="font-bold">{service.name}</h4>
+                      </div>
+                      <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors" />
+                    </div>
+                    <p className="text-xs text-muted-foreground line-clamp-2">
+                      {service.description || 'Expand your partnership with new service opportunities.'}
+                    </p>
+                  </div>
+                ))
+              ) : (
+                <div className="col-span-2 py-8 text-center glass rounded-2xl border-dashed border-white/10">
+                  <p className="text-sm text-muted-foreground">No active partnership opportunities available at the moment.</p>
                 </div>
               )}
             </div>

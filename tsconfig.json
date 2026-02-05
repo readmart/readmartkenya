@@ -8,7 +8,8 @@
   },
   "references": [
     { "path": "./tsconfig.app.json" },
-    { "path": "./tsconfig.node.json" }
+    { "path": "./tsconfig.node.json" },
+    { "path": "./supabase/functions" }
   ],
-  "exclude": ["supabase"]
+  "exclude": ["supabase/migrations", "supabase/seed.sql", "supabase/config.toml"]
 }

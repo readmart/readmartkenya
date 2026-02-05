@@ -1,15 +1,17 @@
-import { useState, useRef } from 'react';
-import { motion } from 'framer-motion';
+import { useState, useRef, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Mail, Phone, Clock, Send, Loader2, 
   MessageSquare, Linkedin, Globe, Truck, 
   RotateCcw, Paperclip, ChevronRight, HelpCircle,
-  Briefcase, Zap, MapPin, MessageCircle, Music2
+  Briefcase, Zap, MapPin, MessageCircle, Music2,
+  AlertCircle
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useSettings } from '@/hooks/useSettings';
 import { uploadContactAttachment } from '@/api/storage';
+import { getPartnershipServices } from '@/api/dashboards';
 
 export default function Contact() {
   const { settings } = useSettings();
@@ -22,6 +24,27 @@ export default function Contact() {
     message: '',
     attachment: null as File | null
   });
+
+  const [partnershipServices, setPartnershipServices] = useState<any[]>([]);
+  const [isLoadingServices, setIsLoadingServices] = useState(true);
+  const [servicesError, setServicesError] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function loadServices() {
+      try {
+        setIsLoadingServices(true);
+        const data = await getPartnershipServices();
+        setPartnershipServices(data);
+        setServicesError(null);
+      } catch (err: any) {
+        console.error('Failed to load partnership services:', err);
+        setServicesError('Failed to load partnership opportunities');
+      } finally {
+        setIsLoadingServices(false);
+      }
+    }
+    loadServices();
+  }, []);
 
   const subjects = [
     'General Inquiry (info@readmartke.com)',
@@ -315,20 +338,76 @@ export default function Contact() {
                   <p className="text-muted-foreground font-medium mb-8">
                     ReadMart welcomes partnerships beyond literacy-focused businesses. We seek collaborations in:
                   </p>
-                  <div className="grid grid-cols-2 gap-4">
-                    {[
-                      { label: 'Logistics', icon: <Truck className="w-4 h-4" /> },
-                      { label: 'Technology', icon: <Zap className="w-4 h-4" /> },
-                      { label: 'Retail', icon: <Briefcase className="w-4 h-4" /> },
-                      { label: 'Media & Marketing', icon: <MessageSquare className="w-4 h-4" /> }
-                    ].map(item => (
-                      <div key={item.label} className="flex items-center gap-2 text-sm font-bold">
-                        <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
-                          {item.icon}
-                        </div>
-                        {item.label}
-                      </div>
-                    ))}
+                  
+                  <div className="relative min-h-[100px]">
+                    <AnimatePresence mode="wait">
+                      {isLoadingServices ? (
+                        <motion.div 
+                          key="loading"
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          exit={{ opacity: 0 }}
+                          className="flex items-center gap-3 text-muted-foreground"
+                        >
+                          <Loader2 className="w-5 h-5 animate-spin" />
+                          <span className="font-bold">Loading opportunities...</span>
+                        </motion.div>
+                      ) : servicesError ? (
+                        <motion.div 
+                          key="error"
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          exit={{ opacity: 0 }}
+                          className="flex items-center gap-3 text-red-400"
+                        >
+                          <AlertCircle className="w-5 h-5" />
+                          <span className="font-bold">{servicesError}</span>
+                        </motion.div>
+                      ) : partnershipServices.length > 0 ? (
+                        <motion.div 
+                          key="content"
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          exit={{ opacity: 0 }}
+                          className="grid grid-cols-2 gap-4"
+                        >
+                          {partnershipServices.map(item => (
+                            <div key={item.id} className="flex items-center gap-2 text-sm font-bold">
+                              <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
+                                {item.icon_name === 'Truck' && <Truck className="w-4 h-4" />}
+                                {item.icon_name === 'Zap' && <Zap className="w-4 h-4" />}
+                                {item.icon_name === 'Briefcase' && <Briefcase className="w-4 h-4" />}
+                                {item.icon_name === 'MessageSquare' && <MessageSquare className="w-4 h-4" />}
+                                {!['Truck', 'Zap', 'Briefcase', 'MessageSquare'].includes(item.icon_name) && <Globe className="w-4 h-4" />}
+                              </div>
+                              {item.name}
+                            </div>
+                          ))}
+                        </motion.div>
+                      ) : (
+                        <motion.div 
+                          key="empty"
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          exit={{ opacity: 0 }}
+                          className="grid grid-cols-2 gap-4"
+                        >
+                          {[
+                            { label: 'Logistics', icon: <Truck className="w-4 h-4" /> },
+                            { label: 'Technology', icon: <Zap className="w-4 h-4" /> },
+                            { label: 'Retail', icon: <Briefcase className="w-4 h-4" /> },
+                            { label: 'Media & Marketing', icon: <MessageSquare className="w-4 h-4" /> }
+                          ].map(item => (
+                            <div key={item.label} className="flex items-center gap-2 text-sm font-bold">
+                              <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
+                                {item.icon}
+                              </div>
+                              {item.label}
+                            </div>
+                          ))}
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
                   </div>
                 </div>
                 <div className="text-center md:text-right">
