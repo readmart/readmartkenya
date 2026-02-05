@@ -9,10 +9,10 @@ BEGIN;
 DO $$
 DECLARE
   tables_to_alter TEXT[] := ARRAY[
-    'profiles', 'orders', 'products', 'cms_content', 'shipping_zones', 
+    'profiles', 'orders', 'products', 'legacy_cms_content', 'shipping_zones', 
     'author_applications', 'partnership_applications', 'partnership_agreements',
     'contact_messages', 'newsletter_subscriptions', 'events', 'audit_logs',
-    'book_clubs', 'book_club_events', 'book_club_discussions'
+    'book_clubs', 'book_club_events', 'book_club_discussions', 'banners', 'announcements'
   ];
   t TEXT;
 BEGIN
@@ -35,10 +35,10 @@ END $$;
 DO $$
 DECLARE
   tables_to_add TEXT[] := ARRAY[
-    'profiles', 'orders', 'products', 'cms_content', 'shipping_zones', 
+    'profiles', 'orders', 'products', 'legacy_cms_content', 'shipping_zones', 
     'author_applications', 'partnership_applications', 'partnership_agreements',
     'contact_messages', 'newsletter_subscriptions', 'events', 'audit_logs',
-    'book_clubs', 'book_club_events', 'book_club_discussions'
+    'book_clubs', 'book_club_events', 'book_club_discussions', 'banners', 'announcements'
   ];
   t TEXT;
 BEGIN

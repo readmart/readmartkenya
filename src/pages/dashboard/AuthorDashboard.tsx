@@ -4,7 +4,7 @@ import {
   BookOpen, DollarSign, TrendingUp,
   Award, MessageSquare, Plus, Loader2, Shield,
   FileCheck, Star, XCircle, Image as ImageIcon, FileUp,
-  Edit
+  Edit, Users, Rss, CreditCard, AlertCircle
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { useCurrency } from '@/contexts/CurrencyContext';
@@ -21,7 +21,12 @@ import {
   deletePaymentMethod,
   setDefaultPaymentMethod,
   createProduct,
-  updateProduct
+  updateProduct,
+  getAuthorEarnings,
+  getAuthorDrops,
+  createAuthorDrop,
+  requestAuthorPayout,
+  getAuthorSubscriptions
 } from '@/api/dashboards';
 import { uploadProductImage, uploadEbookFile, uploadProfileImage } from '@/api/storage';
 import { toast } from 'sonner';
@@ -35,6 +40,9 @@ export default function AuthorDashboard() {
   const [payouts, setPayouts] = useState<any[]>([]);
   const [reviews, setReviews] = useState<any[]>([]);
   const [paymentMethods, setPaymentMethods] = useState<any[]>([]);
+  const [subscriptions, setSubscriptions] = useState<any[]>([]);
+  const [earnings, setEarnings] = useState<any>(null);
+  const [drops, setDrops] = useState<any[]>([]);
   const [settings, setSettings] = useState<any>(null);
   const [categories, setCategories] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -43,6 +51,21 @@ export default function AuthorDashboard() {
   const [isAddingMpesa, setIsAddingMpesa] = useState(false);
   const [newMpesaNumber, setNewMpesaNumber] = useState('');
   const [isSubmittingMpesa, setIsSubmittingMpesa] = useState(false);
+
+  // Drops & Payouts State
+  const [isDropModalOpen, setIsDropModalOpen] = useState(false);
+  const [isPayoutModalOpen, setIsPayoutModalOpen] = useState(false);
+  const [isSubmittingDrop, setIsSubmittingDrop] = useState(false);
+  const [isSubmittingPayout, setIsSubmittingPayout] = useState(false);
+  const [dropFormData, setDropFormData] = useState({
+    title: '',
+    description: '',
+    type: 'content', // 'content', 'perk', 'exclusive'
+    content_url: '',
+    is_public: true,
+    price: 0
+  });
+  const [payoutAmount, setPayoutAmount] = useState('');
 
   useEffect(() => {
     // Component mount logic
@@ -102,14 +125,17 @@ export default function AuthorDashboard() {
     if (!user) return;
     setIsLoading(true);
     try {
-      const [sales, books, siteSettings, payoutData, reviewsData, cats, methods] = await Promise.all([
+      const [sales, books, siteSettings, payoutData, reviewsData, cats, methods, subsData, earningsData, dropsData] = await Promise.all([
         getAuthorSalesReport(user.id),
         getInventory(user.id),
         getSiteSettings(),
         getAuthorPayouts(user.id),
         getAuthorReviews(user.id),
         getCategories(),
-        getPaymentMethods(user.id)
+        getPaymentMethods(user.id),
+        getAuthorSubscriptions(user.id),
+        getAuthorEarnings(user.id),
+        getAuthorDrops(user.id)
       ]);
       setSalesReport(sales);
       setMyBooks(books); 
@@ -118,6 +144,9 @@ export default function AuthorDashboard() {
       setReviews(reviewsData);
       setCategories(cats || []);
       setPaymentMethods(methods || []);
+      setSubscriptions(subsData || []);
+      setEarnings(earningsData);
+      setDrops(dropsData || []);
     } catch (error) {
       toast.error('Failed to fetch dashboard data');
     } finally {
@@ -177,6 +206,74 @@ export default function AuthorDashboard() {
       fetchData();
     } catch (err: any) {
       toast.error(err.message || 'Failed to update default method');
+    }
+  };
+
+  const handleCreateDrop = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user) return;
+
+    setIsSubmittingDrop(true);
+    const loadingToast = toast.loading('Releasing drop...');
+    try {
+      await createAuthorDrop(dropFormData);
+      toast.success('Drop released successfully!', { id: loadingToast });
+      setIsDropModalOpen(false);
+      setDropFormData({
+        title: '',
+        description: '',
+        type: 'content',
+        content_url: '',
+        is_public: true,
+        price: 0
+      });
+      fetchData();
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to release drop', { id: loadingToast });
+    } finally {
+      setIsSubmittingDrop(false);
+    }
+  };
+
+  const handleRequestPayout = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user || !payoutAmount) return;
+
+    const amount = parseFloat(payoutAmount);
+    const balance = earnings?.current_balance || 0;
+
+    if (amount <= 0) {
+      toast.error('Please enter a valid amount');
+      return;
+    }
+
+    if (amount > balance) {
+      toast.error('Insufficient balance');
+      return;
+    }
+
+    const defaultMethod = paymentMethods.find(m => m.is_default);
+    if (!defaultMethod) {
+      toast.error('Please set a default payment method first');
+      return;
+    }
+
+    setIsSubmittingPayout(true);
+    const loadingToast = toast.loading('Submitting payout request...');
+    try {
+      await requestAuthorPayout(user.id, amount, {
+        payment_method_id: defaultMethod.id,
+        method_type: defaultMethod.type,
+        identifier: defaultMethod.identifier || defaultMethod.details?.phone
+      });
+      toast.success('Payout request submitted!', { id: loadingToast });
+      setIsPayoutModalOpen(false);
+      setPayoutAmount('');
+      fetchData();
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to request payout', { id: loadingToast });
+    } finally {
+      setIsSubmittingPayout(false);
     }
   };
 
@@ -311,16 +408,18 @@ export default function AuthorDashboard() {
   };
 
   const stats = useMemo(() => {
-    const totalRoyalties = payouts.reduce((acc, curr) => acc + Number(curr.amount), 0);
+    const totalRoyalties = earnings?.total_earned || 0;
+    const currentBalance = earnings?.current_balance || 0;
     const uniqueBooks = new Set(myBooks.map(b => b.id)).size;
+    const activeSubs = subscriptions.filter(s => s.status === 'active').length;
     
     return [
       { label: 'Published Books', value: uniqueBooks.toString(), icon: <BookOpen />, color: 'text-blue-500' },
-      { label: 'Total Royalties', value: formatPrice(totalRoyalties), icon: <DollarSign />, color: 'text-green-500' },
-      { label: 'Total Sales', value: salesReport.length.toString(), icon: <TrendingUp />, color: 'text-orange-500' },
-      { label: 'Reader Reviews', value: reviews.length.toString(), icon: <MessageSquare />, color: 'text-purple-500' },
+      { label: 'Total Earnings', value: formatPrice(totalRoyalties), icon: <DollarSign />, color: 'text-green-500' },
+      { label: 'Current Balance', value: formatPrice(currentBalance), icon: <TrendingUp />, color: 'text-orange-500' },
+      { label: 'Active Fans', value: activeSubs.toString(), icon: <Users />, color: 'text-purple-500' },
     ];
-  }, [payouts, myBooks, formatPrice, salesReport, reviews]);
+  }, [earnings, myBooks, formatPrice, subscriptions]);
 
   const performanceData = useMemo(() => {
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -571,6 +670,118 @@ export default function AuthorDashboard() {
               )}
             </div>
           </motion.div>
+
+          {/* Drops & Exclusives Section */}
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="glass p-8 rounded-3xl"
+          >
+            <div className="flex justify-between items-center mb-8">
+              <div>
+                <h3 className="text-xl font-bold">Drops & Exclusives</h3>
+                <p className="text-sm text-muted-foreground">Release exclusive content to your fans</p>
+              </div>
+              <button 
+                onClick={() => setIsDropModalOpen(true)}
+                className="p-2 bg-primary text-white rounded-xl hover:scale-105 transition-all shadow-lg shadow-primary/20"
+              >
+                <Plus className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="grid sm:grid-cols-2 gap-4">
+              {drops.map((drop) => (
+                <div key={drop.id} className="p-4 rounded-2xl bg-white/5 border border-white/10 flex flex-col justify-between">
+                  <div>
+                    <div className="flex justify-between items-start mb-2">
+                      <span className={`text-[10px] px-2 py-0.5 rounded-md font-bold uppercase tracking-wider ${
+                        drop.type === 'exclusive' ? 'bg-purple-500/20 text-purple-500' :
+                        drop.type === 'perk' ? 'bg-orange-500/20 text-orange-500' :
+                        'bg-blue-500/20 text-blue-500'
+                      }`}>
+                        {drop.type}
+                      </span>
+                      {drop.price > 0 && <span className="text-xs font-bold text-green-500">{formatPrice(drop.price)}</span>}
+                    </div>
+                    <h4 className="font-bold mb-1">{drop.title}</h4>
+                    <p className="text-xs text-muted-foreground line-clamp-2 mb-4">{drop.description}</p>
+                  </div>
+                  <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+                    <span>{new Date(drop.created_at).toLocaleDateString()}</span>
+                    <span className="flex items-center gap-1">
+                      <Users className="w-3 h-3" />
+                      {drop.unlock_count || 0} Unlocks
+                    </span>
+                  </div>
+                </div>
+              ))}
+              {drops.length === 0 && (
+                <div className="col-span-full py-12 text-center text-muted-foreground bg-white/5 rounded-2xl border border-dashed border-white/10">
+                  <Rss className="w-12 h-12 mx-auto mb-4 opacity-20" />
+                  <p>No drops yet. Engage your fans with exclusive content!</p>
+                </div>
+              )}
+            </div>
+          </motion.div>
+
+          {/* Active Fans Section */}
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="glass p-8 rounded-3xl"
+          >
+            <div className="flex justify-between items-center mb-8">
+              <div>
+                <h3 className="text-xl font-bold">Active Fans</h3>
+                <p className="text-sm text-muted-foreground">Your most dedicated readers</p>
+              </div>
+              <span className="text-xs font-bold text-primary bg-primary/10 px-3 py-1 rounded-full">
+                {subscriptions.length} Total
+              </span>
+            </div>
+
+            <div className="space-y-4">
+              {subscriptions.slice(0, 5).map((sub) => (
+                <div key={sub.id} className="flex items-center justify-between p-4 rounded-2xl bg-white/5 border border-white/10">
+                  <div className="flex items-center gap-4">
+                    <div className="w-10 h-10 rounded-full bg-secondary/20 flex items-center justify-center text-secondary font-bold">
+                      {sub.subscriber?.avatar_url ? (
+                        <img src={sub.subscriber.avatar_url} alt={sub.subscriber.full_name} className="w-full h-full rounded-full object-cover" />
+                      ) : (
+                        sub.subscriber?.full_name?.charAt(0) || 'F'
+                      )}
+                    </div>
+                    <div>
+                      <p className="font-bold text-sm">{sub.subscriber?.full_name || 'Fan'}</p>
+                      <div className="flex items-center gap-2">
+                        <span className={`text-[9px] font-black uppercase tracking-tighter px-1.5 py-0.5 rounded ${
+                          sub.tier === 'patron' ? 'bg-purple-500/20 text-purple-500' :
+                          sub.tier === 'superfan' ? 'bg-orange-500/20 text-orange-500' :
+                          'bg-blue-500/20 text-blue-500'
+                        }`}>
+                          {sub.tier}
+                        </span>
+                        <span className="text-[10px] text-muted-foreground">
+                          Subscribed {new Date(sub.created_at).toLocaleDateString()}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs font-bold text-green-500">{formatPrice(sub.amount)}/mo</p>
+                    <p className="text-[9px] text-muted-foreground uppercase tracking-widest">Active</p>
+                  </div>
+                </div>
+              ))}
+              {subscriptions.length === 0 && (
+                <div className="py-12 text-center text-muted-foreground">
+                  <Users className="w-12 h-12 mx-auto mb-4 opacity-20" />
+                  <p>No active fans yet. Promote your profile to grow your community!</p>
+                </div>
+              )}
+            </div>
+          </motion.div>
         </div>
 
         <div className="space-y-8">
@@ -618,6 +829,15 @@ export default function AuthorDashboard() {
                   {formatPrice(payouts.filter(p => p.payout_status === 'paid').reduce((acc, p) => acc + Number(p.amount), 0))}
                 </span>
               </div>
+              
+              <button 
+                onClick={() => setIsPayoutModalOpen(true)}
+                disabled={!earnings?.current_balance || earnings.current_balance <= 0}
+                className="w-full bg-primary text-white py-3 rounded-xl font-bold hover:opacity-90 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:grayscale"
+              >
+                <CreditCard className="w-4 h-4" />
+                Request Payout
+              </button>
               
               <div className="pt-4 border-t border-white/5">
                 <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-4">Recent Payouts</p>
@@ -1023,6 +1243,192 @@ export default function AuthorDashboard() {
                     type="button"
                     onClick={() => setIsModalOpen(false)}
                     className="px-10 bg-slate-100 text-slate-600 py-5 rounded-2xl font-black uppercase tracking-widest hover:bg-slate-200 transition-all"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Release Drop Modal */}
+      <AnimatePresence>
+        {isDropModalOpen && (
+          <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsDropModalOpen(false)}
+              className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
+            />
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              className="relative bg-white w-full max-w-lg rounded-[40px] shadow-2xl overflow-hidden p-8"
+            >
+              <div className="mb-8">
+                <h2 className="text-2xl font-black uppercase tracking-tighter text-slate-900">Release New Drop</h2>
+                <p className="text-sm font-bold text-slate-400 uppercase tracking-widest">Exclusive Creator Protocol</p>
+              </div>
+
+              <form onSubmit={handleCreateDrop} className="space-y-6">
+                <div>
+                  <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Drop Title</label>
+                  <input 
+                    required
+                    type="text" 
+                    value={dropFormData.title}
+                    onChange={(e) => setDropFormData({...dropFormData, title: e.target.value})}
+                    className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-2 focus:ring-primary/20 font-bold text-slate-900" 
+                    placeholder="e.g. Deleted Scenes: Chapter 5"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Description</label>
+                  <textarea 
+                    required
+                    rows={3}
+                    value={dropFormData.description}
+                    onChange={(e) => setDropFormData({...dropFormData, description: e.target.value})}
+                    className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-2 focus:ring-primary/20 font-bold text-slate-900 resize-none" 
+                    placeholder="What's inside this drop?"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Drop Type</label>
+                    <select 
+                      value={dropFormData.type}
+                      onChange={(e) => setDropFormData({...dropFormData, type: e.target.value})}
+                      className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-2 focus:ring-primary/20 font-bold text-slate-900"
+                    >
+                      <option value="content">Content</option>
+                      <option value="perk">Perk</option>
+                      <option value="exclusive">Exclusive</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Price (Optional)</label>
+                    <input 
+                      type="number" 
+                      value={dropFormData.price}
+                      onChange={(e) => setDropFormData({...dropFormData, price: parseFloat(e.target.value) || 0})}
+                      className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-2 focus:ring-primary/20 font-bold text-slate-900" 
+                      placeholder="0"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Content URL/Asset</label>
+                  <input 
+                    type="text" 
+                    value={dropFormData.content_url}
+                    onChange={(e) => setDropFormData({...dropFormData, content_url: e.target.value})}
+                    className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-2 focus:ring-primary/20 font-bold text-slate-900" 
+                    placeholder="Link to file or secret content"
+                  />
+                </div>
+
+                <div className="pt-4 flex gap-4">
+                  <button 
+                    type="submit"
+                    disabled={isSubmittingDrop}
+                    className="flex-1 bg-primary text-white py-4 rounded-2xl font-black uppercase tracking-widest hover:opacity-90 transition-all flex items-center justify-center gap-2"
+                  >
+                    {isSubmittingDrop ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Release Drop'}
+                  </button>
+                  <button 
+                    type="button"
+                    onClick={() => setIsDropModalOpen(false)}
+                    className="px-8 bg-slate-100 text-slate-600 py-4 rounded-2xl font-black uppercase tracking-widest hover:bg-slate-200 transition-all"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Request Payout Modal */}
+      <AnimatePresence>
+        {isPayoutModalOpen && (
+          <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsPayoutModalOpen(false)}
+              className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
+            />
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              className="relative bg-white w-full max-w-md rounded-[40px] shadow-2xl overflow-hidden p-8"
+            >
+              <div className="mb-8 text-center">
+                <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <TrendingUp className="w-8 h-8" />
+                </div>
+                <h2 className="text-2xl font-black uppercase tracking-tighter text-slate-900">Request Payout</h2>
+                <p className="text-sm font-bold text-slate-400 uppercase tracking-widest">Available Balance: {formatPrice(earnings?.current_balance || 0)}</p>
+              </div>
+
+              <form onSubmit={handleRequestPayout} className="space-y-6">
+                <div>
+                  <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Payout Amount (KES)</label>
+                  <input 
+                    required
+                    type="number" 
+                    value={payoutAmount}
+                    onChange={(e) => setPayoutAmount(e.target.value)}
+                    max={earnings?.current_balance || 0}
+                    className="w-full px-6 py-6 bg-slate-50 rounded-3xl border-none outline-none focus:ring-2 focus:ring-primary/20 font-black text-3xl text-center text-slate-900" 
+                    placeholder="0.00"
+                  />
+                </div>
+
+                <div className="bg-slate-50 p-6 rounded-3xl space-y-3">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Destination</p>
+                  {paymentMethods.find(m => m.is_default) ? (
+                    <div className="flex items-center gap-4">
+                      <div className="p-2 bg-secondary/10 text-secondary rounded-lg">
+                        <CreditCard className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <p className="font-bold text-sm">M-Pesa: {paymentMethods.find(m => m.is_default)?.details?.phone}</p>
+                        <p className="text-[10px] text-muted-foreground uppercase tracking-widest">Verified Default Method</p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-3 text-red-500">
+                      <AlertCircle className="w-5 h-5" />
+                      <p className="text-xs font-bold">No default payment method set!</p>
+                    </div>
+                  )}
+                </div>
+
+                <div className="pt-4 flex flex-col gap-3">
+                  <button 
+                    type="submit"
+                    disabled={isSubmittingPayout || !paymentMethods.find(m => m.is_default)}
+                    className="w-full bg-primary text-white py-5 rounded-2xl font-black uppercase tracking-widest hover:opacity-90 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                  >
+                    {isSubmittingPayout ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Confirm Payout Request'}
+                  </button>
+                  <button 
+                    type="button"
+                    onClick={() => setIsPayoutModalOpen(false)}
+                    className="w-full bg-slate-100 text-slate-600 py-4 rounded-2xl font-black uppercase tracking-widest hover:bg-slate-200 transition-all"
                   >
                     Cancel
                   </button>

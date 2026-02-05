@@ -1,153 +1,124 @@
 -- ==========================================
--- READMART: Database Initialization & Seed
--- Purpose: Ensures all core analytics tables exist and populates them with sample data
+-- READMART SEED DATA & SCHEMA INITIALIZATION
 -- ==========================================
 
-BEGIN;
-
--- 1. Ensure Categories exist
+-- 1. Base Tables
 CREATE TABLE IF NOT EXISTS public.categories (
     id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
-    name text NOT NULL UNIQUE,
+    name text NOT NULL,
     slug text NOT NULL UNIQUE,
-    parent_id uuid REFERENCES public.categories(id),
     created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
--- 2. Ensure Products exist
 CREATE TABLE IF NOT EXISTS public.products (
     id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
     title text NOT NULL,
     slug text NOT NULL UNIQUE,
     description text,
     price decimal(12,2) NOT NULL,
-    sale_price decimal(12,2),
     category_id uuid REFERENCES public.categories(id),
-    metadata jsonb DEFAULT '{}'::jsonb,
-    is_active boolean DEFAULT true,
     stock_quantity integer DEFAULT 0,
-    created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL,
-    author_id uuid
-);
-
--- 3. Ensure Orders exist
-DO $$ 
-BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'order_status') THEN
-        CREATE TYPE order_status AS ENUM ('pending', 'paid', 'processing', 'completed', 'cancelled', 'failed');
-    ELSE
-        -- Add missing values to existing enum
-        BEGIN
-            ALTER TYPE order_status ADD VALUE 'paid';
-        EXCEPTION WHEN duplicate_object THEN null;
-        END;
-        BEGIN
-            ALTER TYPE order_status ADD VALUE 'completed';
-        EXCEPTION WHEN duplicate_object THEN null;
-        END;
-        BEGIN
-            ALTER TYPE order_status ADD VALUE 'failed';
-        EXCEPTION WHEN duplicate_object THEN null;
-        END;
-    END IF;
-END $$;
-
-CREATE TABLE IF NOT EXISTS public.orders (
-    id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
-    user_id uuid NOT NULL,
-    status text DEFAULT 'pending', 
-    total_amount decimal(12,2) NOT NULL,
-    shipping_address jsonb,
-    payment_id text,
-    payment_metadata jsonb DEFAULT '{}'::jsonb,
+    image_url text,
+    is_active boolean DEFAULT true,
+    metadata jsonb DEFAULT '{}'::jsonb,
     created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
--- Ensure status column is compatible (convert enum to text if necessary or vice-versa)
--- For now, we use text with a check constraint for maximum flexibility in seed
-ALTER TABLE public.orders DROP CONSTRAINT IF EXISTS orders_status_check;
-ALTER TABLE public.orders ADD CONSTRAINT orders_status_check 
-    CHECK (status IN ('pending', 'paid', 'processing', 'completed', 'cancelled', 'failed'));
+-- 2. User & Admin Tables
+CREATE TABLE IF NOT EXISTS public.profiles (
+    id uuid PRIMARY KEY, -- Linked to auth.users.id
+    email text,
+    full_name text,
+    avatar_url text,
+    role text DEFAULT 'customer' CHECK (role IN ('customer', 'admin', 'founder', 'author', 'partner')),
+    is_active boolean DEFAULT true,
+    created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
+);
 
--- 4. Ensure Order Items exist
+-- 3. Core Transactions
+CREATE TABLE IF NOT EXISTS public.orders (
+    id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+    user_id uuid NOT NULL,
+    status text DEFAULT 'pending' CHECK (status IN ('pending', 'processing', 'shipped', 'completed', 'cancelled')),
+    total_amount decimal(12,2) NOT NULL,
+    shipping_address jsonb,
+    payment_method text,
+    payment_status text DEFAULT 'pending',
+    created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS public.order_items (
     id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
     order_id uuid REFERENCES public.orders(id) ON DELETE CASCADE NOT NULL,
     product_id uuid REFERENCES public.products(id),
     quantity integer NOT NULL,
     price_at_purchase decimal(12,2) NOT NULL,
-    product_snapshot jsonb NOT NULL,
+    product_snapshot jsonb,
     created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
--- 5. Ensure Reviews exist
+-- 4. Feedback & Auditing
 CREATE TABLE IF NOT EXISTS public.reviews (
     id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
     user_id uuid NOT NULL,
     product_id uuid REFERENCES public.products(id) ON DELETE CASCADE NOT NULL,
-    rating integer NOT NULL CHECK (rating >= 1 AND rating <= 5),
+    rating integer CHECK (rating >= 1 AND rating <= 5),
     comment text,
+    is_approved boolean DEFAULT true,
     created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
--- 6. Ensure Audit Logs exist
 CREATE TABLE IF NOT EXISTS public.audit_logs (
     id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
-    user_id uuid,
     action text NOT NULL,
     entity_type text NOT NULL,
     entity_id uuid,
-    old_data jsonb,
-    new_data jsonb,
-    created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
-);
-
--- 7. Ensure Settings exist
-CREATE TABLE IF NOT EXISTS public.settings (
-    id text PRIMARY KEY DEFAULT 'global',
-    site_name text DEFAULT 'READMART',
-    site_logo text,
-    contact_email text,
-    contact_phone text,
-    address text,
-    whatsapp_link text,
-    tax_rate decimal(5,2) DEFAULT 16.00,
-    default_currency text DEFAULT 'KES',
-    maintenance_mode boolean DEFAULT false,
-    updated_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
-);
-
--- 7.1 Ensure Transactions exist
-CREATE TABLE IF NOT EXISTS public.transactions (
-    id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
-    order_id uuid REFERENCES public.orders(id) NOT NULL,
-    user_id uuid NOT NULL,
-    amount decimal(12,2) NOT NULL,
-    currency text DEFAULT 'KES',
-    provider text DEFAULT 'kopokopo',
-    provider_reference text,
-    status text DEFAULT 'pending' CHECK (status IN ('pending', 'completed', 'failed')),
+    performed_by uuid,
     metadata jsonb DEFAULT '{}'::jsonb,
     created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
--- 7.2 Ensure Missing Analytics/Admin Tables exist
+-- 5. System Configuration
+CREATE TABLE IF NOT EXISTS public.settings (
+    id text PRIMARY KEY DEFAULT 'global',
+    site_name text DEFAULT 'READMART',
+    contact_email text,
+    currency text DEFAULT 'KES',
+    tax_rate decimal(5,2) DEFAULT 0.00,
+    maintenance_mode boolean DEFAULT false,
+    metadata jsonb DEFAULT '{}'::jsonb,
+    updated_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- 6. Platform Specifics
+CREATE TABLE IF NOT EXISTS public.transactions (
+    id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+    order_id uuid REFERENCES public.orders(id),
+    amount decimal(12,2) NOT NULL,
+    type text NOT NULL, -- 'payment', 'refund', 'payout'
+    provider text DEFAULT 'mpesa',
+    provider_ref text,
+    status text DEFAULT 'pending',
+    metadata jsonb DEFAULT '{}'::jsonb,
+    created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS public.author_applications (
     id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
     full_name text NOT NULL,
     email text NOT NULL,
     bio text,
-    status text CHECK (status IN ('pending', 'approved', 'rejected')) DEFAULT 'pending',
-    metadata jsonb DEFAULT '{}'::jsonb,
+    portfolio_url text,
+    status text DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),
     created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS public.notification_logs (
     id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+    type text NOT NULL, -- 'email', 'push', 'sms'
     recipient text NOT NULL,
-    subject text NOT NULL,
-    status text CHECK (status IN ('pending', 'sent', 'failed')) DEFAULT 'pending',
-    error_message text,
+    subject text,
+    status text DEFAULT 'sent',
     metadata jsonb DEFAULT '{}'::jsonb,
     created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
 );
@@ -156,21 +127,21 @@ CREATE TABLE IF NOT EXISTS public.partnership_services (
     id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
     name text NOT NULL,
     description text,
+    base_price decimal(12,2),
     is_active boolean DEFAULT true,
     created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS public.fulfillment_ledger (
     id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
-    order_id uuid REFERENCES public.orders(id) NOT NULL,
-    partner_service_id uuid REFERENCES public.partnership_services(id),
-    amount decimal(12,2) NOT NULL,
-    payout_status text DEFAULT 'pending' CHECK (payout_status IN ('pending', 'paid', 'failed')),
-    metadata jsonb,
+    order_id uuid REFERENCES public.orders(id),
+    action text NOT NULL,
+    status text,
+    notes text,
     created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
--- 7.3 Additional Tables for Digital Community & Management
+-- 7. Missing & Extended Tables
 CREATE TABLE IF NOT EXISTS public.shipping_zones (
     id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
     name text NOT NULL UNIQUE,
@@ -190,12 +161,36 @@ CREATE TABLE IF NOT EXISTS public.promos (
     created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS public.cms_content (
+-- Split CMS Tables
+CREATE TABLE IF NOT EXISTS public.banners (
     id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
-    type text NOT NULL, -- 'hero', 'banner', 'book_club', etc.
     title text NOT NULL,
     content text,
     image_url text,
+    link_url text,
+    is_active boolean DEFAULT true,
+    metadata jsonb DEFAULT '{}'::jsonb,
+    created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS public.book_clubs (
+    id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+    name text NOT NULL,
+    description text,
+    image_url text,
+    founder_id uuid,
+    membership_price decimal(12,2) DEFAULT 0.00,
+    is_active boolean DEFAULT true,
+    metadata jsonb DEFAULT '{}'::jsonb,
+    created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS public.announcements (
+    id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+    title text NOT NULL,
+    content text,
+    image_url text,
+    link_url text,
     is_active boolean DEFAULT true,
     metadata jsonb DEFAULT '{}'::jsonb,
     created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
@@ -252,7 +247,7 @@ CREATE TABLE IF NOT EXISTS public.wishlist_items (
 CREATE TABLE IF NOT EXISTS public.book_club_memberships (
     id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
     user_id uuid NOT NULL,
-    club_id uuid REFERENCES public.cms_content(id) ON DELETE CASCADE NOT NULL,
+    club_id uuid REFERENCES public.book_clubs(id) ON DELETE CASCADE NOT NULL,
     tier text DEFAULT 'basic',
     is_active boolean DEFAULT true,
     created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL,
@@ -285,7 +280,9 @@ ALTER TABLE public.partnership_services ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.fulfillment_ledger ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.shipping_zones ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.promos ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.cms_content ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.banners ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.book_clubs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.announcements ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.contact_messages ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.partnership_applications ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.events ENABLE ROW LEVEL SECURITY;
@@ -295,13 +292,6 @@ ALTER TABLE public.book_club_memberships ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
 
 -- 9. Seed Data
--- Clear existing to avoid conflicts
--- DELETE FROM public.order_items;
--- DELETE FROM public.orders;
--- DELETE FROM public.reviews;
--- DELETE FROM public.products;
--- DELETE FROM public.categories;
-
 -- Categories
 INSERT INTO public.categories (name, slug) VALUES 
 ('Fiction', 'fiction'),
@@ -330,20 +320,23 @@ INSERT INTO public.shipping_zones (name, rate) VALUES
 ('Other Regions', 600.00)
 ON CONFLICT (name) DO NOTHING;
 
--- CMS Content: Book Clubs & Banners
-INSERT INTO public.cms_content (type, title, content, image_url, metadata) VALUES 
-('book_club', 'The Classics Club', 'Exploring timeless literature from around the world.', 'https://images.unsplash.com/photo-1512820790803-83ca734da794', '{"tier": "basic"}'),
-('book_club', 'Tech Visionaries', 'Discussing the future of technology and society.', 'https://images.unsplash.com/photo-1518770660439-4636190af475', '{"tier": "premium"}'),
-('hero', 'EVERY PAGE TELLS A STORY', 'Discover a curated sanctuary for bibliophiles and art enthusiasts. Bridging the gap between creators and readers.', 'https://images.unsplash.com/photo-1544947950-fa07a98d237f', '{"button_text": "Shop Now"}')
+-- Banners
+INSERT INTO public.banners (title, content, image_url, metadata) VALUES 
+('EVERY PAGE TELLS A STORY', 'Discover a curated sanctuary for bibliophiles and art enthusiasts. Bridging the gap between creators and readers.', 'https://images.unsplash.com/photo-1544947950-fa07a98d237f', '{"button_text": "Shop Now"}')
+ON CONFLICT DO NOTHING;
+
+-- Book Clubs
+INSERT INTO public.book_clubs (name, description, image_url, metadata) VALUES 
+('The Classics Club', 'Exploring timeless literature from around the world.', 'https://images.unsplash.com/photo-1512820790803-83ca734da794', '{"tier": "basic"}'),
+('Tech Visionaries', 'Discussing the future of technology and society.', 'https://images.unsplash.com/photo-1518770660439-4636190af475', '{"tier": "premium"}')
 ON CONFLICT DO NOTHING;
 
 -- Settings
-INSERT INTO public.settings (id, site_name, tax_rate, default_currency)
+INSERT INTO public.settings (id, site_name, tax_rate, currency)
 VALUES ('global', 'READMART', 16.00, 'KES')
 ON CONFLICT (id) DO NOTHING;
 
 -- Analytics Data: Sample Orders
--- We use a dummy user_id for seeding if no profiles exist yet
 DO $$
 DECLARE
     dummy_user_id uuid := '00000000-0000-0000-0000-000000000000';

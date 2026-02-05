@@ -115,9 +115,8 @@ export default function SearchDialog({ isOpen, onClose }: SearchDialogProps) {
 
         // 2. Search Events
         const { data: events } = await supabase
-          .from('cms_content')
-          .select('id, title, metadata')
-          .eq('type', 'event')
+          .from('events')
+          .select('id, title, event_date')
           .ilike('title', `%${query}%`)
           .limit(3);
 
@@ -126,7 +125,7 @@ export default function SearchDialog({ isOpen, onClose }: SearchDialogProps) {
             id: e.id,
             type: 'event',
             title: e.title,
-            subtitle: e.metadata?.date ? new Date(e.metadata.date).toLocaleDateString() : 'Upcoming Event',
+            subtitle: e.event_date ? new Date(e.event_date).toLocaleDateString() : 'Upcoming Event',
             link: `/events`
           });
         });

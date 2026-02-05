@@ -46,10 +46,6 @@ export async function getNewsletterSubscriptions() {
       }
       
       isAdmin = profile?.role === 'founder' || profile?.role === 'admin';
-    } else {
-      // Dev bypass
-      const devRole = typeof window !== 'undefined' ? localStorage.getItem('rm_dev_role') : null;
-      isAdmin = devRole === 'founder' || devRole === 'admin';
     }
 
     if (!isAdmin) {
@@ -88,9 +84,6 @@ export async function getNewsletterSubscriptions() {
   }
 }
 
-/**
- * Updates a newsletter subscription status
- */
 export type NewsletterStatus = 'active' | 'unsubscribed';
 
 export async function updateNewsletterStatus(id: string, status: NewsletterStatus) {

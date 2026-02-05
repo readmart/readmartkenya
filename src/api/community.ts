@@ -179,19 +179,18 @@ export async function getWishlist() {
 export async function getAvailableBookClubs(): Promise<BookClub[]> {
   try {
     let { data, error } = await supabase
-      .from('cms_content')
-      .select('id, title, content, image_url, is_active, metadata, created_at')
-      .eq('type', 'book_club');
+      .from('book_clubs')
+      .select('id, name, description, image_url, is_active, metadata, created_at, membership_price, founder_id');
 
     if (error) throw error;
 
     return (data || []).map(item => ({
       id: item.id,
-      name: item.title,
-      description: item.content,
+      name: item.name,
+      description: item.description,
       image_url: item.image_url,
-      founder_id: item.metadata?.founder_id || null,
-      membership_price: item.metadata?.membership_price || 0,
+      founder_id: item.founder_id || null,
+      membership_price: item.membership_price || 0,
       is_active: item.is_active !== false,
       created_at: item.created_at,
       metadata: item.metadata
@@ -208,10 +207,9 @@ export async function getAvailableBookClubs(): Promise<BookClub[]> {
 export async function getBookClubById(id: string): Promise<BookClub | null> {
   try {
     let { data, error } = await supabase
-      .from('cms_content')
-      .select('id, title, content, image_url, is_active, metadata, created_at')
+      .from('book_clubs')
+      .select('id, name, description, image_url, is_active, metadata, created_at, membership_price, founder_id')
       .eq('id', id)
-      .eq('type', 'book_club')
       .maybeSingle();
 
     if (error) throw error;
@@ -219,11 +217,11 @@ export async function getBookClubById(id: string): Promise<BookClub | null> {
 
     return {
       id: data.id,
-      name: data.title,
-      description: data.content,
+      name: data.name,
+      description: data.description,
       image_url: data.image_url,
-      founder_id: data.metadata?.founder_id || null,
-      membership_price: data.metadata?.membership_price || 0,
+      founder_id: data.founder_id || null,
+      membership_price: data.membership_price || 0,
       is_active: data.is_active !== false,
       created_at: data.created_at,
       metadata: data.metadata
@@ -310,7 +308,7 @@ export async function getUserMembership(): Promise<BookClubMembership | null> {
       .from('book_club_memberships')
       .select(`
         id, user_id, club_id, status, created_at, expires_at,
-        club:cms_content(id, title, content, image_url, metadata)
+        club:book_clubs(id, name, description, image_url, metadata)
       `)
       .eq('user_id', user.id)
       .eq('status', 'active')
@@ -331,8 +329,8 @@ export async function getUserMembership(): Promise<BookClubMembership | null> {
       payment_status: 'paid',
       club: club ? {
         id: club.id,
-        name: club.title,
-        description: club.content,
+        name: club.name,
+        description: club.description,
         image_url: club.image_url,
         metadata: club.metadata
       } : undefined
@@ -347,21 +345,19 @@ export async function getUserMembership(): Promise<BookClubMembership | null> {
  */
 export async function getInsights(): Promise<CMSContent[]> {
   try {
-    const columns = 'id, type, title, content, image_url, link_url, is_active, metadata, created_at';
+    const columns = 'id, title, content, image_url, link_url, is_active, metadata, created_at';
     let { data, error } = await supabase
-      .from('cms_content')
+      .from('announcements')
       .select(columns)
-      .eq('type', 'announcement')
       .eq('is_active', true)
       .order('created_at', { ascending: false });
 
     if (error) {
       if (error.code === 'PGRST204' || error.message?.includes('column') || error.message?.includes('cache')) {
-        console.warn('Advanced cms_content columns missing, falling back to core');
+        console.warn('Advanced announcements columns missing, falling back to core');
         const { data: fallbackData, error: fallbackError } = await supabase
-          .from('cms_content')
-          .select('id, type, title, is_active')
-          .eq('type', 'announcement')
+          .from('announcements')
+          .select('id, title, is_active')
           .eq('is_active', true)
           .order('created_at', { ascending: false });
         if (fallbackError) throw fallbackError;
@@ -370,9 +366,9 @@ export async function getInsights(): Promise<CMSContent[]> {
         throw error;
       }
     }
-    return (data as CMSContent[]) || [];
+    return (data || []).map(d => ({ ...d, type: 'announcement' })) as CMSContent[];
   } catch (error) {
-    console.warn('CMS Content (announcements) fetch failed, returning empty list');
+    console.warn('Announcements fetch failed, returning empty list');
     return [];
   }
 }
@@ -382,32 +378,35 @@ export async function getInsights(): Promise<CMSContent[]> {
  */
 export async function getEvents(): Promise<CMSContent[]> {
   try {
-    const columns = 'id, type, title, content, image_url, link_url, is_active, metadata, created_at';
+    const columns = 'id, title, description, image_url, is_active, metadata, created_at, event_date, location';
     let { data, error } = await supabase
-      .from('cms_content')
+      .from('events')
       .select(columns)
-      .eq('type', 'event')
       .eq('is_active', true)
-      .order('created_at', { ascending: true });
+      .order('event_date', { ascending: true });
 
     if (error) {
       if (error.code === 'PGRST204' || error.message?.includes('column') || error.message?.includes('cache')) {
-        console.warn('Advanced cms_content columns missing, falling back to core');
+        console.warn('Advanced events columns missing, falling back to core');
         const { data: fallbackData, error: fallbackError } = await supabase
-          .from('cms_content')
-          .select('id, type, title, is_active')
-          .eq('type', 'event')
+          .from('events')
+          .select('id, name, is_active')
           .eq('is_active', true)
-          .order('created_at', { ascending: true });
+          .order('event_date', { ascending: true });
         if (fallbackError) throw fallbackError;
         data = fallbackData as any;
       } else {
         throw error;
       }
     }
-    return (data as CMSContent[]) || [];
+    return (data || []).map((d: any) => ({ 
+      ...d, 
+      type: 'event', 
+      title: d.name || d.title, 
+      content: d.description || d.content 
+    })) as unknown as CMSContent[];
   } catch (error) {
-    console.warn('CMS Content (events) fetch failed, returning empty list');
+    console.warn('Events fetch failed, returning empty list');
     return [];
   }
 }
@@ -459,12 +458,8 @@ export async function getRecentReviews(): Promise<Review[]> {
         if (fallbackError) throw fallbackError;
         data = fallbackData as any;
       } else if (error.code === 'PGRST116' || error.code === '42P01') {
-        console.warn('Reviews table not found or inaccessible, using mock data');
-        return [
-          { id: '1', user_id: '1', product_id: '1', rating: 5, comment: 'The Alchemist changed my perspective on life!', created_at: new Date().toISOString(), user: 'Sarah W.', book: 'The Alchemist', date: '2 days ago' },
-          { id: '2', user_id: '2', product_id: '2', rating: 4, comment: 'Great read, highly recommend for tech enthusiasts.', created_at: new Date().toISOString(), user: 'John D.', book: 'Life 3.0', date: '1 week ago' },
-          { id: '3', user_id: '3', product_id: '3', rating: 5, comment: 'Beautifully written, a must-read for everyone.', created_at: new Date().toISOString(), user: 'Grace M.', book: 'Creative Minds', date: '3 days ago' },
-        ] as Review[];
+        console.warn('Reviews table not found or inaccessible');
+        return [];
       } else {
         throw error;
       }

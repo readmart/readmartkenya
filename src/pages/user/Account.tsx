@@ -27,17 +27,14 @@ const getTabs = (isPartner: boolean, isAuthor: boolean) => [
   { id: 'settings', label: 'Settings', icon: <Settings className="w-5 h-5" /> },
 ];
 
-const mockOrders = [
-  { id: 'ORD-1234', date: 'Jan 12, 2026', status: 'Delivered', total: 45.99, items: 2 },
-  { id: 'ORD-5678', date: 'Jan 05, 2026', status: 'Processing', total: 29.99, items: 1 },
-];
-
 export default function Account() {
   const [searchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState(searchParams.get('tab') || 'profile');
   const [ebooks, setEbooks] = useState<any[]>([]);
   const [isLoadingEbooks, setIsLoadingEbooks] = useState(false);
   const { user, profile, logout, isPartner, isAuthor, updateProfile } = useAuth();
+  const [orders, setOrders] = useState<any[]>([]);
+  const [isLoadingOrders, setIsLoadingOrders] = useState(false);
 
   const tabs = getTabs(isPartner, isAuthor);
 
@@ -59,6 +56,38 @@ export default function Account() {
       });
     }
   }, [profile]);
+
+  useEffect(() => {
+    if (activeTab === 'orders' && user) {
+      fetchOrders();
+    }
+  }, [activeTab, user]);
+
+  const fetchOrders = async () => {
+    setIsLoadingOrders(true);
+    try {
+      const { data, error } = await supabase
+        .from('orders')
+        .select(`
+          id,
+          total_amount,
+          status,
+          created_at,
+          order_items (
+            product_snapshot
+          )
+        `)
+        .eq('user_id', user?.id)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setOrders(data || []);
+    } catch (error) {
+      console.error('Error fetching orders:', error);
+    } finally {
+      setIsLoadingOrders(false);
+    }
+  };
 
   const handleProfileUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -585,46 +614,63 @@ export default function Account() {
                   </header>
 
                   <div className="space-y-4">
-                    {mockOrders.map((order) => (
-                      <div key={order.id} className="glass p-6 rounded-[2rem] border-white/5 flex flex-col md:flex-row md:items-center justify-between gap-6 hover:bg-white/5 transition-all">
-                        <div className="flex items-center gap-6">
-                          <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center">
-                            <Package className="w-8 h-8 text-primary" />
-                          </div>
-                          <div>
-                            <p className="font-black text-lg">{order.id}</p>
-                            <p className="text-sm text-muted-foreground font-medium">{order.date} • {order.items} items</p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-8">
-                          <div className="text-right">
-                            <p className="font-black text-xl">{formatPrice(order.total)}</p>
-                            <span className={`text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full border ${
-                              order.status === 'Delivered' ? 'bg-green-500/10 text-green-500 border-green-500/20' : 'bg-orange-500/10 text-orange-500 border-orange-500/20'
-                            }`}>
-                              {order.status}
-                            </span>
-                          </div>
-                          <button className="p-4 glass rounded-2xl hover:bg-primary hover:text-white transition-all">
-                            <ChevronRight className="w-5 h-5" />
-                          </button>
-                        </div>
+                    {isLoadingOrders ? (
+                      <div className="flex items-center justify-center py-12">
+                        <Loader2 className="w-8 h-8 animate-spin text-primary" />
                       </div>
-                    ))}
-                  </div>
+                    ) : (
+                      <>
+                        {orders.map((order) => (
+                          <div key={order.id} className="glass p-6 rounded-[2rem] border-white/5 flex flex-col md:flex-row md:items-center justify-between gap-6 hover:bg-white/5 transition-all">
+                            <div className="flex items-center gap-6">
+                              <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center">
+                                <Package className="w-8 h-8 text-primary" />
+                              </div>
+                              <div>
+                                <p className="font-black text-lg">#ORD-{order.id.slice(0, 8).toUpperCase()}</p>
+                                <p className="text-sm text-muted-foreground font-medium">
+                                  {new Date(order.created_at).toLocaleDateString()} • {order.order_items?.length || 0} items
+                                </p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-8">
+                              <div className="text-right">
+                                <p className="font-black text-xl">{formatPrice(order.total_amount)}</p>
+                                <span className={`text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full border ${
+                                  ['completed', 'delivered', 'paid'].includes(order.status) 
+                                    ? 'bg-green-500/10 text-green-500 border-green-500/20' 
+                                    : ['cancelled', 'failed'].includes(order.status)
+                                    ? 'bg-red-500/10 text-red-500 border-red-500/20'
+                                    : 'bg-orange-500/10 text-orange-500 border-orange-500/20'
+                                }`}>
+                                  {order.status}
+                                </span>
+                              </div>
+                              <Link 
+                                to={`/track-order?id=${order.id}`}
+                                className="p-4 glass rounded-2xl hover:bg-primary hover:text-white transition-all"
+                              >
+                                <ChevronRight className="w-5 h-5" />
+                              </Link>
+                            </div>
+                          </div>
+                        ))}
 
-                  {mockOrders.length === 0 && (
-                    <div className="text-center py-20">
-                      <div className="w-20 h-20 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-6">
-                        <Package className="w-10 h-10 text-muted-foreground" />
-                      </div>
-                      <h3 className="text-2xl font-bold mb-2">No orders yet</h3>
-                      <p className="text-muted-foreground mb-8">Start shopping to see your orders here.</p>
-                      <button className="bg-primary text-white px-8 py-3 rounded-xl font-bold">
-                        BROWSE SHOP
-                      </button>
-                    </div>
-                  )}
+                        {orders.length === 0 && (
+                          <div className="text-center py-20">
+                            <div className="w-20 h-20 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-6">
+                              <Package className="w-10 h-10 text-muted-foreground" />
+                            </div>
+                            <h3 className="text-2xl font-bold mb-2">No orders yet</h3>
+                            <p className="text-muted-foreground mb-8">Start shopping to see your orders here.</p>
+                            <Link to="/shop" className="bg-primary text-white px-8 py-3 rounded-xl font-bold inline-block">
+                              BROWSE SHOP
+                            </Link>
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
                 </div>
               )}
 

@@ -1,26 +1,23 @@
 import { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { ShoppingCart, Heart, Share2, Star, ChevronLeft, Check, Truck, ShieldCheck, RotateCcw, ThumbsUp, Loader2, Zap } from 'lucide-react';
+import { ShoppingCart, Heart, Share2, Star, ChevronLeft, Check, Truck, ShieldCheck, RotateCcw, Loader2, Zap } from 'lucide-react';
 import { useCart } from '@/contexts/CartContext';
 import { useWishlist } from '@/contexts/WishlistContext';
 import { useCurrency } from '@/contexts/CurrencyContext';
 import { useSettings } from '@/hooks/useSettings';
 import { toast } from 'sonner';
 import { getProductById } from '@/api/products';
-
-const mockReviews = [
-  { id: 1, user: 'Sarah M.', rating: 5, date: '2 days ago', comment: 'Absolutely loved this book! The characters are so well-developed and the plot kept me guessing until the very end.', likes: 12 },
-  { id: 2, user: 'John D.', rating: 4, date: '1 week ago', comment: 'Great read, though it started a bit slow. Once it picked up, I couldn\'t put it down.', likes: 5 },
-  { id: 3, user: 'Emily R.', rating: 5, date: '2 weeks ago', comment: 'A masterpiece. Matt Haig has a way with words that is simply magical.', likes: 8 },
-];
+import { getProductReviews } from '@/api/community';
 
 export default function BookDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('details');
   const [book, setBook] = useState<any>(null);
+  const [reviews, setReviews] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingReviews, setIsLoadingReviews] = useState(false);
   const { addToCart, buyNow } = useCart();
   const { addToWishlist, removeFromWishlist, isInWishlist } = useWishlist();
   const { formatPrice, currency } = useCurrency();
@@ -46,6 +43,22 @@ export default function BookDetail() {
     }
     loadBook();
   }, [id]);
+
+  useEffect(() => {
+    async function loadReviews() {
+      if (!id || activeTab !== 'reviews') return;
+      setIsLoadingReviews(true);
+      try {
+        const data = await getProductReviews(id);
+        setReviews(data);
+      } catch (error) {
+        console.error('Failed to load reviews:', error);
+      } finally {
+        setIsLoadingReviews(false);
+      }
+    }
+    loadReviews();
+  }, [id, activeTab]);
 
   const jsonLd = useMemo(() => {
     if (!book) return null;
@@ -322,27 +335,39 @@ export default function BookDetail() {
                   exit={{ opacity: 0, y: -10 }}
                   className="space-y-6"
                 >
-                  {mockReviews.map((review) => (
-                    <div key={review.id} className="glass p-6 rounded-2xl space-y-3">
-                      <div className="flex justify-between items-center">
-                        <span className="font-black text-primary">{review.user}</span>
-                        <span className="text-xs text-muted-foreground font-bold">{review.date}</span>
-                      </div>
-                      <div className="flex gap-1" role="img" aria-label={`Rating: ${review.rating} out of 5 stars`}>
-                        {[...Array(5)].map((_, i) => (
-                          <Star key={i} className={`w-3 h-3 ${i < review.rating ? 'text-secondary fill-secondary' : 'text-muted-foreground'}`} aria-hidden="true" />
-                        ))}
-                      </div>
-                      <p className="text-sm text-muted-foreground leading-relaxed">{review.comment}</p>
-                      <button 
-                        className="flex items-center gap-2 text-xs font-black text-primary hover:opacity-70 transition-all uppercase tracking-widest"
-                        aria-label={`Mark review by ${review.user} as helpful`}
-                      >
-                        <ThumbsUp className="w-3 h-3" />
-                        Helpful ({review.likes})
-                      </button>
+                  {isLoadingReviews ? (
+                    <div className="flex justify-center py-8">
+                      <Loader2 className="w-8 h-8 animate-spin text-primary" />
                     </div>
-                  ))}
+                  ) : (
+                    <>
+                      {reviews.map((review) => (
+                        <div key={review.id} className="glass p-6 rounded-2xl space-y-3">
+                          <div className="flex justify-between items-center">
+                            <span className="font-black text-primary">
+                              {review.profile?.full_name || 'Anonymous Reader'}
+                            </span>
+                            <span className="text-xs text-muted-foreground font-bold">
+                              {new Date(review.created_at).toLocaleDateString()}
+                            </span>
+                          </div>
+                          <div className="flex gap-1" role="img" aria-label={`Rating: ${review.rating} out of 5 stars`}>
+                            {[...Array(5)].map((_, i) => (
+                              <Star key={i} className={`w-3 h-3 ${i < review.rating ? 'text-secondary fill-secondary' : 'text-muted-foreground'}`} aria-hidden="true" />
+                            ))}
+                          </div>
+                          <p className="text-sm text-muted-foreground leading-relaxed">{review.comment}</p>
+                        </div>
+                      ))}
+
+                      {reviews.length === 0 && (
+                        <div className="text-center py-12">
+                          <Star className="w-12 h-12 text-muted-foreground mx-auto mb-4 opacity-20" />
+                          <p className="text-muted-foreground font-bold">No reviews yet. Be the first to share your thoughts!</p>
+                        </div>
+                      )}
+                    </>
+                  )}
                 </motion.div>
               )}
 

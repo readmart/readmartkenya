@@ -71,7 +71,7 @@ export async function getMyBookClubs() {
     .select(`
       club_id,
       status,
-      club:cms_content(id, title, content, image_url, metadata, is_active, created_at)
+      club:book_clubs(id, name, description, image_url, metadata, is_active, created_at)
     `)
     .eq('user_id', user.id)
     .eq('status', 'active');
@@ -86,8 +86,8 @@ export async function getMyBookClubs() {
       status: m.status,
       book_club: club ? {
         id: club.id,
-        name: club.title,
-        description: club.content,
+        name: club.name,
+        description: club.description,
         image_url: club.image_url,
         is_active: club.is_active,
         created_at: club.created_at,
@@ -99,10 +99,9 @@ export async function getMyBookClubs() {
 
 export async function getBookClub(id: string) {
   let { data, error } = await supabase
-    .from('cms_content')
-    .select('id, title, content, image_url, metadata, is_active, created_at')
+    .from('book_clubs')
+    .select('id, name, description, image_url, metadata, is_active, created_at')
     .eq('id', id)
-    .eq('type', 'book_club')
     .maybeSingle();
 
   if (error) throw error;
@@ -110,8 +109,8 @@ export async function getBookClub(id: string) {
 
   return {
     id: data.id,
-    name: data.title,
-    description: data.content,
+    name: data.name,
+    description: data.description,
     image_url: data.image_url,
     is_active: data.is_active,
     created_at: data.created_at,

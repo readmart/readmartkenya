@@ -34,25 +34,13 @@ export default function AdminLogin() {
     setLoading(true);
     setError(null);
 
-    // Special check for founder credentials from .env
-    const founderEmail = import.meta.env.VITE_FOUNDER_EMAIL || 'admin@readmart.com';
-    const isDev = import.meta.env.DEV;
-
     try {
       const { data, error: authError } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
 
-      if (authError) {
-        if (isDev && email === founderEmail) {
-          console.log('Using dev bypass for founder login');
-          localStorage.setItem('rm_dev_role', 'founder');
-          window.location.reload();
-          return;
-        }
-        throw authError;
-      }
+      if (authError) throw authError;
 
       // Check if user has required role
       const { data: profile, error: profileError } = await supabase
@@ -84,21 +72,8 @@ export default function AdminLogin() {
     } catch (err: any) {
       setError(err.message || 'Failed to login');
       if (err.message?.includes('API key')) {
-        setError('Supabase API Key is missing or invalid. Please check your .env file or use the Demo buttons below.');
+        setError('Supabase API Key is missing or invalid. Please check your .env file.');
       }
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Development helper
-  const handleDemoLogin = async (role: 'founder' | 'author' | 'partner') => {
-    setLoading(true);
-    try {
-      localStorage.setItem('rm_dev_role', role);
-      window.location.reload();
-    } catch (err: any) {
-      setError(err.message);
     } finally {
       setLoading(false);
     }
@@ -188,24 +163,6 @@ export default function AdminLogin() {
             )}
           </button>
         </form>
-
-        <div className="mt-8 pt-8 border-t border-white/10 text-center">
-          <p className="text-xs text-muted-foreground mb-4">Development Shortcuts</p>
-          <div className="flex flex-wrap justify-center gap-2">
-            <button 
-              onClick={() => handleDemoLogin('founder')}
-              className="px-3 py-1.5 glass rounded-lg text-[10px] font-bold uppercase tracking-wider hover:bg-white/10 transition-colors"
-            >
-              Demo Founder
-            </button>
-            <button 
-              onClick={() => handleDemoLogin('author')}
-              className="px-3 py-1.5 glass rounded-lg text-[10px] font-bold uppercase tracking-wider hover:bg-white/10 transition-colors"
-            >
-              Demo Author
-            </button>
-          </div>
-        </div>
       </motion.div>
     </div>
   );

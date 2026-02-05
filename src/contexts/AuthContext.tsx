@@ -45,33 +45,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     // Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
-      const devRole = localStorage.getItem('rm_dev_role');
-      
-      if (devRole && !session?.user) {
-        // Mock a user if dev role is set but no session exists
-        setUser({ id: 'dev-user-id', email: 'dev@readmart.com' } as any);
-        fetchProfile('dev-user-id');
-      } else {
-        setUser(session?.user ?? null);
-        if (session?.user) fetchProfile(session.user.id);
-        else setLoading(false);
-      }
+      setUser(session?.user ?? null);
+      if (session?.user) fetchProfile(session.user.id);
+      else setLoading(false);
     });
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      const devRole = localStorage.getItem('rm_dev_role');
-      
-      if (devRole && !session?.user) {
-        setUser({ id: 'dev-user-id', email: 'dev@readmart.com' } as any);
-        fetchProfile('dev-user-id');
-      } else {
-        setUser(session?.user ?? null);
-        if (session?.user) fetchProfile(session.user.id);
-        else {
-          setProfile(null);
-          setLoading(false);
-        }
+      setUser(session?.user ?? null);
+      if (session?.user) fetchProfile(session.user.id);
+      else {
+        setProfile(null);
+        setLoading(false);
       }
     });
 
@@ -79,22 +64,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const fetchProfile = async (userId: string) => {
-    // Development bypass: If localStorage has 'rm_dev_role', use that
-    const devRole = localStorage.getItem('rm_dev_role') as UserRole | null;
-    
-    if (devRole) {
-      setProfile({
-        id: userId,
-        full_name: 'Dev User',
-        avatar_url: null,
-        phone: null,
-        address: null,
-        role: devRole
-      });
-      setLoading(false);
-      return;
-    }
-
     try {
       const columns = 'id, full_name, avatar_url, role, phone, address, preferences, created_at, updated_at';
       let { data, error } = await supabase
@@ -168,18 +137,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const logout = async () => {
-    localStorage.removeItem('rm_dev_role');
     await supabase.auth.signOut();
     window.location.reload();
   };
 
   const resetPassword = async (email: string) => {
-    // Determine the redirect URL based on environment
-    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-    const redirectTo = isLocalhost 
-      ? `${window.location.origin}/reset-password`
-      : `${window.location.origin}/reset-password`;
-
+    const redirectTo = `${window.location.origin}/reset-password`;
     console.log('[Auth] Reset password request for:', email, 'Redirecting to:', redirectTo);
     
     const { error } = await supabase.auth.resetPasswordForEmail(email, {

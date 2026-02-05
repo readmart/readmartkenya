@@ -820,104 +820,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           });
         }
 
-        if (isConfigError || isK2Error || err.message.includes('failed')) {
-          console.warn('Payment failed or credentials missing, using demo response in development');
-          
-          // FOR DEMO: Automatically complete the order/membership
-          const { orderId, type, metadata } = req.body;
-          const isMembership = type === 'membership' || type === 'club_membership' || type === 'site_membership';
-          
-          if (!isMembership && orderId) {
-            console.log(`Demo mode: Fulfilling order ${orderId}`);
-            // Update order to paid
-            try {
-              const { error: demoError } = await supabase.from('orders').update({ 
-                status: 'paid',
-                is_paid: true,
-                payment_status: 'paid'
-              }).eq('id', orderId);
-
-              if (demoError) {
-                if (demoError.code === 'PGRST204' || demoError.message?.includes('cache')) {
-                  console.warn('Orders schema cache issue in demo mode, retrying');
-                  await supabase.from('orders').update({ 
-                    status: 'paid',
-                    is_paid: true
-                  }).eq('id', orderId);
-                }
-              }
-            } catch (e) {
-              console.error('Demo mode order update failed:', e);
-            }
-            // Trigger commission calculation (will be handled by trigger if is_paid updated, 
-            // but we call it explicitly here for immediate effect in demo)
-            await calculateOrderCommissions(orderId);
-          } else if (isMembership) {
-            const token = req.headers.authorization?.split(' ')[1] || '';
-          const { data: userData } = await supabase.auth.getUser(token);
-          const user = userData?.user;
-          if (user) {
-              if (type === 'club_membership' && metadata?.club_id) {
-                console.log(`Demo mode: Activating club membership for user ${user.id} in club ${metadata.club_id}`);
-                try {
-                  const { error: clubDemoError } = await supabase.from('book_club_memberships').upsert({
-                    user_id: user.id,
-                    club_id: metadata.club_id,
-                    status: 'active',
-                    is_active: true,
-                    joined_at: new Date().toISOString()
-                  }, { onConflict: 'user_id, club_id' });
-
-                  if (clubDemoError) {
-                    if (clubDemoError.code === 'PGRST204' || clubDemoError.message?.includes('cache')) {
-                      console.warn('Book club memberships schema cache issue in demo mode, retrying');
-                      await supabase.from('book_club_memberships').upsert({
-                        user_id: user.id,
-                        club_id: metadata.club_id,
-                        status: 'active',
-                        is_active: true
-                      }, { onConflict: 'user_id, club_id' });
-                    }
-                  }
-                } catch (e) {
-                  console.error('Demo mode club membership activation failed:', e);
-                }
-              } else {
-                console.log(`Demo mode: Activating membership for user ${user.id}`);
-                let duration = 30;
-                try {
-                  const { data: settings } = await supabase.from('site_settings').select('membership_duration_days').maybeSingle();
-                  duration = settings?.membership_duration_days || 30;
-                } catch (e) {}
-
-                const expiresAt = new Date();
-                expiresAt.setDate(expiresAt.getDate() + duration);
-                
-                try {
-                  const { error: profileDemoError } = await supabase.from('profiles').update({
-                    is_member: true,
-                    membership_started_at: new Date().toISOString(),
-                    membership_expires_at: expiresAt.toISOString()
-                  }).eq('id', user.id);
-
-                  if (profileDemoError) {
-                    if (profileDemoError.code === 'PGRST204' || profileDemoError.message?.includes('cache')) {
-                      console.warn('Profiles schema cache issue in demo mode, retrying');
-                      await supabase.from('profiles').update({
-                        is_member: true
-                      }).eq('id', user.id);
-                    }
-                  }
-                } catch (e) {
-                  console.error('Demo mode profile update failed:', e);
-                }
-              }
-            }
-          }
-
-          return json(res, 200, { demo: true, message: 'Demo mode active - Order automatically fulfilled' });
+        // Non-production: return structured error; never auto-fulfill (removed demo mode for production safety)
+        if (isConfigError) {
+          return json(res, 503, {
+            error: 'Payment Configuration Error',
+            message: err.message,
+            code: 'CONFIG_ERROR'
+          });
         }
-        throw err;
+        if (isK2Error) {
+          return json(res, 503, {
+            error: 'Payment Provider Error',
+            message: err.message,
+            code: 'PROVIDER_ERROR'
+          });
+        }
+        return json(res, 500, {
+          error: 'Internal Server Error',
+          message: err.message || 'An unexpected error occurred during payment initiation',
+          code: 'SERVER_ERROR'
+        });
       }
     }
 

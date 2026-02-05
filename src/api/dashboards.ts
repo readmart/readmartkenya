@@ -355,10 +355,6 @@ async function getAllRecords(table: string, orderBy: string = 'created_at') {
         query = supabase
           .from(table)
           .select('id, full_name, email, role, avatar_url, created_at');
-      } else if (table === 'cms_content') {
-        query = supabase
-          .from(table)
-          .select('*');
       } else if (table === 'newsletter_subscriptions') {
         query = supabase
           .from(table)
@@ -376,6 +372,10 @@ async function getAllRecords(table: string, orderBy: string = 'created_at') {
           .from(table)
           .select('*');
       } else if (table === 'audit_logs') {
+        query = supabase
+          .from(table)
+          .select('*');
+      } else if (table === 'book_clubs' || table === 'events' || table === 'banners' || table === 'announcements') {
         query = supabase
           .from(table)
           .select('*');
@@ -487,11 +487,6 @@ export async function getOrders(partnerId?: string) {
       if (session) {
         const { data: profile } = await supabase.from('profiles').select('role').eq('id', session.user.id).single();
         isAdmin = profile?.role === 'founder' || profile?.role === 'admin';
-      } else {
-        // Dev bypass mode: assume admin for demonstration if needed, 
-        // or check localStorage again. For safety, let's check dev role.
-        const devRole = typeof window !== 'undefined' ? localStorage.getItem('rm_dev_role') : null;
-        isAdmin = devRole === 'founder' || devRole === 'admin';
       }
       
       let data;
@@ -599,25 +594,12 @@ export async function getAllUsers() {
   }
 }
 
-export async function getCMSContent() {
-  try {
-    // CMS content is public-facing (home page, events, etc.)
-    // RLS policies on the database handle the security
-    return await getAllRecords('cms_content');
-  } catch (err) {
-    console.error('CMS Content fetch failed:', err);
-    return [];
-  }
-}
-
 export async function getClubs() {
   try {
     await verifyAdmin();
-    // Use select('*') for schema resilience
     let { data, error, status } = await supabase
-      .from('cms_content')
+      .from('book_clubs')
       .select('*')
-      .eq('type', 'book_club')
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -634,59 +616,20 @@ export async function getClubs() {
 export async function getEvents() {
   try {
     await verifyAdmin();
-    // Prefer the new events table, use * for schema resilience
     let { data, error, status } = await supabase
       .from('events')
       .select('*')
       .order('event_date', { ascending: false });
 
-    if (!error && data) return data;
-    
-    // If events table missing, fallback to cms_content
-    if (status === 404 || error?.code === 'PGRST116') {
-      const { data: legacyData, error: legacyError } = await supabase
-        .from('cms_content')
-        .select('*')
-        .eq('type', 'event')
-        .order('created_at', { ascending: false });
-
-      if (!legacyError) return legacyData || [];
+    if (error) {
+      if (status === 404 || error.code === 'PGRST116') return [];
+      throw error;
     }
-
-    if (error) throw error;
-    
-    // Filter to only include paid items (webhook verified)
-    const paidData = (data || []).filter((item: any) => item.order?.is_paid === true);
-    return paidData;
+    return data || [];
   } catch (err) {
     console.error('Events fetch failed:', err);
     return [];
   }
-}
-
-export async function createEvent(event: any) {
-  await verifyAdmin();
-  const { data, error } = await supabase
-    .from('events')
-    .insert([event])
-    .select()
-    .single();
-
-  if (error) throw error;
-  return data;
-}
-
-export async function updateEvent(id: string, updates: any) {
-  await verifyAdmin();
-  const { data, error } = await supabase
-    .from('events')
-    .update(updates)
-    .eq('id', id)
-    .select()
-    .single();
-
-  if (error) throw error;
-  return data;
 }
 
 export async function getAgreements() {
@@ -819,9 +762,8 @@ export async function getBanners() {
   try {
     await verifyAdmin();
     let { data, error } = await supabase
-      .from('cms_content')
+      .from('banners')
       .select('*')
-      .eq('type', 'banner')
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -830,6 +772,59 @@ export async function getBanners() {
     return data || [];
   } catch (err) {
     console.error('Banners fetch failed:', err);
+    return [];
+  }
+}
+
+export async function getAnnouncements() {
+  try {
+    await verifyAdmin();
+    let { data, error } = await supabase
+      .from('announcements')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      throw error;
+    }
+    return data || [];
+  } catch (err) {
+    console.error('Announcements fetch failed:', err);
+    return [];
+  }
+}
+
+/**
+ * CMS content compatibility - now split into banners and announcements
+ */
+export async function getCMSContent(forcePublic: boolean = false) {
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    
+    // Check if session exists and user is admin/founder
+    let isAdmin = false;
+    if (session) {
+      const { data: profile } = await supabase.from('profiles').select('role').eq('id', session.user.id).single();
+      isAdmin = profile?.role === 'founder' || profile?.role === 'admin';
+    }
+
+    if (!forcePublic && !isAdmin) {
+      return [];
+    }
+
+    // CMS content is now split into multiple tables
+    const [banners, announcements] = await Promise.all([
+      supabase.from('banners').select('*').eq('is_active', true),
+      supabase.from('announcements').select('*').eq('is_active', true)
+    ]);
+
+    // Format them back to the legacy structure for compatibility
+    const formattedBanners = (banners.data || []).map(b => ({ ...b, type: 'banner' }));
+    const formattedAnnouncements = (announcements.data || []).map(a => ({ ...a, type: 'announcement' }));
+
+    return [...formattedBanners, ...formattedAnnouncements];
+  } catch (err) {
+    console.error('CMS Content fetch failed:', err);
     return [];
   }
 }
@@ -1071,14 +1066,16 @@ export async function getPaymentMethods(userId: string) {
 export async function addPaymentMethod(method: any) {
   try {
     const session = await verifyRole(['author', 'partner', 'admin', 'founder']);
-    if (session.user.id === 'dev-id') {
-      // For dev bypass, we need to handle the mock ID
-      // but in real world, we want to use the actual session user ID
-    }
     
+    // Ensure identifier is set for M-Pesa (required for K2 disbursement)
+    const processedMethod = { ...method };
+    if (processedMethod.type === 'mpesa' && !processedMethod.identifier && processedMethod.details?.phone) {
+      processedMethod.identifier = processedMethod.details.phone;
+    }
+
     const { data, error } = await supabase
       .from('payment_methods')
-      .insert([{ ...method, user_id: method.user_id || session.user.id }])
+      .insert([{ ...processedMethod, user_id: processedMethod.user_id || session.user.id }])
       .select()
       .single();
 
@@ -1152,6 +1149,192 @@ export async function getAuthorReviews(authorId: string) {
   } catch (err) {
     console.error('Author Reviews fetch failed:', err);
     return [];
+  }
+}
+
+/**
+ * --- Author First-Class Domain Services ---
+ */
+
+export async function getAuthorProfile(authorId: string) {
+  try {
+    const { data, error } = await supabase
+      .from('authors')
+      .select('*')
+      .eq('id', authorId)
+      .maybeSingle();
+
+    if (error) throw error;
+    return data;
+  } catch (err) {
+    console.error('Author Profile fetch failed:', err);
+    return null;
+  }
+}
+
+export async function updateAuthorProfile(authorId: string, profileData: any) {
+  try {
+    const session = await verifyRole(['author', 'admin', 'founder']);
+    if (session.user.id !== authorId && !['admin', 'founder'].includes((session.user as any).role)) {
+      throw new Error('Unauthorized');
+    }
+
+    const { data, error } = await supabase
+      .from('authors')
+      .update(profileData)
+      .eq('id', authorId)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  } catch (err) {
+    console.error('Author Profile update failed:', err);
+    throw err;
+  }
+}
+
+export async function getAuthorEarnings(authorId: string) {
+  try {
+    await verifyRole(['author', 'admin', 'founder']);
+    const { data, error } = await supabase
+      .from('author_earnings')
+      .select('*')
+      .eq('author_id', authorId)
+      .maybeSingle();
+
+    if (error) throw error;
+    return data;
+  } catch (err) {
+    console.error('Author Earnings fetch failed:', err);
+    return null;
+  }
+}
+
+export async function getAuthorDrops(authorId: string) {
+  try {
+    const { data, error } = await supabase
+      .from('author_drops')
+      .select('*')
+      .eq('author_id', authorId)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return data || [];
+  } catch (err) {
+    console.error('Author Drops fetch failed:', err);
+    return [];
+  }
+}
+
+export async function createAuthorDrop(dropData: any) {
+  try {
+    const session = await verifyRole(['author', 'admin', 'founder']);
+    const { data, error } = await supabase
+      .from('author_drops')
+      .insert([{ ...dropData, author_id: session.user.id }])
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  } catch (err) {
+    console.error('Create Author Drop failed:', err);
+    throw err;
+  }
+}
+
+export async function requestAuthorPayout(authorId: string, amount: number, details: any) {
+  try {
+    const session = await verifyRole(['author', 'admin', 'founder']);
+    if (session.user.id !== authorId) throw new Error('Unauthorized');
+
+    // Call the Supabase Edge Function instead of direct database insert
+    const { data: { session: authSession } } = await supabase.auth.getSession();
+    if (!authSession) throw new Error('No active session');
+
+    const response = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/payments/author-payout`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${authSession.access_token}`
+      },
+      body: JSON.stringify({
+        amount,
+        phone: details.identifier || details.phone || details.phone_number
+      })
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to request payout');
+    }
+
+    return await response.json();
+  } catch (err) {
+    console.error('Payout Request failed:', err);
+    throw err;
+  }
+}
+
+/**
+ * --- Fan Subscriptions & Memberships ---
+ */
+
+export async function getAuthorSubscriptions(authorId: string) {
+  try {
+    await verifyRole(['author', 'admin', 'founder']);
+    const { data, error } = await supabase
+      .from('author_subscriptions')
+      .select(`
+        *,
+        subscriber:profiles!subscriber_id(id, full_name, avatar_url, email)
+      `)
+      .eq('author_id', authorId)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return data || [];
+  } catch (err) {
+    console.error('Author Subscriptions fetch failed:', err);
+    return [];
+  }
+}
+
+export async function getMyAuthorSubscriptions(subscriberId: string) {
+  try {
+    const { data, error } = await supabase
+      .from('author_subscriptions')
+      .select(`
+        *,
+        author:authors(id, display_name, pen_name)
+      `)
+      .eq('subscriber_id', subscriberId)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return data || [];
+  } catch (err) {
+    console.error('My Author Subscriptions fetch failed:', err);
+    return [];
+  }
+}
+
+export async function updateAuthorSubscription(id: string, updates: any) {
+  try {
+    await verifyAdmin();
+    const { data, error } = await supabase
+      .from('author_subscriptions')
+      .update(updates)
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  } catch (err) {
+    console.error('Update Author Subscription failed:', err);
+    throw err;
   }
 }
 
@@ -1713,14 +1896,114 @@ export async function updateSiteSettings(settings: any) {
   }
 }
 
-export async function updateCMSContent(id: string, content: any) {
+// --- New Table CRUD Functions (Post-Polymorphic Split) ---
+
+export async function createBookClub(club: any) {
   await verifyAdmin();
-  return updateRecord('cms_content', id, content);
+  const { data, error } = await supabase
+    .from('book_clubs')
+    .insert([club])
+    .select()
+    .single();
+
+  if (error) throw error;
+  if (data) await logAudit('CREATE', 'book_clubs', data.id, club);
+  return data;
 }
 
-export async function createCMSContent(content: any) {
+export async function updateBookClub(id: string, updates: any) {
   await verifyAdmin();
-  return createRecord('cms_content', content);
+  const { data, error } = await supabase
+    .from('book_clubs')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) throw error;
+  if (data) await logAudit('UPDATE', 'book_clubs', id, updates);
+  return data;
+}
+
+export async function createEvent(event: any) {
+  await verifyAdmin();
+  const { data, error } = await supabase
+    .from('events')
+    .insert([event])
+    .select()
+    .single();
+
+  if (error) throw error;
+  if (data) await logAudit('CREATE', 'events', data.id, event);
+  return data;
+}
+
+export async function updateEvent(id: string, updates: any) {
+  await verifyAdmin();
+  const { data, error } = await supabase
+    .from('events')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) throw error;
+  if (data) await logAudit('UPDATE', 'events', id, updates);
+  return data;
+}
+
+export async function createBanner(banner: any) {
+  await verifyAdmin();
+  const { data, error } = await supabase
+    .from('banners')
+    .insert([banner])
+    .select()
+    .single();
+
+  if (error) throw error;
+  if (data) await logAudit('CREATE', 'banners', data.id, banner);
+  return data;
+}
+
+export async function updateBanner(id: string, updates: any) {
+  await verifyAdmin();
+  const { data, error } = await supabase
+    .from('banners')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) throw error;
+  if (data) await logAudit('UPDATE', 'banners', id, updates);
+  return data;
+}
+
+export async function createAnnouncement(announcement: any) {
+  await verifyAdmin();
+  const { data, error } = await supabase
+    .from('announcements')
+    .insert([announcement])
+    .select()
+    .single();
+
+  if (error) throw error;
+  if (data) await logAudit('CREATE', 'announcements', data.id, announcement);
+  return data;
+}
+
+export async function updateAnnouncement(id: string, updates: any) {
+  await verifyAdmin();
+  const { data, error } = await supabase
+    .from('announcements')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) throw error;
+  if (data) await logAudit('UPDATE', 'announcements', id, updates);
+  return data;
 }
 
 /**

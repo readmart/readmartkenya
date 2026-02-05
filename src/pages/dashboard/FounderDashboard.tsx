@@ -26,7 +26,10 @@ import {
   createProduct, updateOrderStatus, updateUserStatus, updateApplicationStatus,
   getCategories, getShippingZones, getPromos, togglePromoStatus,
   initializeCampaign, getPromoMetrics, getPromoAuditLogs, calculateImpact,
-  getCMSContent, updateCMSContent, createCMSContent,
+  getClubs, createBookClub, updateBookClub,
+  getEvents, createEvent, updateEvent,
+  getBanners, createBanner, updateBanner,
+  getAnnouncements, createAnnouncement, updateAnnouncement,
   sendAbandonedCartReminders, updateRecord, createRecord,
   getProtocolAgreements, createProtocolAgreement, updateProtocolAgreement, deleteProtocolAgreement,
   deleteRecord, getAllPayouts, disbursePayouts
@@ -57,7 +60,10 @@ export default function FounderDashboard() {
     categories: [],
     shippingZones: [],
     promos: [],
-    cmsContent: [],
+    clubs: [],
+    events: [],
+    banners: [],
+    announcements: [],
     newsletterSubscriptions: [],
     protocols: [],
     payouts: []
@@ -107,11 +113,14 @@ export default function FounderDashboard() {
       // 2. Content Data
       const contentChannel = supabase
         .channel('founder_dashboard_content')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'cms_content' }, () => fetchAllData())
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'book_clubs' }, () => fetchAllData())
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'events' }, () => fetchAllData())
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'banners' }, () => fetchAllData())
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'announcements' }, () => fetchAllData())
         .on('postgres_changes', { event: '*', schema: 'public', table: 'shipping_zones' }, () => fetchAllData())
         .subscribe((status) => {
           if (status === 'CHANNEL_ERROR') {
-            console.warn('Realtime Error (Content): Failed to subscribe to cms_content/shipping_zones');
+            console.warn('Realtime Error (Content): Failed to subscribe to content tables');
           }
         });
 
@@ -167,7 +176,10 @@ export default function FounderDashboard() {
         getCategories(),
         getShippingZones(),
         getPromos(),
-        getCMSContent(),
+        getClubs(),
+        getEvents(),
+        getBanners(),
+        getAnnouncements(),
         getNewsletterSubscriptions(),
         getProtocolAgreements(),
         getAllPayouts()
@@ -177,7 +189,8 @@ export default function FounderDashboard() {
         analytics, inventory, orders, users, 
         settings, inquiries, partnerships, 
         authors, approvedAuthors, categories, shippingZones, promos,
-        cmsContent, newsletterSubscriptions, protocols, payouts
+        clubs, events, banners, announcements,
+        newsletterSubscriptions, protocols, payouts
       ] = results.map(res => res.status === 'fulfilled' ? res.value : null);
 
       setData({ 
@@ -204,7 +217,10 @@ export default function FounderDashboard() {
         categories: categories || [],
         shippingZones: shippingZones || [],
         promos: promos || [],
-        cmsContent: cmsContent || [],
+        clubs: clubs || [],
+        events: events || [],
+        banners: banners || [],
+        announcements: announcements || [],
         newsletterSubscriptions: newsletterSubscriptions || [],
         protocols: protocols || [],
         payouts: payouts || []
@@ -219,7 +235,8 @@ export default function FounderDashboard() {
           'getGlobalAnalytics', 'getInventory', 'getOrders', 'getAllUsers', 
           'getSiteSettings', 'getInquiries', 'getPartnerships', 'getAuthors', 
           'getApprovedAuthors', 'getCategories', 'getShippingZones', 'getPromos',
-          'getCMSContent', 'getNewsletterSubscriptions', 'getProtocolAgreements', 'getAllPayouts'
+          'getClubs', 'getEvents', 'getBanners', 'getAnnouncements',
+          'getNewsletterSubscriptions', 'getProtocolAgreements', 'getAllPayouts'
         ];
 
         failedIndices.forEach(idx => {
@@ -284,7 +301,7 @@ export default function FounderDashboard() {
       case 'users': return <UsersView data={data.users} onUpdate={fetchAllData} />;
       case 'settings': return <SettingsView settings={data.settings} onUpdate={fetchAllData} />;
       case 'identity': return <IdentityView settings={data.settings} onUpdate={fetchAllData} />;
-      case 'banners': return <BannersView settings={data.settings} cmsContent={data.cmsContent} onUpdate={fetchAllData} />;
+      case 'banners': return <BannersView settings={data.settings} banners={data.banners} announcements={data.announcements} onUpdate={fetchAllData} />;
       case 'author_of_day': return (
         <AuthorOfDayView 
           settings={data.settings} 
@@ -304,13 +321,13 @@ export default function FounderDashboard() {
       case 'inquiries': return <InquiriesView data={data.inquiries} onUpdate={fetchAllData} />;
       case 'clubs': return (
         <ClubsView 
-          data={data.cmsContent?.filter((c: any) => c.type === 'book_club') || []} 
+          data={data.clubs || []} 
           onUpdate={fetchAllData} 
         />
       );
       case 'events': return (
         <EventsView 
-          data={data.cmsContent?.filter((c: any) => c.type === 'event') || []} 
+          data={data.events || []} 
           onUpdate={fetchAllData} 
         />
       );
@@ -2832,7 +2849,7 @@ function IdentityView({ settings, onUpdate }: any) {
   );
 }
 
-function BannersView({ settings, cmsContent, onUpdate }: any) {
+function BannersView({ settings, banners, announcements, onUpdate }: any) {
   const [heroFormData, setHeroFormData] = useState(settings);
   const [isMounted, setIsMounted] = useState(false);
   const [isUploadingHero, setIsUploadingHero] = useState(false);
@@ -2848,7 +2865,6 @@ function BannersView({ settings, cmsContent, onUpdate }: any) {
   const [editingBanner, setEditingBanner] = useState<any>(null);
   const [isUploadingBanner, setIsUploadingBanner] = useState(false);
   const [bannerFormData, setBannerFormData] = useState({
-    type: 'banner',
     title: '',
     content: '',
     image_url: '',
@@ -2856,7 +2872,15 @@ function BannersView({ settings, cmsContent, onUpdate }: any) {
     is_active: true
   });
 
-  const banners = useMemo(() => cmsContent.filter((c: any) => c.type === 'banner'), [cmsContent]);
+  // Announcements State
+  const [isAnnouncementModalOpen, setIsAnnouncementModalOpen] = useState(false);
+  const [editingAnnouncement, setEditingAnnouncement] = useState<any>(null);
+  const [announcementFormData, setAnnouncementFormData] = useState({
+    content: '',
+    link_url: '',
+    is_active: true,
+    priority: 1
+  });
 
   const handleHeroUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -2921,7 +2945,6 @@ function BannersView({ settings, cmsContent, onUpdate }: any) {
   const handleEditBanner = (banner: any) => {
     setEditingBanner(banner);
     setBannerFormData({
-      type: 'banner',
       title: banner.title,
       content: banner.content || '',
       image_url: banner.image_url || '',
@@ -2934,7 +2957,6 @@ function BannersView({ settings, cmsContent, onUpdate }: any) {
   const handleAddNewBanner = () => {
     setEditingBanner(null);
     setBannerFormData({
-      type: 'banner',
       title: '',
       content: '',
       image_url: '',
@@ -2948,20 +2970,18 @@ function BannersView({ settings, cmsContent, onUpdate }: any) {
     e.preventDefault();
     const loadingToast = toast.loading(editingBanner ? 'Updating Banner...' : 'Deploying Banner...');
     try {
-      // Ensure we include metadata for consistency with cms_content schema
       const payload = {
         ...bannerFormData,
         metadata: {
-          type: 'banner',
           updated_at: new Date().toISOString()
         }
       };
 
       if (editingBanner) {
-        await updateCMSContent(editingBanner.id, payload);
+        await updateBanner(editingBanner.id, payload);
         toast.success('Banner updated', { id: loadingToast });
       } else {
-        await createCMSContent(payload);
+        await createBanner(payload);
         toast.success('Banner deployed', { id: loadingToast });
       }
       setIsModalOpen(false);
@@ -2976,8 +2996,61 @@ function BannersView({ settings, cmsContent, onUpdate }: any) {
     if (!confirm('Are you sure you want to decommission this banner?')) return;
     const loadingToast = toast.loading('Decommissioning Banner...');
     try {
-      await deleteRecord('cms_content', id);
+      await deleteRecord('banners', id);
       toast.success('Banner decommissioned', { id: loadingToast });
+      onUpdate();
+    } catch (error) {
+      toast.error('Failed to decommission', { id: loadingToast });
+    }
+  };
+
+  const handleEditAnnouncement = (announcement: any) => {
+    setEditingAnnouncement(announcement);
+    setAnnouncementFormData({
+      content: announcement.content,
+      link_url: announcement.link_url || '',
+      is_active: announcement.is_active ?? true,
+      priority: announcement.priority || 1
+    });
+    setIsAnnouncementModalOpen(true);
+  };
+
+  const handleAddNewAnnouncement = () => {
+    setEditingAnnouncement(null);
+    setAnnouncementFormData({
+      content: '',
+      link_url: '',
+      is_active: true,
+      priority: 1
+    });
+    setIsAnnouncementModalOpen(true);
+  };
+
+  const handleAnnouncementSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const loadingToast = toast.loading(editingAnnouncement ? 'Updating Announcement...' : 'Deploying Announcement...');
+    try {
+      if (editingAnnouncement) {
+        await updateAnnouncement(editingAnnouncement.id, announcementFormData);
+        toast.success('Announcement updated', { id: loadingToast });
+      } else {
+        await createAnnouncement(announcementFormData);
+        toast.success('Announcement deployed', { id: loadingToast });
+      }
+      setIsAnnouncementModalOpen(false);
+      onUpdate();
+    } catch (error: any) {
+      console.error('Announcement error:', error);
+      toast.error(`Operation failed: ${error.message || 'Check connectivity'}`, { id: loadingToast });
+    }
+  };
+
+  const handleDeleteAnnouncement = async (id: string) => {
+    if (!confirm('Are you sure you want to decommission this announcement?')) return;
+    const loadingToast = toast.loading('Decommissioning Announcement...');
+    try {
+      await deleteRecord('announcements', id);
+      toast.success('Announcement decommissioned', { id: loadingToast });
       onUpdate();
     } catch (error) {
       toast.error('Failed to decommission', { id: loadingToast });
@@ -3112,6 +3185,63 @@ function BannersView({ settings, cmsContent, onUpdate }: any) {
                 )}
              </div>
           </div>
+
+          <div className="mt-12 pt-12 border-t border-slate-100">
+             <div className="flex justify-between items-center mb-8">
+               <h3 className="text-xl font-black tracking-tighter uppercase">Bar Announcements</h3>
+               <button 
+                onClick={handleAddNewAnnouncement}
+                className="text-primary font-bold text-sm hover:underline flex items-center gap-1"
+               >
+                 <Plus className="w-4 h-4" />
+                 Deploy New Broadcast
+               </button>
+             </div>
+
+             <div className="space-y-4">
+                {announcements.map((announcement: any) => (
+                  <div key={announcement.id} className="p-4 bg-slate-50 rounded-2xl border border-slate-100 flex items-center gap-4 group">
+                    <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center text-primary">
+                      <Bell className="w-5 h-5" />
+                    </div>
+                    <div className="flex-1">
+                      <p className="font-bold text-slate-900 text-sm line-clamp-1">{announcement.content}</p>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-full ${announcement.is_active ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-200 text-slate-500'}`}>
+                          {announcement.is_active ? 'Active' : 'Inactive'}
+                        </span>
+                        {announcement.priority > 1 && (
+                          <span className="text-[8px] font-black uppercase px-2 py-0.5 rounded-full bg-amber-100 text-amber-600">
+                            Priority {announcement.priority}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-all">
+                      <button 
+                        onClick={() => handleEditAnnouncement(announcement)}
+                        className="p-2 bg-white text-slate-600 rounded-lg hover:bg-primary hover:text-white transition-all shadow-sm"
+                      >
+                        <Edit className="w-4 h-4" />
+                      </button>
+                      <button 
+                        onClick={() => handleDeleteAnnouncement(announcement.id)}
+                        className="p-2 bg-white text-rose-500 rounded-lg hover:bg-rose-500 hover:text-white transition-all shadow-sm"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+                {announcements.length === 0 && (
+                  <div className="p-8 border-2 border-dashed border-slate-200 rounded-[24px] flex flex-col items-center justify-center text-center">
+                    <Bell className="w-8 h-8 text-slate-300 mb-2" />
+                    <p className="font-black uppercase tracking-widest text-[10px] text-slate-400 mb-1">Global Site Broadcasts</p>
+                    <button onClick={handleAddNewAnnouncement} className="text-primary font-bold text-xs hover:underline">Deploy New Broadcast</button>
+                  </div>
+                )}
+             </div>
+          </div>
         </div>
       </div>
 
@@ -3231,6 +3361,97 @@ function BannersView({ settings, cmsContent, onUpdate }: any) {
                   className="w-full bg-primary text-white py-6 rounded-[32px] font-black uppercase tracking-widest shadow-2xl shadow-primary/30 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50"
                 >
                   {editingBanner ? 'Commit Changes' : 'Deploy Banner'}
+                </button>
+              </form>
+            </motion.div>
+          </div>
+        )}
+
+        {isMounted && isAnnouncementModalOpen && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsAnnouncementModalOpen(false)}
+              className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
+            />
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              className="relative bg-white w-full max-w-lg rounded-[40px] shadow-2xl overflow-hidden max-h-[90vh] flex flex-col"
+            >
+              <div className="p-8 border-b border-slate-50 flex justify-between items-center bg-slate-50/50">
+                <div>
+                  <h2 className="text-2xl font-black uppercase tracking-tighter">{editingAnnouncement ? 'Modify Broadcast' : 'Deploy Broadcast'}</h2>
+                  <p className="text-sm font-bold text-slate-400 uppercase tracking-widest">Global Site Protocol</p>
+                </div>
+                <button onClick={() => setIsAnnouncementModalOpen(false)} className="p-2 hover:bg-white rounded-full transition-all">
+                  <XCircle className="w-8 h-8 text-slate-300 hover:text-red-500" />
+                </button>
+              </div>
+
+              <form onSubmit={handleAnnouncementSubmit} className="flex-1 overflow-y-auto p-10 space-y-6 custom-scrollbar">
+                <div>
+                  <label htmlFor="announcement_content" className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Announcement Content</label>
+                  <textarea 
+                    id="announcement_content"
+                    name="announcement_content"
+                    required
+                    value={announcementFormData.content}
+                    onChange={(e) => setAnnouncementFormData({...announcementFormData, content: e.target.value})}
+                    placeholder="Broadcast message..."
+                    className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-2 focus:ring-primary/20 font-bold h-32 resize-none" 
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="announcement_link" className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Link URL (Optional)</label>
+                  <input 
+                    id="announcement_link"
+                    name="announcement_link"
+                    type="text" 
+                    value={announcementFormData.link_url}
+                    onChange={(e) => setAnnouncementFormData({...announcementFormData, link_url: e.target.value})}
+                    placeholder="https://..."
+                    className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-2 focus:ring-primary/20 font-bold" 
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label htmlFor="announcement_priority" className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Priority Level</label>
+                    <input 
+                      id="announcement_priority"
+                      name="announcement_priority"
+                      type="number" 
+                      min="1"
+                      max="10"
+                      value={announcementFormData.priority}
+                      onChange={(e) => setAnnouncementFormData({...announcementFormData, priority: parseInt(e.target.value)})}
+                      className="w-full px-6 py-4 bg-slate-50 rounded-2xl border-none outline-none focus:ring-2 focus:ring-primary/20 font-bold" 
+                    />
+                  </div>
+                  <div className="flex flex-col justify-end pb-4">
+                    <div className="flex items-center gap-3">
+                      <input 
+                        type="checkbox" 
+                        id="announcement-active"
+                        checked={announcementFormData.is_active}
+                        onChange={(e) => setAnnouncementFormData({...announcementFormData, is_active: e.target.checked})}
+                        className="w-5 h-5 rounded border-slate-300 text-primary focus:ring-primary"
+                      />
+                      <label htmlFor="announcement-active" className="text-sm font-bold text-slate-600">Active</label>
+                    </div>
+                  </div>
+                </div>
+
+                <button 
+                  type="submit"
+                  className="w-full bg-primary text-white py-6 rounded-[32px] font-black uppercase tracking-widest shadow-2xl shadow-primary/30 hover:scale-[1.02] active:scale-[0.98] transition-all"
+                >
+                  {editingAnnouncement ? 'Commit Changes' : 'Deploy Broadcast'}
                 </button>
               </form>
             </motion.div>
@@ -4324,8 +4545,8 @@ function ClubsView({ data, onUpdate }: any) {
   const handleEdit = (club: any) => {
     setEditingClub(club);
     setFormData({
-      title: club.title,
-      content: club.content || '',
+      title: club.name || club.title || '',
+      content: club.description || club.content || '',
       image_url: club.image_url || '',
       is_active: club.is_active ?? true,
       membership_price: club.metadata?.membership_price || club.membership_price || 0,
@@ -4361,8 +4582,10 @@ function ClubsView({ data, onUpdate }: any) {
     try {
       const { membership_price, ...rest } = formData;
       const payload = {
-        ...rest,
-        type: 'book_club',
+        name: formData.title,
+        description: formData.content,
+        image_url: formData.image_url,
+        is_active: formData.is_active,
         metadata: {
           ...rest.metadata,
           membership_price
@@ -4370,10 +4593,10 @@ function ClubsView({ data, onUpdate }: any) {
       };
 
       if (editingClub) {
-        await updateCMSContent(editingClub.id, payload);
+        await updateBookClub(editingClub.id, payload);
         toast.success('Club updated', { id: loadingToast });
       } else {
-        await createCMSContent(payload);
+        await createBookClub(payload);
         toast.success('Club initialized', { id: loadingToast });
       }
       setIsModalOpen(false);
@@ -4388,7 +4611,7 @@ function ClubsView({ data, onUpdate }: any) {
     if (!confirm('Are you sure you want to decommission this book club?')) return;
     const loadingToast = toast.loading('Decommissioning Club...');
     try {
-      await deleteRecord('cms_content', id);
+      await deleteRecord('book_clubs', id);
       toast.success('Club decommissioned', { id: loadingToast });
       onUpdate();
     } catch (error) {
@@ -4422,7 +4645,7 @@ function ClubsView({ data, onUpdate }: any) {
           >
             <div className="relative w-full h-48 bg-slate-50 rounded-[32px] mb-6 overflow-hidden">
               {club.image_url ? (
-                <img src={club.image_url} alt={club.title} className="w-full h-full object-cover" />
+                <img src={club.image_url} alt={club.name || club.title} className="w-full h-full object-cover" />
               ) : (
                 <div className="w-full h-full flex items-center justify-center text-slate-200">
                   <Users className="w-12 h-12" />
@@ -4437,8 +4660,8 @@ function ClubsView({ data, onUpdate }: any) {
               </div>
             </div>
             
-            <h3 className="text-xl font-black tracking-tighter uppercase mb-2 line-clamp-1">{club.title}</h3>
-            <p className="text-sm text-slate-500 font-medium mb-6 line-clamp-2 leading-relaxed">{club.content}</p>
+            <h3 className="text-xl font-black tracking-tighter uppercase mb-2 line-clamp-1">{club.name || club.title}</h3>
+            <p className="text-sm text-slate-500 font-medium mb-6 line-clamp-2 leading-relaxed">{club.description || club.content}</p>
             
             <div className="flex items-center justify-between pt-4 border-t border-slate-50">
               <div className="flex items-center gap-2">
@@ -4678,14 +4901,14 @@ function EventsView({ data, onUpdate }: any) {
   const handleEdit = (event: any) => {
     setEditingEvent(event);
     setFormData({
-      title: event.title,
-      content: event.content || '',
+      title: event.name || event.title || '',
+      content: event.description || event.content || '',
       image_url: event.image_url || '',
       is_active: event.is_active ?? true,
       metadata: {
-        date: event.metadata?.date || '',
-        time: event.metadata?.time || '14:00',
-        location: event.metadata?.location || 'Virtual / ReadMart Hub',
+        date: event.date || event.metadata?.date || '',
+        time: event.time || event.metadata?.time || '14:00',
+        location: event.location || event.metadata?.location || 'Virtual / ReadMart Hub',
         type: event.metadata?.type || 'Workshop'
       }
     });
@@ -4714,15 +4937,21 @@ function EventsView({ data, onUpdate }: any) {
     const loadingToast = toast.loading(editingEvent ? 'Updating Event...' : 'Deploying Event...');
     try {
       const payload = {
-        ...formData,
-        type: 'event'
+        name: formData.title,
+        description: formData.content,
+        image_url: formData.image_url,
+        is_active: formData.is_active,
+        date: formData.metadata.date,
+        time: formData.metadata.time,
+        location: formData.metadata.location,
+        metadata: formData.metadata
       };
 
       if (editingEvent) {
-        await updateCMSContent(editingEvent.id, payload);
+        await updateEvent(editingEvent.id, payload);
         toast.success('Event updated', { id: loadingToast });
       } else {
-        await createCMSContent(payload);
+        await createEvent(payload);
         toast.success('Event deployed', { id: loadingToast });
       }
       setIsModalOpen(false);
@@ -4737,7 +4966,7 @@ function EventsView({ data, onUpdate }: any) {
     if (!confirm('Are you sure you want to cancel this event?')) return;
     const loadingToast = toast.loading('Cancelling Event...');
     try {
-      await deleteRecord('cms_content', id);
+      await deleteRecord('events', id);
       toast.success('Event cancelled', { id: loadingToast });
       onUpdate();
     } catch (error) {
@@ -4771,7 +5000,7 @@ function EventsView({ data, onUpdate }: any) {
           >
             <div className="relative w-full h-48 bg-slate-50 rounded-[32px] mb-6 overflow-hidden">
               {event.image_url ? (
-                <img src={event.image_url} alt={event.title} className="w-full h-full object-cover" />
+                <img src={event.image_url} alt={event.name || event.title} className="w-full h-full object-cover" />
               ) : (
                 <div className="w-full h-full flex items-center justify-center text-slate-200">
                   <Calendar className="w-12 h-12" />
@@ -4788,16 +5017,16 @@ function EventsView({ data, onUpdate }: any) {
             
             <div className="space-y-4">
               <div>
-                <h3 className="text-xl font-black tracking-tighter uppercase line-clamp-1">{event.title}</h3>
+                <h3 className="text-xl font-black tracking-tighter uppercase line-clamp-1">{event.name || event.title}</h3>
                 <div className="flex items-center gap-2 text-primary font-bold text-xs mt-1">
                   <Clock className="w-3 h-3" />
-                  {event.metadata?.date} @ {event.metadata?.time}
+                  {event.date || event.metadata?.date} @ {event.time || event.metadata?.time}
                 </div>
               </div>
 
               <div className="flex items-center gap-2 text-slate-400 text-xs font-bold">
                 <MapPin className="w-3 h-3" />
-                {event.metadata?.location}
+                {event.location || event.metadata?.location}
               </div>
 
               <div className="flex gap-2 pt-2">

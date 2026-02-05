@@ -15,17 +15,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (type === 'book-clubs') {
       const { data, error } = await supabase
-        .from('cms_content')
-        .select('id, title, content, image_url, metadata, is_active, created_at')
-        .eq('type', 'book_club')
+        .from('book_clubs')
+        .select('id, name, description, image_url, metadata, is_active, created_at')
         .eq('is_active', true);
       
       if (error) throw error;
 
       const clubs = (data || []).map(item => ({
         id: item.id,
-        name: item.title,
-        description: item.content,
+        name: item.name,
+        description: item.description,
         cover_url: item.image_url,
         member_count: item.metadata?.member_count || 0,
         is_active: item.is_active,

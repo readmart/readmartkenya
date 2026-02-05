@@ -1,12 +1,12 @@
+
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 import path from 'path';
-import fs from 'fs';
 
 dotenv.config({ path: path.resolve(process.cwd(), '.env') });
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL;
-const supabaseKey = process.env.VITE_SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 if (!supabaseUrl || !supabaseKey) {
   console.error('Missing Supabase credentials');
@@ -15,94 +15,70 @@ if (!supabaseUrl || !supabaseKey) {
 
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-const AVAILABLE_IMAGES = [
-  '/assets/books/20240923044324.jpg',
-  '/assets/books/20240923044800.jpg',
-  '/assets/books/20240923045030.jpg',
-  '/assets/books/20240923045216.jpg',
-  '/assets/books/20240923045459.jpg',
-  '/assets/books/20240923045805.jpg',
-  '/assets/books/20240923050011.jpg',
-  '/assets/books/20240923050459.jpg',
-  '/assets/books/20240923050752.jpg',
-  '/assets/books/20240923051047.jpg',
-  '/assets/books/20240923051248.jpg',
-  '/assets/books/20240923051614.jpg',
-];
-
 async function fixAssets() {
-  console.log('--- Fixing Missing Product Images ---');
-  
-  const { data: products, error: prodErr } = await supabase
+  console.log('\n--- Checking Products ---');
+  const { data: products, error } = await supabase
     .from('products')
-    .select('id, title, image_url, is_active');
+    .select('id, title, image_url');
 
-  if (prodErr) {
-    console.error('Error fetching products:', prodErr);
+  if (error) {
+    console.error('Error fetching products:', error);
     return;
   }
 
-  console.log(`Found ${products.length} products total.`);
-
+  const defaultImage = 'https://images.unsplash.com/photo-1544947950-fa07a98d237f?auto=format&fit=crop&q=80&w=800';
   let fixCount = 0;
-  for (const product of products) {
-    let needsFix = false;
-    if (!product.image_url) {
-      needsFix = true;
-    } else if (!product.image_url.startsWith('http')) {
-      const filePath = path.join(process.cwd(), 'public', product.image_url.startsWith('/') ? product.image_url.substring(1) : product.image_url);
-      if (!fs.existsSync(filePath)) {
-        needsFix = true;
-      }
-    }
 
-    if (needsFix) {
-      const randomImage = AVAILABLE_IMAGES[Math.floor(Math.random() * AVAILABLE_IMAGES.length)];
+  for (const product of products || []) {
+    if (!product.image_url || product.image_url.includes('example.com')) {
       const { error: updateErr } = await supabase
         .from('products')
-        .update({ image_url: randomImage })
+        .update({ image_url: defaultImage })
         .eq('id', product.id);
-      
-      if (updateErr) {
-        console.error(`Failed to update product ${product.title}:`, updateErr);
-      } else {
+
+      if (!updateErr) {
         fixCount++;
+        console.log(`Fixed image for: ${product.title}`);
       }
     }
   }
 
   console.log(`Fixed ${fixCount} products with missing images.`);
 
-  console.log('\n--- Populating CMS Content ---');
+  console.log('\n--- Populating CMS Tables ---');
   
-  // Clear existing items to avoid duplicates during audit/fix
-  await supabase.from('cms_content').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-
-  console.log('Seeding CMS content...');
-  const seedData = [
+  // 1. Seed Book Clubs
+  console.log('Seeding Book Clubs...');
+  const clubsData = [
     {
-      type: 'book_club',
-      title: 'The Classics Club',
-      content: 'Exploring timeless literature from around the world.',
+      name: 'The Classics Club',
+      description: 'Exploring timeless literature from around the world.',
       image_url: 'https://images.unsplash.com/photo-1512820790803-83ca734da794',
       metadata: { tier: 'basic' }
     },
     {
-      type: 'book_club',
-      title: 'Tech Visionaries',
-      content: 'Discussing the future of technology and society.',
+      name: 'Tech Visionaries',
+      description: 'Discussing the future of technology and society.',
       image_url: 'https://images.unsplash.com/photo-1518770660439-4636190af475',
       metadata: { tier: 'premium' }
-    },
+    }
+  ];
+
+  const { error: clubsErr } = await supabase.from('book_clubs').upsert(clubsData, { onConflict: 'name' });
+  if (clubsErr) console.error('Error seeding Book Clubs:', clubsErr);
+  else console.log('Successfully seeded Book Clubs.');
+
+  // 2. Seed Banners
+  console.log('Seeding Banners...');
+  const bannersData = [
     {
-      type: 'hero',
       title: 'EVERY PAGE TELLS A STORY',
       content: 'Discover our curated collection of literature, art, and community events.',
       image_url: 'https://images.unsplash.com/photo-1507842217343-583bb7270b66',
-      is_active: true
+      is_active: true,
+      metadata: { button_text: 'Shop Now' }
     },
     {
-      type: 'banner',
       title: 'NEW ARRIVALS',
       content: 'Check out the latest additions to our collection.',
       image_url: 'https://images.unsplash.com/photo-1524995997946-a1c2e315a42f',
@@ -111,15 +87,23 @@ async function fixAssets() {
     }
   ];
 
-  const { error: seedErr } = await supabase
-    .from('cms_content')
-    .insert(seedData);
+  const { error: bannersErr } = await supabase.from('banners').upsert(bannersData, { onConflict: 'title' });
+  if (bannersErr) console.error('Error seeding Banners:', bannersErr);
+  else console.log('Successfully seeded Banners.');
 
-  if (seedErr) {
-    console.error('Error seeding CMS content:', seedErr);
-  } else {
-    console.log('Successfully seeded CMS content.');
-  }
+  // 3. Seed Announcements
+  console.log('Seeding Announcements...');
+  const announcementsData = [
+    {
+      title: 'Platform Launch',
+      content: 'Welcome to the new ReadMart platform! Enjoy a seamless literary experience.',
+      is_active: true
+    }
+  ];
+
+  const { error: annErr } = await supabase.from('announcements').upsert(announcementsData, { onConflict: 'title' });
+  if (annErr) console.error('Error seeding Announcements:', annErr);
+  else console.log('Successfully seeded Announcements.');
 }
 
 fixAssets();

@@ -29,7 +29,7 @@ export default function Home() {
   useEffect(() => {
     async function fetchPageData() {
       try {
-        const cms = await getCMSContent();
+        const cms = await getCMSContent(true);
         setBanners(cms.filter((item: any) => item.type === 'banner' && item.is_active));
 
         // Fetch latest books
