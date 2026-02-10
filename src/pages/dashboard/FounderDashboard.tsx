@@ -10,7 +10,7 @@ import {
   TrendingUp, BarChart2, Briefcase, UserPlus,
   Clock, MapPin, FileUp, Download, Filter,
   ChevronLeft, ChevronRight, CheckSquare, Square,
-  HelpCircle, Zap, Database, ChevronUp
+  HelpCircle, Zap, Database, ChevronUp, Handshake
 } from 'lucide-react';
 import { 
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -36,6 +36,7 @@ import {
 } from '@/api/dashboards';
 import { uploadSiteAsset, uploadProductImage, uploadEbookFile, uploadAgreementFile } from '@/api/storage';
 import { getEventRSVPs } from '@/api/community';
+import FounderPartnerships from './FounderPartnerships';
 import { 
   getNewsletterSubscriptions, 
   updateNewsletterStatus,
@@ -283,6 +284,7 @@ export default function FounderDashboard() {
     { id: 'agreements', label: 'Agreements', icon: FileText },
     { id: 'promos', label: 'Promos', icon: Tag },
     { id: 'newsletter', label: 'Newsletter', icon: Mail },
+    { id: 'partnerships', label: 'Partnerships', icon: Handshake },
     { id: 'payouts', label: 'Payouts', icon: CreditCard },
   ];
 
@@ -341,6 +343,7 @@ export default function FounderDashboard() {
       );
       case 'promos': return <PromosView data={data.promos} onUpdate={fetchAllData} />;
       case 'newsletter': return <NewsletterView data={data.newsletterSubscriptions} onUpdate={fetchAllData} />;
+      case 'partnerships': return <FounderPartnerships />;
       case 'payouts': return (
         <PayoutsView 
           data={data.payouts} 
@@ -5335,8 +5338,7 @@ function AgreementsView({ partnerships, authors, protocols, onUpdate }: any) {
   const handleStatusUpdate = async (table: string, id: string, status: string, name: string, userId?: string) => {
     const loadingToast = toast.loading(`Updating status for ${name}...`);
     try {
-      const role = table === 'author_applications' ? 'author' : 'partner';
-      await updateApplicationStatus(table, id, status, userId, role);
+      await updateApplicationStatus(table, id, status, userId);
       
       toast.success(`Status updated to ${status}`, { id: loadingToast });
       onUpdate();
@@ -5362,9 +5364,13 @@ function AgreementsView({ partnerships, authors, protocols, onUpdate }: any) {
       const protocol = protocols.find((p: any) => p.type === protocolType && p.is_active);
 
       // 2. Sync with the applications API
+      const { data: { session } } = await supabase.auth.getSession();
       const response = await fetch('/api/applications', {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`
+        },
         body: JSON.stringify({ 
           id, 
           type, 

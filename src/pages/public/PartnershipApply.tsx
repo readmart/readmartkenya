@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { 
   Handshake, Mail, User, FileText, Send, 
@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 import { Link, useNavigate } from 'react-router-dom';
 import { uploadQualificationProof } from '@/api/storage';
+import { trackEvent } from '@/lib/analytics';
 
 export default function PartnershipApply() {
   const { user, profile } = useAuth();
@@ -25,6 +26,10 @@ export default function PartnershipApply() {
     collaboration_intent: '',
     type: 'service_provider' as 'author' | 'service_provider'
   });
+
+  useEffect(() => {
+    trackEvent('partnership_apply_start');
+  }, []);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -88,6 +93,7 @@ export default function PartnershipApply() {
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || 'Failed to submit application');
 
+      trackEvent('partnership_apply_submit', { type: formData.type });
       setIsSubmitted(true);
       toast.success('Application submitted successfully!');
     } catch (error: any) {

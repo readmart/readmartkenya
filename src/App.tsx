@@ -13,6 +13,7 @@ const Shop = lazy(() => lazyRetry(() => import('@/pages/public/Shop')));
 const BookDetail = lazy(() => lazyRetry(() => import('@/pages/public/BookDetail')));
 const BookClub = lazy(() => lazyRetry(() => import('@/pages/public/BookClub')));
 const Events = lazy(() => lazyRetry(() => import('@/pages/public/Events')));
+const Partnerships = lazy(() => lazyRetry(() => import('@/pages/public/Partnerships')));
 const PartnershipApply = lazy(() => lazyRetry(() => import('@/pages/public/PartnershipApply')));
 const AuthorApply = lazy(() => lazyRetry(() => import('@/pages/public/AuthorApply')));
 const Membership = lazy(() => lazyRetry(() => import('@/pages/public/Membership')));
@@ -147,6 +148,7 @@ function App() {
               <Route path="/returns" element={<Returns />} />
               <Route path="/privacy" element={<Privacy />} />
               <Route path="/terms" element={<Terms />} />
+              <Route path="/partnerships" element={<Partnerships />} />
               <Route path="/newsletter/success" element={<NewsletterStatus />} />
               <Route path="/newsletter/error" element={<NewsletterStatus />} />
 

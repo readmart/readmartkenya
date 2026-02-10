@@ -1492,15 +1492,34 @@ export async function deleteProtocolAgreement(id: string) {
   return true;
 }
 
-export async function updateApplicationStatus(table: string, id: string, status: string, userId?: string, role?: string) {
+export async function updateApplicationStatus(table: string, id: string, status: string, userId?: string) {
   await verifyAdmin();
-  const result = await updateRecord(table, id, { status });
   
-  if (status === 'completed' && userId && role) {
-    await updateRecord('profiles', userId, { role });
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) throw new Error('No active session');
+
+  const type = table === 'author_applications' ? 'author' : 'partner';
+  
+  const response = await fetch('/api/applications', {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${session.access_token}`
+    },
+    body: JSON.stringify({
+      id,
+      type,
+      status,
+      userId
+    })
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.message || 'Failed to update application status');
   }
-  
-  return result;
+
+  return await response.json();
 }
 
 export async function getApprovedAuthors() {

@@ -69,6 +69,7 @@ export default function Navbar() {
     { name: 'Home', href: '/' },
     { name: 'Shop', href: '/shop' },
     { name: 'Club Hub', href: '/book-club-hub' },
+    { name: 'Partnerships', href: '/partnerships' },
     { name: 'Help', href: '/help' },
   ];
 

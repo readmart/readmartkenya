@@ -17,7 +17,8 @@ import {
   Star,
   ChevronRight,
   Loader2,
-  MessageCircle
+  MessageCircle,
+  Handshake
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { CONTACT_INFO } from '@/lib/constants';
@@ -33,6 +34,7 @@ const FAQ_CATEGORIES = [
   { id: 'payments', label: 'Payments', icon: <CreditCard className="w-4 h-4" /> },
   { id: 'account', label: 'Account', icon: <User className="w-4 h-4" /> },
   { id: 'technical', label: 'Technical', icon: <ShieldCheck className="w-4 h-4" /> },
+  { id: 'partnerships', label: 'Partnerships', icon: <Handshake className="w-4 h-4" /> },
 ];
 
 const FAQS = [
@@ -65,6 +67,16 @@ const FAQS = [
     category: 'technical',
     question: 'The website is not loading properly.',
     answer: 'Try clearing your browser cache or opening the site in an incognito window. If the problem persists, please contact our technical support.'
+  },
+  {
+    category: 'partnerships',
+    question: 'How do I apply for a partnership?',
+    answer: 'You can apply by visiting our Partnerships page and clicking on "Become a Partner". We offer various tiers for publishers, logistics providers, and strategic allies.'
+  },
+  {
+    category: 'partnerships',
+    question: 'What are the benefits of partnering with ReadMart?',
+    answer: 'Partners get access to our wide audience, specialized dashboards for tracking impact/earnings, and integration into our literary ecosystem.'
   },
 ];
 
