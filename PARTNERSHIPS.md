@@ -66,10 +66,26 @@ The partnership system is designed to manage a global ecosystem of collaborators
 2. Edit existing partners to update their "Featured" status, tier, or contact information.
 3. Manage Tiers to adjust benefits as the ecosystem scales.
 
+## SEO and Discoverability
+- **Meta Tags**: Optimized with `react-helmet-async` for social sharing and search ranking.
+- **Structured Data**: JSON-LD schema (Schema.org) implemented for "Organization" and "WebPage" types to enhance search engine results.
+- **Semantic HTML**: Using proper header hierarchy (`h1`-`h6`) and sectioning.
+
+## Performance Optimization
+- **Lazy Loading**: Partner logos use `loading="lazy"` and explicit dimensions to prevent Layout Shift (CLS).
+- **Memoized Filtering**: Search and category filtering use `useMemo` for sub-millisecond responsiveness.
+- **Page Load**: Targeted load time < 3s through optimized assets and minimal runtime overhead.
+
+## Accessibility (WCAG 2.1 AA)
+- **ARIA Roles**: Interactive elements use `role="list"`, `role="listitem"`, and `aria-label`.
+- **Keyboard Navigation**: All interactive elements are focusable and navigable via keyboard.
+- **Screen Readers**: `sr-only` text used for descriptive section titles and decorative elements hidden with `aria-hidden`.
+
 ## Analytics Events
-The system tracks the following events via `src/lib/analytics.ts`:
-- `page_view`: Tracked on `/partnerships`.
-- `partnership_apply_start`: When a user opens the application form.
-- `partnership_apply_submit`: On successful submission.
-- `partnership_filter_change`: When a user filters partners by category.
+The system tracks the following events via `@vercel/analytics`:
+- `page_view_partnerships`: Tracked on `/partnerships`.
+- `click_become_partner_hero`: When a user clicks the CTA in the hero section.
 - `partnership_search`: When a user searches for a partner.
+- `filter_partners`: When a user filters by category.
+- `partnership_application_submit`: On successful form submission.
+- `partnership_file_upload`: When a user uploads qualification proof.

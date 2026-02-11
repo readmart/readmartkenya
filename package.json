@@ -48,6 +48,7 @@
     "@types/react-dom": "^19.2.3",
     "@vercel/node": "^5.5.23",
     "@vitejs/plugin-react-swc": "^4.2.2",
+    "@vitest/coverage-v8": "^4.0.18",
     "autoprefixer": "^10.4.23",
     "esbuild": "^0.27.2",
     "eslint": "^9.39.1",

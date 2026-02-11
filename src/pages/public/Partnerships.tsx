@@ -1,14 +1,14 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { useState, useEffect, useMemo } from 'react';
-import { 
-  Handshake, Globe, ArrowRight, CheckCircle2, Building2, 
+import {
+  Handshake, Globe, ArrowRight, CheckCircle2, Building2,
   Mail, Phone, MapPin, Search, X
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { getPartnershipTiers, getPartners } from '@/api/partnerships';
 import { Loader2 } from 'lucide-react';
 import { Helmet } from 'react-helmet-async';
-import { trackEvent } from '@/lib/analytics';
+import { track } from '@vercel/analytics';
 
 const CATEGORIES = [
   'All',
@@ -45,7 +45,7 @@ export default function Partnerships() {
     loadData();
     
     // Analytics tracking
-    trackEvent('page_view', { page: 'partnerships' });
+    track('page_view_partnerships');
   }, []);
 
   const filteredPartners = useMemo(() => {
@@ -90,14 +90,14 @@ export default function Partnerships() {
       </Helmet>
 
       {/* Hero Section */}
-      <section className="container mx-auto px-4 mb-24">
-        <div className="max-w-4xl mx-auto text-center space-y-8">
+      <section className="container mx-auto px-4 mb-16 md:mb-24">
+        <div className="max-w-4xl mx-auto text-center space-y-6 md:space-y-8">
           <motion.div 
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 text-primary text-sm font-black uppercase tracking-widest"
+            className="inline-flex items-center gap-2 px-3 py-1.5 md:px-4 md:py-2 rounded-full bg-primary/10 text-primary text-[10px] md:text-sm font-black uppercase tracking-widest"
           >
-            <Handshake className="w-4 h-4" />
+            <Handshake className="w-3 h-3 md:w-4 md:h-4" />
             Global Ecosystem
           </motion.div>
           
@@ -105,7 +105,7 @@ export default function Partnerships() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
-            className="text-5xl md:text-7xl font-black tracking-tighter leading-[0.9]"
+            className="text-4xl sm:text-5xl md:text-7xl font-black tracking-tighter leading-[1] md:leading-[0.9]"
           >
             COLLABORATE TO <br />
             <span className="text-primary">TRANSFORM READING</span>
@@ -115,7 +115,7 @@ export default function Partnerships() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2 }}
-            className="text-xl text-muted-foreground font-medium max-w-2xl mx-auto leading-relaxed"
+            className="text-lg md:text-xl text-muted-foreground font-medium max-w-2xl mx-auto leading-relaxed px-4"
           >
             Join our network of logistics providers, publishers, tech partners, and local hubs. 
             Together, we're building the future of literary commerce across Africa.
@@ -125,18 +125,20 @@ export default function Partnerships() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.3 }}
-            className="flex flex-wrap justify-center gap-4"
+            className="flex flex-col sm:flex-row justify-center gap-4 px-4"
           >
             <Link 
               to="/partnership/apply" 
-              className="px-10 py-5 bg-primary text-white rounded-[2rem] font-black hover:scale-105 transition-all shadow-lg shadow-primary/25 flex items-center gap-2"
+              onClick={() => track('click_become_partner_hero')}
+              className="w-full sm:w-auto px-10 py-4 md:py-5 bg-primary text-white rounded-[2rem] font-black hover:scale-105 transition-all shadow-lg shadow-primary/25 flex items-center justify-center gap-2"
             >
               BECOME A PARTNER
               <ArrowRight className="w-5 h-5" />
             </Link>
             <a 
               href="#tiers" 
-              className="px-10 py-5 glass border-white/10 rounded-[2rem] font-black hover:bg-white/5 transition-all"
+              onClick={() => track('click_view_directory_hero')}
+              className="w-full sm:w-auto px-10 py-4 md:py-5 glass border-white/10 rounded-[2rem] font-black hover:bg-white/5 transition-all flex items-center justify-center"
             >
               VIEW TIERS
             </a>
@@ -145,12 +147,12 @@ export default function Partnerships() {
       </section>
 
       {/* Filter and Search Section */}
-      <section className="container mx-auto px-4 mb-12">
-        <div className="glass p-6 md:p-8 rounded-[2.5rem] border-white/5 space-y-8">
+      <section className="container mx-auto px-4 mb-8 md:mb-12">
+        <div className="glass p-6 md:p-8 rounded-[2rem] md:rounded-[2.5rem] border-white/5 space-y-6 md:space-y-8">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
             <div className="space-y-1">
-              <h2 className="text-2xl font-black tracking-tight">EXPLORE OUR NETWORK</h2>
-              <p className="text-sm text-muted-foreground font-medium">Find partners by category or search by name</p>
+              <h2 className="text-xl md:text-2xl font-black tracking-tight uppercase">Explore Our Network</h2>
+              <p className="text-xs md:text-sm text-muted-foreground font-medium">Find partners by category or search by name</p>
             </div>
             
             <div className="relative group w-full md:w-96">
@@ -162,10 +164,10 @@ export default function Partnerships() {
                 onChange={(e) => {
                   setSearchQuery(e.target.value);
                   if (e.target.value.length > 2) {
-                    trackEvent('partnership_search', { query: e.target.value });
+                    track('partnership_search', { query: e.target.value });
                   }
                 }}
-                className="w-full pl-12 pr-4 py-3 bg-white/5 border border-white/10 rounded-2xl focus:ring-2 focus:ring-primary/50 outline-none transition-all font-medium"
+                className="w-full pl-12 pr-12 py-3 bg-white/5 border border-white/10 rounded-2xl focus:ring-2 focus:ring-primary/50 outline-none transition-all font-medium text-sm md:text-base"
                 aria-label="Search partners"
               />
               {searchQuery && (
@@ -179,15 +181,15 @@ export default function Partnerships() {
             </div>
           </div>
 
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2 overflow-x-auto no-scrollbar -mx-2 px-2 md:mx-0 md:px-0">
             {CATEGORIES.map(cat => (
               <button
                 key={cat}
                 onClick={() => {
                   setSelectedCategory(cat);
-                  trackEvent('partnership_filter_change', { category: cat });
+                  track('filter_partners', { category: cat });
                 }}
-                className={`px-6 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${
+                className={`px-5 md:px-6 py-2 rounded-xl text-[10px] md:text-xs font-black uppercase tracking-widest transition-all whitespace-nowrap ${
                   selectedCategory === cat 
                   ? 'bg-primary text-white shadow-lg shadow-primary/20' 
                   : 'bg-white/5 text-muted-foreground hover:bg-white/10'
@@ -201,7 +203,8 @@ export default function Partnerships() {
       </section>
 
       {/* Featured Partners Grid */}
-      <section className="container mx-auto px-4 mb-32">
+      <section className="container mx-auto px-4 mb-24 md:mb-32" aria-labelledby="partners-grid-title">
+        <h2 id="partners-grid-title" className="sr-only">Featured Partners</h2>
         <AnimatePresence mode="wait">
           {filteredPartners.length > 0 ? (
             <motion.div 
@@ -209,7 +212,8 @@ export default function Partnerships() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="grid md:grid-cols-2 lg:grid-cols-3 gap-8"
+              className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8"
+              role="list"
             >
               {filteredPartners.map((partner, i) => (
                 <motion.div 
@@ -217,28 +221,36 @@ export default function Partnerships() {
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: i * 0.05 }}
-                  className="glass-card group overflow-hidden rounded-[2.5rem] border-white/5 hover:border-primary/20 transition-all flex flex-col h-full"
+                  className="glass-card group overflow-hidden rounded-[2rem] md:rounded-[2.5rem] border-white/5 hover:border-primary/20 transition-all flex flex-col h-full"
+                  role="listitem"
                 >
-                  <div className="p-8 space-y-6 flex-grow">
-                    <div className="flex justify-between items-start">
-                      <div className="w-16 h-16 bg-white/5 rounded-2xl flex items-center justify-center p-3">
+                  <div className="p-6 md:p-8 space-y-6 flex-grow">
+                    <div className="flex justify-between items-start gap-4">
+                      <div className="w-14 h-14 md:w-16 md:h-16 bg-white/5 rounded-2xl flex items-center justify-center p-3 shrink-0">
                         {partner.logo_url ? (
-                          <img src={partner.logo_url} alt={partner.company_name} className="max-w-full max-h-full object-contain" />
+                          <img 
+                            src={partner.logo_url} 
+                            alt={partner.company_name} 
+                            className="max-w-full max-h-full object-contain" 
+                            loading="lazy"
+                            width="64"
+                            height="64"
+                          />
                         ) : (
-                          <Building2 className="w-8 h-8 text-muted-foreground" />
+                          <Building2 className="w-6 h-6 md:w-8 md:h-8 text-muted-foreground" />
                         )}
                       </div>
-                      <div className="flex flex-col items-end gap-2">
+                      <div className="flex flex-col items-end gap-2 shrink-0">
                         {partner.tier && (
                           <span 
-                            className="text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full border border-white/10"
+                            className="text-[8px] md:text-[10px] font-black uppercase tracking-widest px-2 md:px-3 py-1 rounded-full border border-white/10 whitespace-nowrap"
                             style={{ color: partner.tier.color_code, borderColor: `${partner.tier.color_code}20` }}
                           >
                             {partner.tier.name}
                           </span>
                         )}
                         {partner.category && (
-                          <span className="text-[8px] font-black uppercase tracking-[0.2em] text-muted-foreground bg-white/5 px-2 py-0.5 rounded">
+                          <span className="text-[7px] md:text-[8px] font-black uppercase tracking-[0.2em] text-muted-foreground bg-white/5 px-2 py-0.5 rounded whitespace-nowrap">
                             {partner.category}
                           </span>
                         )}
@@ -247,7 +259,7 @@ export default function Partnerships() {
                     
                     <div className="space-y-4">
                       <div>
-                        <h3 className="text-xl font-black group-hover:text-primary transition-colors">{partner.company_name}</h3>
+                        <h3 className="text-lg md:text-xl font-black group-hover:text-primary transition-colors line-clamp-1">{partner.company_name}</h3>
                         <p className="text-sm text-muted-foreground leading-relaxed mt-2">
                           {partner.description || 'Verified ReadMart logistics and infrastructure partner.'}
                         </p>
@@ -275,6 +287,7 @@ export default function Partnerships() {
                             href={partner.website_url} 
                             target="_blank" 
                             rel="noopener noreferrer" 
+                            onClick={() => track('click_partner_website', { partner: partner.company_name })}
                             className="p-2 glass rounded-xl hover:text-primary transition-colors"
                             aria-label={`${partner.company_name} website`}
                           >
@@ -302,6 +315,7 @@ export default function Partnerships() {
                       </div>
                       <Link 
                         to={`/partnerships/${partner.id}`} 
+                        onClick={() => track('click_partner_details', { partner: partner.company_name })}
                         className="text-[10px] font-black uppercase tracking-widest text-primary hover:translate-x-1 transition-transform flex items-center gap-2"
                       >
                         VIEW PROFILE
@@ -394,29 +408,30 @@ export default function Partnerships() {
       </section>
 
       {/* CTA Section */}
-      <section className="container mx-auto px-4 mb-32">
-        <div className="glass p-12 md:p-24 rounded-[3.5rem] bg-foreground text-background relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-primary/20 rounded-full blur-[120px] translate-x-1/2 -translate-y-1/2" />
+      <section className="container mx-auto px-4 mb-24 md:mb-32">
+        <div className="glass p-8 md:p-12 lg:p-24 rounded-[2.5rem] md:rounded-[3.5rem] bg-foreground text-background relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-[300px] md:w-[600px] h-[300px] md:h-[600px] bg-primary/20 rounded-full blur-[60px] md:blur-[120px] translate-x-1/2 -translate-y-1/2" />
           
-          <div className="relative z-10 max-w-2xl space-y-8">
-            <h2 className="text-5xl md:text-6xl font-black leading-none tracking-tighter">
+          <div className="relative z-10 max-w-2xl space-y-6 md:space-y-8">
+            <h2 className="text-4xl md:text-5xl lg:text-6xl font-black leading-none tracking-tighter">
               READY TO <br />
               PARTNER?
             </h2>
-            <p className="text-xl opacity-80 font-medium">
+            <p className="text-lg md:text-xl opacity-80 font-medium">
               Take the first step towards a rewarding collaboration. Our team will review your application and match you with the ideal tier.
             </p>
-            <div className="flex flex-wrap gap-4 pt-4">
+            <div className="flex flex-col sm:flex-row gap-4 pt-4">
               <Link 
                 to="/partnership/apply" 
-                className="px-10 py-5 bg-primary text-white rounded-[2rem] font-black hover:scale-105 transition-all shadow-xl shadow-primary/20 flex items-center gap-2"
+                onClick={() => track('click_become_partner_cta')}
+                className="w-full sm:w-auto px-10 py-5 bg-primary text-white rounded-[2rem] font-black hover:scale-105 transition-all shadow-xl shadow-primary/20 flex items-center justify-center gap-2"
               >
                 APPLY NOW
                 <ArrowRight className="w-5 h-5" />
               </Link>
               <a 
                 href="mailto:partners@readmartke.com" 
-                className="px-10 py-5 bg-white/10 text-white rounded-[2rem] font-black hover:bg-white/20 transition-all backdrop-blur-md"
+                className="w-full sm:w-auto px-10 py-5 bg-white/10 text-white rounded-[2rem] font-black hover:bg-white/20 transition-all backdrop-blur-md flex items-center justify-center"
               >
                 CONTACT SALES
               </a>
@@ -427,32 +442,32 @@ export default function Partnerships() {
 
       {/* Footer Contact */}
       <section className="container mx-auto px-4 mb-24">
-        <div className="grid md:grid-cols-3 gap-12">
-          <div className="flex gap-6">
-            <div className="p-4 glass rounded-2xl h-fit">
-              <Mail className="w-6 h-6 text-primary" />
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 md:gap-12">
+          <div className="flex items-center md:items-start gap-4 md:gap-6 p-6 md:p-0 glass md:bg-transparent rounded-2xl">
+            <div className="p-3 md:p-4 bg-primary/10 md:glass rounded-xl md:rounded-2xl h-fit">
+              <Mail className="w-5 h-5 md:w-6 md:h-6 text-primary" />
             </div>
             <div>
-              <h4 className="font-black uppercase tracking-widest text-xs mb-2">Email Us</h4>
-              <p className="font-bold">partners@readmartke.com</p>
+              <h4 className="font-black uppercase tracking-widest text-[10px] md:text-xs mb-1 md:mb-2 text-muted-foreground md:text-foreground">Email Us</h4>
+              <p className="font-bold text-sm md:text-base">partners@readmartke.com</p>
             </div>
           </div>
-          <div className="flex gap-6">
-            <div className="p-4 glass rounded-2xl h-fit">
-              <Phone className="w-6 h-6 text-primary" />
+          <div className="flex items-center md:items-start gap-4 md:gap-6 p-6 md:p-0 glass md:bg-transparent rounded-2xl">
+            <div className="p-3 md:p-4 bg-primary/10 md:glass rounded-xl md:rounded-2xl h-fit">
+              <Phone className="w-5 h-5 md:w-6 md:h-6 text-primary" />
             </div>
             <div>
-              <h4 className="font-black uppercase tracking-widest text-xs mb-2">Call Us</h4>
-              <p className="font-bold">+254 794 129 958</p>
+              <h4 className="font-black uppercase tracking-widest text-[10px] md:text-xs mb-1 md:mb-2 text-muted-foreground md:text-foreground">Call Us</h4>
+              <p className="font-bold text-sm md:text-base">+254 794 129 958</p>
             </div>
           </div>
-          <div className="flex gap-6">
-            <div className="p-4 glass rounded-2xl h-fit">
-              <MapPin className="w-6 h-6 text-primary" />
+          <div className="flex items-center md:items-start gap-4 md:gap-6 p-6 md:p-0 glass md:bg-transparent rounded-2xl">
+            <div className="p-3 md:p-4 bg-primary/10 md:glass rounded-xl md:rounded-2xl h-fit">
+              <MapPin className="w-5 h-5 md:w-6 md:h-6 text-primary" />
             </div>
             <div>
-              <h4 className="font-black uppercase tracking-widest text-xs mb-2">Visit Us</h4>
-              <p className="font-bold">Nairobi, Kenya</p>
+              <h4 className="font-black uppercase tracking-widest text-[10px] md:text-xs mb-1 md:mb-2 text-muted-foreground md:text-foreground">Visit Us</h4>
+              <p className="font-bold text-sm md:text-base">Nairobi, Kenya</p>
             </div>
           </div>
         </div>
