@@ -55,10 +55,8 @@ async function checkDatabase() {
   
   const results = await Promise.all(tables.map(async (table) => {
     try {
-      // For site_settings, we check specific columns needed by useSettings hook
-      const requiredColumns = ['site_name', 'site_logo', 'contact_email', 'whatsapp_link', 'maintenance_mode', 'secondary_phone', 'tax_rate', 'default_currency'];
-      
       if (table === 'site_settings') {
+        const requiredColumns = ['site_name', 'site_logo', 'contact_email', 'whatsapp_link', 'maintenance_mode', 'secondary_phone', 'tax_rate', 'default_currency', 'hero_headline', 'hero_subtext', 'hero_image_url'];
         const missingCols = [];
         for (const col of requiredColumns) {
           const { error } = await supabase.from(table).select(col).limit(1);
@@ -79,6 +77,25 @@ async function checkDatabase() {
         return { table, status: '✅ OK', details: data && data.length > 0 ? '✅ All Columns OK' : '⚠️ Table Empty' };
       }
 
+      if (table === 'products') {
+        const requiredColumns = ['sale_price', 'type', 'is_active', 'stock_quantity', 'metadata'];
+        const missingCols = [];
+        for (const col of requiredColumns) {
+          const { error } = await supabase.from(table).select(col).limit(1);
+          if (error && error.code === '42703') {
+            missingCols.push(col);
+          }
+        }
+
+        if (missingCols.length > 0) {
+          return { 
+            table, 
+            status: '❌ Error', 
+            details: `Missing columns: ${missingCols.join(', ')}` 
+          };
+        }
+      }
+
       const { error, count } = await supabase.from(table).select('*', { count: 'exact', head: true });
 
       if (error) {
@@ -89,9 +106,7 @@ async function checkDatabase() {
         };
       }
       
-      const details = table === 'site_settings' 
-        ? (data && data.length > 0 ? '✅ Columns OK' : '⚠️ Table Empty')
-        : `✅ ${count} rows`;
+      const details = `✅ ${count} rows`;
 
       return { table, status: '✅ OK', details };
     } catch (e) {
