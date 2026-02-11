@@ -32,7 +32,7 @@ import {
   getAnnouncements, createAnnouncement, updateAnnouncement,
   sendAbandonedCartReminders, updateRecord, createRecord,
   getProtocolAgreements, createProtocolAgreement, updateProtocolAgreement, deleteProtocolAgreement,
-  deleteRecord, getAllPayouts, disbursePayouts
+  deleteRecord, getAllPayouts, disbursePayouts, getNotificationLogs
 } from '@/api/dashboards';
 import { uploadSiteAsset, uploadProductImage, uploadEbookFile, uploadAgreementFile } from '@/api/storage';
 import { getEventRSVPs } from '@/api/community';
@@ -67,7 +67,8 @@ export default function FounderDashboard() {
     announcements: [],
     newsletterSubscriptions: [],
     protocols: [],
-    payouts: []
+    payouts: [],
+    notificationLogs: []
   });
 
   const [isDisbursing, setIsDisbursing] = useState(false);
@@ -183,7 +184,8 @@ export default function FounderDashboard() {
         getAnnouncements(),
         getNewsletterSubscriptions(),
         getProtocolAgreements(),
-        getAllPayouts()
+        getAllPayouts(),
+        getNotificationLogs()
       ]);
 
       const [
@@ -191,7 +193,7 @@ export default function FounderDashboard() {
         settings, inquiries, partnerships, 
         authors, approvedAuthors, categories, shippingZones, promos,
         clubs, events, banners, announcements,
-        newsletterSubscriptions, protocols, payouts
+        newsletterSubscriptions, protocols, payouts, notificationLogs
       ] = results.map(res => res.status === 'fulfilled' ? res.value : null);
 
       setData({ 
@@ -224,7 +226,8 @@ export default function FounderDashboard() {
         announcements: announcements || [],
         newsletterSubscriptions: newsletterSubscriptions || [],
         protocols: protocols || [],
-        payouts: payouts || []
+        payouts: payouts || [],
+        notificationLogs: notificationLogs || []
       });
 
       if (results.some(res => res.status === 'rejected')) {
@@ -237,7 +240,7 @@ export default function FounderDashboard() {
           'getSiteSettings', 'getInquiries', 'getPartnerships', 'getAuthors', 
           'getApprovedAuthors', 'getCategories', 'getShippingZones', 'getPromos',
           'getClubs', 'getEvents', 'getBanners', 'getAnnouncements',
-          'getNewsletterSubscriptions', 'getProtocolAgreements', 'getAllPayouts'
+          'getNewsletterSubscriptions', 'getProtocolAgreements', 'getAllPayouts', 'getNotificationLogs'
         ];
 
         failedIndices.forEach(idx => {
@@ -284,6 +287,7 @@ export default function FounderDashboard() {
     { id: 'agreements', label: 'Agreements', icon: FileText },
     { id: 'promos', label: 'Promos', icon: Tag },
     { id: 'newsletter', label: 'Newsletter', icon: Mail },
+    { id: 'comms', label: 'Communications', icon: Bell },
     { id: 'partnerships', label: 'Partnerships', icon: Handshake },
     { id: 'payouts', label: 'Payouts', icon: CreditCard },
   ];
@@ -343,6 +347,7 @@ export default function FounderDashboard() {
       );
       case 'promos': return <PromosView data={data.promos} onUpdate={fetchAllData} />;
       case 'newsletter': return <NewsletterView data={data.newsletterSubscriptions} onUpdate={fetchAllData} />;
+      case 'comms': return <CommunicationsView logs={data.notificationLogs} users={data.users} onUpdate={fetchAllData} />;
       case 'partnerships': return <FounderPartnerships />;
       case 'payouts': return (
         <PayoutsView 
@@ -427,6 +432,206 @@ export default function FounderDashboard() {
           </motion.div>
         </AnimatePresence>
       </main>
+    </div>
+  );
+}
+
+function CommunicationsView({ logs, users, onUpdate }: any) {
+  const [isSending, setIsSending] = useState(false);
+  const [recipient, setRecipient] = useState('');
+  const [subject, setSubject] = useState('');
+  const [message, setMessage] = useState('');
+  const [useTemplate, setUseTemplate] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showUserList, setShowUserList] = useState(false);
+
+  const filteredUsers = useMemo(() => {
+    if (!searchQuery) return [];
+    return users?.filter((u: any) => 
+      u.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      u.full_name?.toLowerCase().includes(searchQuery.toLowerCase())
+    ).slice(0, 5);
+  }, [users, searchQuery]);
+
+  const handleSend = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!recipient || !subject || !message) {
+      toast.error('Please fill in all fields');
+      return;
+    }
+
+    setIsSending(true);
+    try {
+      const { sendCustomEmail } = await import('@/api/dashboards');
+      await sendCustomEmail({
+        to: recipient,
+        subject,
+        message,
+        useTemplate
+      });
+      toast.success('Email sent successfully');
+      setRecipient('');
+      setSubject('');
+      setMessage('');
+      onUpdate?.();
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to send email');
+    } finally {
+      setIsSending(false);
+    }
+  };
+
+  const selectUser = (user: any) => {
+    setRecipient(user.email);
+    setSearchQuery('');
+    setShowUserList(false);
+  };
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      {/* Composer */}
+      <div className="lg:col-span-2 space-y-8">
+        <div>
+          <h1 className="text-4xl font-black tracking-tighter uppercase mb-2">Communications Protocol</h1>
+          <p className="text-slate-500 font-medium">Draft and dispatch system-wide intelligence</p>
+        </div>
+
+        <div className="bg-white rounded-[40px] border border-slate-100 shadow-sm overflow-hidden p-8">
+          <form onSubmit={handleSend} className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-2 relative">
+                <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400 ml-2">Recipient</label>
+                <div className="relative">
+                  <Users className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <input
+                    type="text"
+                    value={recipient || searchQuery}
+                    onChange={(e) => {
+                      if (recipient) setRecipient('');
+                      setSearchQuery(e.target.value);
+                      setShowUserList(true);
+                    }}
+                    onFocus={() => setShowUserList(true)}
+                    placeholder="Search users or enter email..."
+                    className="w-full pl-12 pr-4 py-3 bg-slate-50 border-none rounded-2xl text-sm focus:ring-2 focus:ring-primary/20 transition-all"
+                  />
+                </div>
+                
+                {showUserList && filteredUsers.length > 0 && (
+                  <div className="absolute z-10 w-full mt-2 bg-white border border-slate-100 rounded-2xl shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-2">
+                    {filteredUsers.map((user: any) => (
+                      <button
+                        key={user.id}
+                        type="button"
+                        onClick={() => selectUser(user)}
+                        className="w-full flex items-center gap-3 p-4 hover:bg-slate-50 transition-colors text-left border-b border-slate-50 last:border-none"
+                      >
+                        <div className="w-8 h-8 bg-slate-100 rounded-full flex items-center justify-center text-[10px] font-black uppercase">
+                          {user.full_name?.charAt(0) || user.email?.charAt(0)}
+                        </div>
+                        <div>
+                          <p className="text-sm font-bold text-slate-900">{user.full_name || 'Anonymous User'}</p>
+                          <p className="text-[10px] text-slate-400 font-medium">{user.email}</p>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400 ml-2">Subject</label>
+                <div className="relative">
+                  <FileText className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <input
+                    type="text"
+                    value={subject}
+                    onChange={(e) => setSubject(e.target.value)}
+                    placeholder="Enter subject line"
+                    className="w-full pl-12 pr-4 py-3 bg-slate-50 border-none rounded-2xl text-sm focus:ring-2 focus:ring-primary/20 transition-all"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex justify-between items-center mb-2">
+                <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400 ml-2">Message Body</label>
+                <div className="flex gap-2">
+                  <button type="button" onClick={() => setMessage(m => m + '**Bold Text**')} className="p-1.5 bg-slate-50 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-900 transition-all"><span className="text-xs font-bold">B</span></button>
+                  <button type="button" onClick={() => setMessage(m => m + '*Italic Text*')} className="p-1.5 bg-slate-50 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-900 transition-all"><span className="text-xs italic font-serif">I</span></button>
+                  <button type="button" onClick={() => setMessage(m => m + '\n- List Item')} className="p-1.5 bg-slate-50 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-900 transition-all"><Filter className="w-3 h-3" /></button>
+                </div>
+              </div>
+              <textarea
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
+                rows={8}
+                placeholder="Compose your message here... (Markdown supported)"
+                className="w-full px-6 py-4 bg-slate-50 border-none rounded-3xl text-sm focus:ring-2 focus:ring-primary/20 transition-all resize-none font-mono"
+              />
+            </div>
+
+            <div className="flex items-center justify-between">
+              <label className="flex items-center gap-3 cursor-pointer group">
+                <div className="relative">
+                  <input
+                    type="checkbox"
+                    checked={useTemplate}
+                    onChange={(e) => setUseTemplate(e.target.checked)}
+                    className="sr-only"
+                  />
+                  <div className={`w-10 h-6 rounded-full transition-colors ${useTemplate ? 'bg-primary' : 'bg-slate-200'}`} />
+                  <div className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform ${useTemplate ? 'translate-x-4' : ''}`} />
+                </div>
+                <span className="text-xs font-bold text-slate-500 group-hover:text-slate-900 transition-colors">Apply Branded Template</span>
+              </label>
+
+              <button
+                type="submit"
+                disabled={isSending}
+                className="flex items-center gap-2 bg-primary text-white px-8 py-3 rounded-2xl font-bold text-sm hover:shadow-lg hover:shadow-primary/20 transition-all disabled:opacity-50"
+              >
+                {isSending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
+                Dispatch Communication
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      {/* Logs */}
+      <div className="space-y-8">
+        <div>
+          <h2 className="text-2xl font-black tracking-tighter uppercase mb-2">Transmission Log</h2>
+          <p className="text-slate-500 font-medium">Recent delivery statuses</p>
+        </div>
+
+        <div className="bg-white rounded-[40px] border border-slate-100 shadow-sm overflow-hidden p-6 max-h-[700px] overflow-y-auto custom-scrollbar">
+          <div className="space-y-4">
+            {logs?.map((log: any) => (
+              <div key={log.id} className="p-4 bg-slate-50 rounded-2xl border border-slate-100 group hover:border-primary/20 transition-all">
+                <div className="flex justify-between items-start mb-2">
+                  <div className="flex items-center gap-2">
+                    <div className={`w-2 h-2 rounded-full ${
+                      log.status === 'sent' ? 'bg-green-500' : 
+                      log.status === 'failed' ? 'bg-red-500' : 'bg-amber-500'
+                    }`} />
+                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">{log.status}</span>
+                  </div>
+                  <span className="text-[10px] font-bold text-slate-300">{new Date(log.created_at).toLocaleDateString()}</span>
+                </div>
+                <p className="font-bold text-sm text-slate-900 line-clamp-1">{log.subject}</p>
+                <p className="text-xs text-slate-500 mt-1 line-clamp-1">{log.recipient}</p>
+              </div>
+            ))}
+            {(!logs || logs.length === 0) && (
+              <div className="text-center py-12 text-slate-400 font-bold uppercase text-[10px] tracking-widest">
+                No transmissions recorded
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

@@ -1492,6 +1492,58 @@ export async function deleteProtocolAgreement(id: string) {
   return true;
 }
 
+/**
+ * Fetch notification logs for Communications tab
+ */
+export async function getNotificationLogs() {
+  try {
+    await verifyAdmin();
+    const { data, error } = await supabase
+      .from('notification_logs')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(100);
+    
+    if (error) throw error;
+    return data;
+  } catch (error: any) {
+    console.error('Failed to fetch notification logs:', error);
+    throw error;
+  }
+}
+
+/**
+ * Send a custom email via the Communications API
+ */
+export async function sendCustomEmail(payload: {
+  to: string | string[];
+  subject: string;
+  message: string;
+  previewText?: string;
+  useTemplate?: boolean;
+}) {
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) throw new Error('Not authenticated');
+
+    const response = await fetch('/api/communications?action=send', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session.access_token}`
+      },
+      body: JSON.stringify(payload)
+    });
+
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || 'Failed to send email');
+    return result;
+  } catch (error: any) {
+    console.error('Email sending failed:', error);
+    throw error;
+  }
+}
+
 export async function updateApplicationStatus(table: string, id: string, status: string, userId?: string) {
   await verifyAdmin();
   

@@ -1,70 +1,116 @@
 import { createClient } from '@supabase/supabase-js';
 import * as dotenv from 'dotenv';
-import path from 'path';
+import { resolve } from 'path';
+import fs from 'fs';
 
-dotenv.config({ path: path.resolve(process.cwd(), '.env') });
+// Check for .env.local first, then .env
+const envPath = fs.existsSync(resolve(process.cwd(), '.env.local')) 
+  ? resolve(process.cwd(), '.env.local') 
+  : resolve(process.cwd(), '.env');
 
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+dotenv.config({ path: envPath });
 
-if (!supabaseUrl || !supabaseServiceKey) {
-  console.error('Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY');
+const supabaseUrl = process.env.VITE_SUPABASE_URL;
+const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY;
+
+if (!supabaseUrl || !supabaseKey) {
+  console.error(`❌ Missing Supabase environment variables in ${envPath}`);
   process.exit(1);
 }
 
-const supabase = createClient(supabaseUrl, supabaseServiceKey);
-
-const tables = [
-  'profiles',
-  'products',
-  'categories',
-  'orders',
-  'order_items',
-  'reviews',
-  'transactions',
-  'audit_logs',
-  'banners',
-  'book_clubs',
-  'announcements',
-  'events',
-  'shipping_zones',
-  'promos',
-  'payment_methods',
-  'newsletter_subscriptions',
-  'book_club_memberships',
-  'author_applications',
-  'partnership_applications',
-  'contact_messages',
-  'notification_logs',
-  'fulfillment_ledger',
-  'partnership_agreements',
-  'settings'
-];
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 async function checkDatabase() {
-  console.log('🔍 Auditing ReadMart Database Integrity...\n');
+  console.log(`🔍 Auditing ReadMart Database Integrity...`);
+  console.log(`📡 Connecting to: ${supabaseUrl}\n`);
+  
+  const tables = [
+    'profiles',
+    'products',
+    'categories',
+    'orders',
+    'order_items',
+    'reviews',
+    'transactions',
+    'banners',
+    'book_clubs',
+    'announcements',
+    'events',
+    'shipping_zones',
+    'promos',
+    'payment_methods',
+    'newsletter_subscriptions',
+    'partnership_applications',
+    'author_applications',
+    'partnership_agreements',
+    'agreements',
+    'partnership_services',
+    'partnership_tiers',
+    'partners',
+    'fulfillment_ledger',
+    'contact_messages',
+    'site_settings',
+    'notification_logs'
+  ];
   
   const results = await Promise.all(tables.map(async (table) => {
     try {
-      const { error } = await supabase.from(table).select('count').limit(1);
-      if (error) {
-        return { table, exists: false, error: error.message };
+      // For site_settings, we check specific columns needed by useSettings hook
+      const requiredColumns = ['site_name', 'site_logo', 'contact_email', 'whatsapp_link', 'maintenance_mode', 'secondary_phone', 'tax_rate', 'default_currency'];
+      
+      if (table === 'site_settings') {
+        const missingCols = [];
+        for (const col of requiredColumns) {
+          const { error } = await supabase.from(table).select(col).limit(1);
+          if (error && error.code === '42703') {
+            missingCols.push(col);
+          }
+        }
+        
+        if (missingCols.length > 0) {
+          return { 
+            table, 
+            status: '❌ Error', 
+            details: `Missing columns: ${missingCols.join(', ')}` 
+          };
+        }
+        
+        const { data } = await supabase.from(table).select('*').limit(1);
+        return { table, status: '✅ OK', details: data && data.length > 0 ? '✅ All Columns OK' : '⚠️ Table Empty' };
       }
-      return { table, exists: true };
+
+      const { error, count } = await supabase.from(table).select('*', { count: 'exact', head: true });
+
+      if (error) {
+        return { 
+          table, 
+          status: '❌ Error', 
+          details: `[${error.code}] ${error.message}` 
+        };
+      }
+      
+      const details = table === 'site_settings' 
+        ? (data && data.length > 0 ? '✅ Columns OK' : '⚠️ Table Empty')
+        : `✅ ${count} rows`;
+
+      return { table, status: '✅ OK', details };
     } catch (e) {
-      return { table, exists: false, error: String(e) };
+      return { table, status: '❌ Exception', details: String(e) };
     }
   }));
 
   console.table(results);
 
-  const missing = results.filter(r => !r.exists);
-  if (missing.length > 0) {
-    console.log('\n⚠️  The following tables are MISSING or inaccessible:');
-    missing.forEach(m => console.log(`- ${m.table}: ${m.error}`));
-    console.log('\n💡 Please run the corresponding migrations in the Supabase SQL Editor.');
+  const errors = results.filter(r => r.status.includes('❌'));
+  if (errors.length > 0) {
+    console.log('\n⚠️ Issues detected:');
+    errors.forEach(e => console.log(`- ${e.table}: ${e.details}`));
+    console.log('\n💡 Suggestions:');
+    console.log('1. Check if the table exists in the Supabase Dashboard.');
+    console.log('2. Verify Row Level Security (RLS) policies allow "anon" access.');
+    console.log('3. If PGRST205, reload the schema cache (Settings -> API -> PostgREST).');
   } else {
-    console.log('\n✅ All core tables are present and healthy!');
+    console.log('\n✅ All checked tables and columns are accessible!');
   }
 }
 
