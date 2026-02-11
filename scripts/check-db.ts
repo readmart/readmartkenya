@@ -22,7 +22,8 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 
 async function checkDatabase() {
   console.log(`🔍 Auditing ReadMart Database Integrity...`);
-  console.log(`📡 Connecting to: ${supabaseUrl}\n`);
+  console.log(`📡 Connecting to: ${supabaseUrl}`);
+  console.log(`🔑 Using Key (start): ${supabaseKey?.substring(0, 20)}...`);
   
   const tables = [
     'profiles',
@@ -56,7 +57,7 @@ async function checkDatabase() {
   const results = await Promise.all(tables.map(async (table) => {
     try {
       if (table === 'site_settings') {
-        const requiredColumns = ['site_name', 'site_logo', 'contact_email', 'whatsapp_link', 'maintenance_mode', 'secondary_phone', 'tax_rate', 'default_currency', 'hero_headline', 'hero_subtext', 'hero_image_url'];
+        const requiredColumns = ['id', 'site_name', 'site_logo', 'contact_email', 'whatsapp_link', 'maintenance_mode', 'secondary_phone', 'tax_rate', 'default_currency', 'hero_headline', 'hero_subtext', 'hero_image_url', 'instagram_url', 'facebook_url', 'x_url', 'linkedin_url', 'tiktok_url', 'threads_url', 'global_announcement', 'announcement_active'];
         const missingCols = [];
         for (const col of requiredColumns) {
           const { error } = await supabase.from(table).select(col).limit(1);
@@ -72,13 +73,23 @@ async function checkDatabase() {
             details: `Missing columns: ${missingCols.join(', ')}` 
           };
         }
+
+        // Test if 'global' ID works (checks for UUID vs Text issue)
+        const { error: idError } = await supabase.from(table).select('id').eq('id', 'global').maybeSingle();
+        if (idError && idError.code === '22P02') {
+          return {
+            table,
+            status: '❌ Error',
+            details: 'ID column is still UUID type. Must be converted to TEXT.'
+          };
+        }
         
         const { data } = await supabase.from(table).select('*').limit(1);
         return { table, status: '✅ OK', details: data && data.length > 0 ? '✅ All Columns OK' : '⚠️ Table Empty' };
       }
 
       if (table === 'products') {
-        const requiredColumns = ['sale_price', 'type', 'is_active', 'stock_quantity', 'metadata'];
+        const requiredColumns = ['id', 'title', 'author', 'description', 'price', 'sale_price', 'image_url', 'category_id', 'stock_quantity', 'type', 'metadata', 'created_at', 'is_active'];
         const missingCols = [];
         for (const col of requiredColumns) {
           const { error } = await supabase.from(table).select(col).limit(1);

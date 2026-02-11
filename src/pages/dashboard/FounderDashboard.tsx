@@ -1472,20 +1472,32 @@ function PayoutsView({ data, isDisbursing, onDisburse, formatPrice }: any) {
 // --- View Components ---
 
 function AnalyticsView({ data, formatPrice }: any) {
-  if (!data) return null;
+  if (!data) return (
+    <div className="flex items-center justify-center h-[400px] bg-slate-50 rounded-[40px] border border-dashed border-slate-200">
+      <div className="text-center">
+        <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto mb-4" />
+        <p className="text-sm font-bold text-slate-400 uppercase tracking-widest">Initialising Analytics Engine...</p>
+      </div>
+    </div>
+  );
 
   const [shouldRenderChart, setShouldRenderChart] = useState(false);
 
   useEffect(() => {
-    const timer = setTimeout(() => setShouldRenderChart(true), 100);
+    const timer = setTimeout(() => setShouldRenderChart(true), 250);
     return () => clearTimeout(timer);
   }, []);
 
+  const safeTrend = (trend: any) => {
+    if (typeof trend !== 'string') return '0%';
+    return trend || '0%';
+  };
+
   const stats = [
-    { label: 'Total Revenue', value: formatPrice(data.totalRevenue), trend: data.revenueTrend, icon: DollarSign, color: 'bg-green-500' },
-    { label: 'Total Orders', value: data.totalOrders, trend: data.ordersTrend, icon: ShoppingCart, color: 'bg-blue-500' },
-    { label: 'Total Users', value: data.totalUsers, trend: data.usersTrend, icon: Users, color: 'bg-purple-500' },
-    { label: 'Total Products', value: data.totalProducts, trend: data.productsTrend, icon: Package, color: 'bg-orange-500' },
+    { label: 'Total Revenue', value: formatPrice(data.totalRevenue || 0), trend: safeTrend(data.revenueTrend), icon: DollarSign, color: 'bg-green-500' },
+    { label: 'Total Orders', value: data.totalOrders || 0, trend: safeTrend(data.ordersTrend), icon: ShoppingCart, color: 'bg-blue-500' },
+    { label: 'Total Users', value: data.totalUsers || 0, trend: safeTrend(data.usersTrend), icon: Users, color: 'bg-purple-500' },
+    { label: 'Total Products', value: data.totalProducts || 0, trend: safeTrend(data.productsTrend), icon: Package, color: 'bg-orange-500' },
   ];
 
   return (
