@@ -409,7 +409,7 @@ export default function Partnerships() {
 
       {/* CTA Section */}
       <section className="container mx-auto px-4 mb-24 md:mb-32">
-        <div className="glass p-8 md:p-12 lg:p-24 rounded-[2.5rem] md:rounded-[3.5rem] bg-foreground text-background relative overflow-hidden">
+        <div className="p-8 md:p-12 lg:p-24 rounded-[2.5rem] md:rounded-[3.5rem] bg-foreground text-background relative overflow-hidden">
           <div className="absolute top-0 right-0 w-[300px] md:w-[600px] h-[300px] md:h-[600px] bg-primary/20 rounded-full blur-[60px] md:blur-[120px] translate-x-1/2 -translate-y-1/2" />
           
           <div className="relative z-10 max-w-2xl space-y-6 md:space-y-8">
