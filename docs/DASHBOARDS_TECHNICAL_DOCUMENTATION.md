@@ -115,7 +115,7 @@ This document provides a comprehensive technical audit of the Founder, Author, a
 
 | Data Slice | API Function | Supabase Tables |
 |------------|--------------|-----------------|
-| analytics | getGlobalAnalytics | orders, transactions, profiles, products, order_items, book_club_memberships |
+| analytics | getGlobalAnalytics | orders, transactions, profiles, products, order_items, book_club_members |
 | inventory | getInventory | products, categories |
 | orders | getOrders | orders, profiles, order_items, products, shipping_zones |
 | users | getAllUsers | profiles |
@@ -181,7 +181,7 @@ This document provides a comprehensive technical audit of the Founder, Author, a
 | usersTrend | Same pattern | 30d vs prior 30d |
 | productsTrend | Same pattern | 30d vs prior 30d |
 | aov | totalRevenue / totalOrders | Last 30 days |
-| clubMembersCount | Count of active book_club_memberships | All time |
+| clubMembersCount | Count of active book_club_members | All time |
 | categoryStats | Revenue by category from order_items | Last 30 days |
 | topProducts | Top 5 by revenue | Last 30 days |
 

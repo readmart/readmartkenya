@@ -30,7 +30,7 @@ export function useClubMembership(clubId?: string) {
     async function checkMembership() {
       try {
         const { data, error } = await supabase
-          .from('book_club_memberships')
+          .from('book_club_members')
           .select('status')
           .eq('club_id', clubId)
           .eq('user_id', currentUser.id)

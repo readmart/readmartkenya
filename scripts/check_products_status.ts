@@ -32,7 +32,7 @@ async function checkProducts() {
     await checkTable('announcements');
     await checkTable('events');
     await checkTable('legacy_cms_content');
-    await checkTable('book_club_memberships');
+    await checkTable('book_club_members');
     await checkTable('categories');
     await checkTable('products');
   } else {
@@ -64,18 +64,18 @@ async function checkProducts() {
     console.log('book_clubs columns:', Object.keys(clubsCols[0]));
   }
 
-  console.log('\n--- Checking Club Members Columns ---');
+  console.log('\n--- Checking Book Club Members Columns ---');
   const { data: membersCols, error: membersColErr } = await supabase
-    .from('club_members')
+    .from('book_club_members')
     .select('*')
     .limit(1);
   
   if (membersColErr) {
-    console.error('Error fetching club_members:', membersColErr.message);
+    console.error('Error fetching book_club_members:', membersColErr.message);
   } else if (membersCols && membersCols.length > 0) {
-    console.log('club_members columns:', Object.keys(membersCols[0]));
+    console.log('book_club_members columns:', Object.keys(membersCols[0]));
   } else {
-    console.log('club_members table is empty');
+    console.log('book_club_members table is empty');
   }
 
   console.log('\n--- Checking Categories ---');

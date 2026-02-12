@@ -242,7 +242,7 @@ export async function joinBookClub(clubId: string): Promise<BookClubMembership> 
   try {
     // Check for existing membership (One-Club Policy)
     const { data: existing } = await supabase
-      .from('book_club_memberships')
+      .from('book_club_members')
       .select('id')
       .eq('user_id', user.id)
       .eq('status', 'active')
@@ -253,12 +253,11 @@ export async function joinBookClub(clubId: string): Promise<BookClubMembership> 
     }
 
     const { data, error } = await supabase
-      .from('book_club_memberships')
+      .from('book_club_members')
       .upsert({ 
         user_id: user.id, 
         club_id: clubId, 
-        status: 'active',
-        is_active: true
+        status: 'active'
       })
       .select('id, user_id, club_id, status')
       .single();
@@ -284,7 +283,7 @@ export async function leaveBookClub(clubId: string): Promise<boolean> {
 
   try {
     const { error } = await supabase
-      .from('book_club_memberships')
+      .from('book_club_members')
       .delete()
       .eq('user_id', user.id)
       .eq('club_id', clubId);
@@ -305,9 +304,9 @@ export async function getUserMembership(): Promise<BookClubMembership | null> {
 
   try {
     const { data, error } = await supabase
-      .from('book_club_memberships')
+      .from('book_club_members')
       .select(`
-        id, user_id, club_id, status, created_at, expires_at,
+        id, user_id, club_id, status, joined_at,
         club:book_clubs(id, name, description, image_url, metadata)
       `)
       .eq('user_id', user.id)
@@ -324,8 +323,8 @@ export async function getUserMembership(): Promise<BookClubMembership | null> {
       user_id: data.user_id,
       club_id: data.club_id,
       status: data.status,
-      joined_at: data.created_at,
-      expires_at: data.expires_at,
+      joined_at: data.joined_at,
+      expires_at: null,
       payment_status: 'paid',
       club: club ? {
         id: club.id,

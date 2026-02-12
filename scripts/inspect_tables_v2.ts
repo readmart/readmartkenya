@@ -46,7 +46,7 @@ async function inspectTable(tableName: string) {
 }
 
 async function run() {
-  const tables = ['promos', 'book_club_memberships', 'audit_logs'];
+  const tables = ['promos', 'book_club_members', 'audit_logs'];
   for (const table of tables) {
     await inspectTable(table);
   }

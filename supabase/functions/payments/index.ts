@@ -830,11 +830,10 @@ async function handleMembershipPayment(orderId: string, transactionId: string, w
 
     if (isClubMembership && clubId) {
       console.log(`Activating club membership for user ${userId} in club ${clubId}`)
-      await supabase.from('book_club_memberships').upsert({
+      await supabase.from('book_club_members').upsert({
         user_id: userId,
         club_id: clubId,
         status: 'active',
-        is_active: true,
         joined_at: new Date().toISOString()
       }, { onConflict: 'user_id, club_id' })
 

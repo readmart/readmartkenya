@@ -277,10 +277,9 @@ export async function getGlobalAnalytics() {
     let clubMembersCount = 0;
     try {
       const { count, error: clubError } = await supabase
-        .from('book_club_memberships')
+        .from('book_club_members')
         .select('id', { count: 'exact', head: true })
-        .eq('is_active', true)
-        .in('status', ['active', 'paid']); // Count both active and paid memberships
+        .eq('status', 'active');
       
       if (clubError) throw clubError;
       clubMembersCount = count || 0;

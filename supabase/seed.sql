@@ -244,14 +244,14 @@ CREATE TABLE IF NOT EXISTS public.wishlist_items (
     UNIQUE(user_id, product_id)
 );
 
-CREATE TABLE IF NOT EXISTS public.book_club_memberships (
+CREATE TABLE IF NOT EXISTS public.book_club_members (
     id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
-    user_id uuid NOT NULL,
     club_id uuid REFERENCES public.book_clubs(id) ON DELETE CASCADE NOT NULL,
-    tier text DEFAULT 'basic',
-    is_active boolean DEFAULT true,
-    created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL,
-    UNIQUE(user_id, club_id)
+    user_id uuid NOT NULL,
+    role text DEFAULT 'member' CHECK (role IN ('admin', 'moderator', 'member')),
+    status text DEFAULT 'active' CHECK (status IN ('active', 'pending', 'invited', 'banned')),
+    joined_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL,
+    UNIQUE(club_id, user_id)
 );
 
 CREATE TABLE IF NOT EXISTS public.notifications (
@@ -288,7 +288,7 @@ ALTER TABLE public.partnership_applications ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.ebook_metadata ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.wishlist_items ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.book_club_memberships ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.book_club_members ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
 
 -- 9. Seed Data

@@ -85,11 +85,13 @@ async function runMigration() {
     END IF;
   END $$;
 
-  -- 3. Fix book_club_memberships
+  -- 3. Fix book_club_members
   DO $$ 
   BEGIN
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'book_club_memberships' AND column_name = 'status') THEN
-      ALTER TABLE public.book_club_memberships ADD COLUMN status text DEFAULT 'pending';
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'book_club_members' AND column_name = 'status') THEN
+      IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'book_club_members') THEN
+        ALTER TABLE public.book_club_members ADD COLUMN status text DEFAULT 'active';
+      END IF;
     END IF;
   END $$;
 

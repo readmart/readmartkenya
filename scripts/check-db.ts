@@ -35,6 +35,7 @@ async function checkDatabase() {
     'transactions',
     'banners',
     'book_clubs',
+    'book_club_members',
     'announcements',
     'events',
     'shipping_zones',

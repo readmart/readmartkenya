@@ -192,7 +192,7 @@ Managed via `storage.buckets`:
 | **Catalog** | `Shop.tsx`, `BookDetail.tsx` | `products`, `categories` | `api/products.ts` |
 | **Commerce** | `Cart.tsx`, `Checkout.tsx` | `orders`, `order_items` | `api/orders.ts` |
 | **Payments** | `api/payments.ts` | `transactions` | `api/payments.ts` |
-| **Community**| `BookClubHub.tsx` | `book_clubs`, `book_club_memberships`| `api/community.ts` |
+| **Community**| `BookClubHub.tsx` | `book_clubs`, `book_club_members`| `api/community.ts` |
 | **Admin** | `FounderDashboard.tsx` | `site_settings`, `audit_logs` | `api/dashboards.ts` |
 
 ---

@@ -67,7 +67,7 @@ export async function getMyBookClubs() {
   if (!user) return [];
 
   const { data, error } = await supabase
-    .from('book_club_memberships')
+    .from('book_club_members')
     .select(`
       club_id,
       status,
@@ -82,7 +82,7 @@ export async function getMyBookClubs() {
     const club = Array.isArray(m.club) ? m.club[0] : m.club;
     return {
       club_id: m.club_id,
-      role: 'member', // Default since book_club_memberships doesn't have role
+      role: 'member', // Default since we don't always have role info here
       status: m.status,
       book_club: club ? {
         id: club.id,
