@@ -1508,17 +1508,34 @@ function AnalyticsView({ data, formatPrice }: any) {
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    // We use a small delay but also check if the container is ready
-    const timer = setTimeout(() => {
-      if (containerRef.current && containerRef.current.offsetWidth > 0) {
+    let checkInterval: NodeJS.Timeout;
+    let timeout: NodeJS.Timeout;
+
+    const checkDimensions = () => {
+      if (containerRef.current && containerRef.current.offsetWidth > 0 && containerRef.current.offsetHeight > 0) {
         setShouldRenderChart(true);
-      } else {
-        // Retry if container not ready
-        const retryTimer = setTimeout(() => setShouldRenderChart(true), 1000);
-        return () => clearTimeout(retryTimer);
+        clearInterval(checkInterval);
+        clearTimeout(timeout);
       }
-    }, 300);
-    return () => clearTimeout(timer);
+    };
+
+    // Initial check after a small delay
+    timeout = setTimeout(checkDimensions, 300);
+
+    // Poll for dimensions if not ready
+    checkInterval = setInterval(checkDimensions, 500);
+
+    // Safety timeout to eventually try rendering anyway after 5 seconds
+    const safetyTimeout = setTimeout(() => {
+      setShouldRenderChart(true);
+      clearInterval(checkInterval);
+    }, 5000);
+
+    return () => {
+      clearTimeout(timeout);
+      clearInterval(checkInterval);
+      clearTimeout(safetyTimeout);
+    };
   }, []);
 
   const safeTrend = (trend: any) => {

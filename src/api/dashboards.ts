@@ -1285,50 +1285,39 @@ export async function getAuthorSalesReport(authorId: string) {
 }
 
 export async function getPartnerPayouts(partnerId: string) {
-  try {
-    await verifyRole(['partner', 'author', 'admin', 'founder']);
-    
-    // We filter by partner_id which links directly to the partner's profile
-    const { data, error } = await supabase
-      .from('fulfillment_ledger')
-      .select(`
-        *,
-        order:orders(id, status, total_amount, created_at, is_paid)
-      `)
-      .eq('partner_id', partnerId)
-      .order('created_at', { ascending: false });
+  return withRetry(async () => {
+    try {
+      await verifyRole(['partner', 'author', 'admin', 'founder']);
+      
+      // First Principles: Fetch ledger entries directly to avoid relationship errors
+      const { data: ledgerData, error: ledgerError } = await supabase
+        .from('fulfillment_ledger')
+        .select(`
+          id,
+          order_id,
+          partner_id,
+          amount,
+          payout_status,
+          metadata,
+          created_at
+        `)
+        .eq('partner_id', partnerId)
+        .order('created_at', { ascending: false });
+      
+      if (ledgerError) throw ledgerError;
+      if (!ledgerData || ledgerData.length === 0) return [];
 
-    if (error) {
-      // Handle relationship errors (PGRST200) or 400 Bad Request
-      if (error.code === 'PGRST200' || error.message?.includes('relationship') || error.message?.includes('cache') || (error as any).status === 400) {
-        console.warn('[API] Schema mismatch in partner payouts, retrying with simplified query...');
-        const { data: ledgerData, error: ledgerError } = await supabase
-          .from('fulfillment_ledger')
-          .select(`
-            id,
-            order_id,
-            partner_id,
-            amount,
-            payout_status,
-            metadata,
-            created_at
-          `)
-          .eq('partner_id', partnerId)
-          .order('created_at', { ascending: false });
+      // Manually fetch related orders
+      const orderIds = [...new Set(ledgerData.map((item: any) => item.order_id).filter(Boolean))];
+      
+      if (orderIds.length > 0) {
+        const { data: orderData, error: orderError } = await supabase
+          .from('orders')
+          .select('id, status, total_amount, created_at, is_paid')
+          .in('id', orderIds);
         
-        if (ledgerError) throw ledgerError;
-
-        if (!ledgerData || ledgerData.length === 0) return [];
-
-        // Manually fetch orders to avoid join errors
-        const orderIds = [...new Set(ledgerData.map((item: any) => item.order_id).filter(Boolean))];
-        if (orderIds.length > 0) {
-          const { data: orderData } = await supabase
-            .from('orders')
-            .select('id, status, total_amount, created_at, is_paid')
-            .in('id', orderIds);
-
-          const ordersMap = (orderData || []).reduce((acc: any, o: any) => {
+        if (!orderError && orderData) {
+          const ordersMap = orderData.reduce((acc: any, o: any) => {
             acc[o.id] = o;
             return acc;
           }, {});
@@ -1338,16 +1327,14 @@ export async function getPartnerPayouts(partnerId: string) {
             order: item.order_id ? ordersMap[item.order_id] : null
           }));
         }
-
-        return ledgerData || [];
       }
-      throw error;
+
+      return ledgerData;
+    } catch (err) {
+      console.error('Partner Payouts fetch failed:', err);
+      return [];
     }
-    return data || [];
-  } catch (err) {
-    console.error('Partner Payouts fetch failed:', err);
-    return [];
-  }
+  });
 }
 
 export async function getAuthorPayouts(authorId: string) {
@@ -1838,66 +1825,47 @@ export async function getAllPayouts() {
     try {
       await verifyAdmin();
       
-      const { data, error } = await supabase
+      // First Principles: Fetch ledger entries directly to avoid relationship errors
+      const { data: ledgerData, error: ledgerError } = await supabase
         .from('fulfillment_ledger')
         .select(`
-          *,
-          partner:profiles(id, full_name, email, role, avatar_url),
-          order:orders(id, status, total_amount, created_at, is_paid)
+          id,
+          order_id,
+          partner_id,
+          amount,
+          payout_status,
+          metadata,
+          created_at
         `)
         .order('created_at', { ascending: false });
+        
+      if (ledgerError) throw ledgerError;
+      if (!ledgerData || ledgerData.length === 0) return [];
 
-      if (error) {
-        // Handle relationship errors (PGRST200) or schema cache issues or 400 Bad Request
-        if (error.code === 'PGRST200' || error.code === 'PGRST204' || error.message?.includes('relationship') || error.message?.includes('cache') || (error as any).status === 400) {
-          console.warn('[API] Schema/Relationship mismatch in payouts, retrying with simplified query...');
-          
-          // Fallback: Fetch ledger entries and orders first, then resolve partners manually if needed
-          const { data: ledgerData, error: ledgerError } = await supabase
-            .from('fulfillment_ledger')
-            .select(`
-              id,
-              order_id,
-              partner_id,
-              amount,
-              payout_status,
-              metadata,
-              created_at
-            `)
-            .order('created_at', { ascending: false });
-            
-          if (ledgerError) throw ledgerError;
-          
-          if (!ledgerData || ledgerData.length === 0) return [];
+      // Fetch related data manually
+      const orderIds = [...new Set(ledgerData.map((item: any) => item.order_id).filter(Boolean))];
+      const partnerIds = [...new Set(ledgerData.map((item: any) => item.partner_id).filter(Boolean))];
 
-          // Fetch related data manually
-          const orderIds = [...new Set(ledgerData.map((item: any) => item.order_id).filter(Boolean))];
-          const partnerIds = [...new Set(ledgerData.map((item: any) => item.partner_id).filter(Boolean))];
+      const [ordersResponse, partnersResponse] = await Promise.all([
+        orderIds.length > 0 ? supabase.from('orders').select('id, status, total_amount, created_at, is_paid').in('id', orderIds) : Promise.resolve({ data: [] }),
+        partnerIds.length > 0 ? supabase.from('profiles').select('id, full_name, email, role, avatar_url').in('id', partnerIds) : Promise.resolve({ data: [] })
+      ]);
 
-          const [ordersResponse, partnersResponse] = await Promise.all([
-            orderIds.length > 0 ? supabase.from('orders').select('id, status, total_amount, created_at, is_paid').in('id', orderIds) : Promise.resolve({ data: [] }),
-            partnerIds.length > 0 ? supabase.from('profiles').select('id, full_name, email, role, avatar_url').in('id', partnerIds) : Promise.resolve({ data: [] })
-          ]);
+      const ordersMap = (ordersResponse.data || []).reduce((acc: any, o: any) => {
+        acc[o.id] = o;
+        return acc;
+      }, {});
 
-          const ordersMap = (ordersResponse.data || []).reduce((acc: any, o: any) => {
-            acc[o.id] = o;
-            return acc;
-          }, {});
-
-          const partnersMap = (partnersResponse.data || []).reduce((acc: any, p: any) => {
-            acc[p.id] = p;
-            return acc;
-          }, {});
-          
-          return ledgerData.map((item: any) => ({
-            ...item,
-            order: item.order_id ? ordersMap[item.order_id] : null,
-            partner: item.partner_id ? partnersMap[item.partner_id] : null
-          }));
-        }
-        throw error;
-      }
-      return data || [];
+      const partnersMap = (partnersResponse.data || []).reduce((acc: any, p: any) => {
+        acc[p.id] = p;
+        return acc;
+      }, {});
+      
+      return ledgerData.map((item: any) => ({
+        ...item,
+        order: item.order_id ? ordersMap[item.order_id] : null,
+        partner: item.partner_id ? partnersMap[item.partner_id] : null
+      }));
     } catch (err) {
       console.error('All Payouts fetch failed:', err);
       return [];
@@ -2615,32 +2583,34 @@ export async function createProduct(product: any) {
         hint: error.hint,
         payload: currentData
       });
-      // Handle missing columns or schema cache errors
+
+      // PGRST204: Column not found in schema cache
       if (error.code === 'PGRST204' || 
           (error.message?.includes('column') && 
            (error.message?.includes('not found') || error.message?.includes('cache')))) {
         
+        // Extract the missing column name from the error message
+        // Common formats:
+        // "Could not find the 'author_id' column of 'products' in the schema cache"
+        // "column 'author_id' does not exist"
         const match = error.message.match(/['"]([^'"]+)['"] column/) || 
                       error.message.match(/column ['"]([^'"]+)['"]/) ||
                       error.message.match(/column ([^ ]+) does not exist/);
         
         if (match && match[1]) {
-          let missingCol = match[1];
-          if (missingCol === 'products') {
-            const allMatches = error.message.matchAll(/['"]([^'"]+)['"]/g);
-            for (const m of allMatches) {
-              if (m[1] !== 'products') {
-                missingCol = m[1];
-                break;
-              }
-            }
-          }
-
-          if (missingCol !== 'products') {
-            console.warn(`Column ${missingCol} missing in products, filtering and retrying...`);
+          const missingCol = match[1];
+          // Don't delete 'id' or table name if it somehow matched
+          if (missingCol !== 'products' && missingCol !== 'id') {
+            console.warn(`[API] Column ${missingCol} missing in products schema cache, filtering and retrying...`);
             delete currentData[missingCol];
-            throw error; // Trigger retry
+            // We throw to trigger withRetry
+            throw error;
           }
+        } else if (error.message.includes('author_id')) {
+          // Hardcoded fallback for the common author_id error reported by user
+          console.warn('[API] author_id specifically missing in products schema cache, filtering and retrying...');
+          delete currentData['author_id'];
+          throw error;
         }
       }
       throw error;
