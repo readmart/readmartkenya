@@ -5,9 +5,9 @@ import path from 'path';
 // Load .env from project root
 dotenv.config({ path: path.resolve(process.cwd(), '.env') });
 
-const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const founderEmail = process.env.FOUNDER_EMAIL;
+const founderEmail = process.env.FOUNDER_EMAIL || process.env.VITE_FOUNDER_EMAIL;
 const founderPassword = process.env.FOUNDER_PASSWORD;
 const bootstrapEnabled = process.env.BOOTSTRAP_ENABLED === 'true';
 
@@ -52,7 +52,13 @@ async function bootstrap() {
       founderUser = user!;
       console.log('✅ Founder auth account created.');
     } else {
-      console.log('ℹ️ Founder auth account already exists.');
+      console.log('ℹ️ Founder auth account already exists. Updating password to ensure it matches .env...');
+      const { error: updateAuthError } = await supabase.auth.admin.updateUserById(
+        founderUser.id,
+        { password: founderPassword }
+      );
+      if (updateAuthError) throw updateAuthError;
+      console.log('✅ Founder password updated.');
     }
 
     // 2. Ensure profile exists and has 'founder' role

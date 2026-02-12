@@ -269,6 +269,14 @@ async function runMigration() {
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'partners' AND column_name = 'status') THEN
       ALTER TABLE public.partners ADD COLUMN status text DEFAULT 'active';
     END IF;
+
+    -- 10. Fix profiles table
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'profiles' AND column_name = 'phone') THEN
+      ALTER TABLE public.profiles ADD COLUMN phone text;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'profiles' AND column_name = 'address') THEN
+      ALTER TABLE public.profiles ADD COLUMN address text;
+    END IF;
   END $$;
 
   -- 9. Reload schema cache

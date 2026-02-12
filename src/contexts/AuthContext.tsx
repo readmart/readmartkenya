@@ -7,8 +7,8 @@ export interface Profile {
   id: string;
   full_name: string | null;
   avatar_url: string | null;
-  phone: string | null;
-  address: string | null;
+  phone?: string | null;
+  address?: string | null;
   role: UserRole;
   is_member?: boolean;
   membership_expires_at?: string;
@@ -64,7 +64,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const fetchProfile = async (userId: string) => {
     try {
-      const columns = 'id, full_name, avatar_url, role, phone, address, preferences, created_at, updated_at';
+      const columns = 'id, full_name, avatar_url, role, preferences, created_at, updated_at';
       let { data, error } = await supabase
         .from('profiles')
         .select(columns)
