@@ -1638,8 +1638,8 @@ export async function getAllPayouts() {
         .from('fulfillment_ledger')
         .select(`
           *,
-          partner:profiles!partner_id(*),
-          order:orders!inner(*)
+          partner:profiles(id, full_name, email, role, avatar_url),
+          order:orders(id, status, total_amount, created_at, is_paid)
         `)
         .order('created_at', { ascending: false });
 
@@ -1653,7 +1653,7 @@ export async function getAllPayouts() {
             .from('fulfillment_ledger')
             .select(`
               *,
-              order:orders!inner(*)
+              order:orders(id, status, total_amount, created_at, is_paid)
             `)
             .order('created_at', { ascending: false });
             
