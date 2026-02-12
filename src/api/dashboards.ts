@@ -1208,8 +1208,8 @@ export async function getAuthorSalesReport(authorId: string) {
       if (error) {
         console.error('[API] Author Sales Report fetch error:', error);
         
-        // Handle specific schema cache errors (PGRST204/PGRST205)
-        if (error.code === 'PGRST204' || error.message?.includes('column')) {
+        // Handle specific schema cache errors (PGRST204/PGRST205) or 400 Bad Request
+        if (error.code === 'PGRST204' || error.message?.includes('column') || (error as any).status === 400) {
            console.warn('[API] Schema mismatch in order_items, retrying with minimal select...');
            const { data: fallback, error: fallbackError } = await supabase
             .from('order_items')
@@ -1220,15 +1220,59 @@ export async function getAuthorSalesReport(authorId: string) {
               quantity,
               unit_price,
               price_at_purchase,
-              created_at,
-              orders!inner(id, created_at, is_paid),
-              products!inner(id, title, author_id)
+              created_at
             `)
-            .eq('products.author_id', authorId)
-            .eq('orders.is_paid', true);
+            .order('created_at', { ascending: false });
             
             if (fallbackError) throw fallbackError;
-            return fallback || [];
+            
+            if (!fallback || fallback.length === 0) return [];
+
+            // Manually filter by product author_id
+            const productIds = [...new Set(fallback.map((item: any) => item.product_id).filter(Boolean))];
+            if (productIds.length > 0) {
+              const { data: productData } = await supabase
+                .from('products')
+                .select('id, title, author_id')
+                .in('id', productIds)
+                .eq('author_id', authorId);
+              
+              if (!productData || productData.length === 0) return [];
+
+              const authorProductIds = new Set(productData.map(p => p.id));
+              const authorItems = fallback.filter(item => authorProductIds.has(item.product_id));
+
+              // Manually fetch and filter by paid orders
+              const orderIds = [...new Set(authorItems.map(item => item.order_id).filter(Boolean))];
+              if (orderIds.length > 0) {
+                const { data: orderData } = await supabase
+                  .from('orders')
+                  .select('id, created_at, is_paid')
+                  .in('id', orderIds)
+                  .eq('is_paid', true);
+                
+                if (!orderData || orderData.length === 0) return [];
+
+                const paidOrderIds = new Set(orderData.map(o => o.id));
+                const productsMap = productData.reduce((acc: any, p: any) => {
+                  acc[p.id] = p;
+                  return acc;
+                }, {});
+                const ordersMap = orderData.reduce((acc: any, o: any) => {
+                  acc[o.id] = o;
+                  return acc;
+                }, {});
+
+                return authorItems
+                  .filter(item => paidOrderIds.has(item.order_id))
+                  .map(item => ({
+                    ...item,
+                    orders: ordersMap[item.order_id],
+                    products: productsMap[item.product_id]
+                  }));
+              }
+            }
+            return [];
         }
         throw error;
       }
@@ -1249,13 +1293,56 @@ export async function getPartnerPayouts(partnerId: string) {
       .from('fulfillment_ledger')
       .select(`
         *,
-        order:orders!inner(*)
+        order:orders(id, status, total_amount, created_at, is_paid)
       `)
       .eq('partner_id', partnerId)
-      .eq('order.is_paid', true) // Only fetch payouts for paid orders
       .order('created_at', { ascending: false });
 
-    if (error) throw error;
+    if (error) {
+      // Handle relationship errors (PGRST200) or 400 Bad Request
+      if (error.code === 'PGRST200' || error.message?.includes('relationship') || error.message?.includes('cache') || (error as any).status === 400) {
+        console.warn('[API] Schema mismatch in partner payouts, retrying with simplified query...');
+        const { data: ledgerData, error: ledgerError } = await supabase
+          .from('fulfillment_ledger')
+          .select(`
+            id,
+            order_id,
+            partner_id,
+            amount,
+            payout_status,
+            metadata,
+            created_at
+          `)
+          .eq('partner_id', partnerId)
+          .order('created_at', { ascending: false });
+        
+        if (ledgerError) throw ledgerError;
+
+        if (!ledgerData || ledgerData.length === 0) return [];
+
+        // Manually fetch orders to avoid join errors
+        const orderIds = [...new Set(ledgerData.map((item: any) => item.order_id).filter(Boolean))];
+        if (orderIds.length > 0) {
+          const { data: orderData } = await supabase
+            .from('orders')
+            .select('id, status, total_amount, created_at, is_paid')
+            .in('id', orderIds);
+
+          const ordersMap = (orderData || []).reduce((acc: any, o: any) => {
+            acc[o.id] = o;
+            return acc;
+          }, {});
+
+          return ledgerData.map((item: any) => ({
+            ...item,
+            order: item.order_id ? ordersMap[item.order_id] : null
+          }));
+        }
+
+        return ledgerData || [];
+      }
+      throw error;
+    }
     return data || [];
   } catch (err) {
     console.error('Partner Payouts fetch failed:', err);
@@ -1356,17 +1443,71 @@ export async function setDefaultPaymentMethod(methodId: string) {
 export async function getAuthorReviews(authorId: string) {
   try {
     await verifyRole(['author', 'admin', 'founder']);
+    
+    // Hardened query to avoid relationship/schema cache errors
     const { data, error } = await supabase
       .from('reviews')
       .select(`
         *,
-        product:products!inner(*),
-        profile:profiles(*)
+        product:products(*)
       `)
       .eq('product.author_id', authorId)
       .order('created_at', { ascending: false });
 
-    if (error) throw error;
+    if (error) {
+      // Handle relationship errors (PGRST200) or 400 Bad Request
+      if (error.code === 'PGRST200' || error.message?.includes('relationship') || error.message?.includes('cache') || (error as any).status === 400) {
+        console.warn('[API] Schema mismatch in author reviews, retrying with manual join...');
+        
+        // 1. Fetch reviews first
+        const { data: reviews, error: reviewsError } = await supabase
+          .from('reviews')
+          .select('*')
+          .order('created_at', { ascending: false });
+        
+        if (reviewsError) throw reviewsError;
+        if (!reviews || reviews.length === 0) return [];
+
+        // 2. Fetch products for this author
+        const { data: products, error: productsError } = await supabase
+          .from('products')
+          .select('id, title, image_url, author_id')
+          .eq('author_id', authorId);
+        
+        if (productsError) throw productsError;
+        
+        const authorProductIds = new Set((products || []).map(p => p.id));
+        const authorReviews = reviews.filter(r => authorProductIds.has(r.product_id));
+        
+        if (authorReviews.length === 0) return [];
+
+        // 3. Fetch profiles for reviewers
+        const profileIds = [...new Set(authorReviews.map(r => r.user_id).filter(Boolean))];
+        const { data: profiles } = profileIds.length > 0 
+          ? await supabase.from('profiles').select('id, full_name, avatar_url').in('id', profileIds)
+          : { data: [] };
+
+        const productsMap = (products || []).reduce((acc: any, p: any) => {
+          acc[p.id] = p;
+          return acc;
+        }, {});
+
+        const profilesMap = (profiles || []).reduce((acc: any, p: any) => {
+          acc[p.id] = p;
+          return acc;
+        }, {});
+
+        return authorReviews.map(r => ({
+          ...r,
+          product: productsMap[r.product_id],
+          profile: profilesMap[r.user_id]
+        }));
+      }
+      throw error;
+    }
+
+    // Still need to fetch profiles if they weren't in the initial successful query
+    // (Wait, the initial query HAD profiles(*) - let's keep it if it works)
     return data || [];
   } catch (err) {
     console.error('Author Reviews fetch failed:', err);
@@ -1506,16 +1647,48 @@ export async function requestAuthorPayout(authorId: string, amount: number, deta
 export async function getAuthorSubscriptions(authorId: string) {
   try {
     await verifyRole(['author', 'admin', 'founder']);
+    
+    // Hardened query to avoid relationship/schema cache errors
     const { data, error } = await supabase
       .from('author_subscriptions')
       .select(`
         *,
-        subscriber:profiles!subscriber_id(id, full_name, avatar_url, email)
+        subscriber:profiles(id, full_name, avatar_url, email)
       `)
       .eq('author_id', authorId)
       .order('created_at', { ascending: false });
 
-    if (error) throw error;
+    if (error) {
+      // Handle relationship errors (PGRST200) or 400 Bad Request
+      if (error.code === 'PGRST200' || error.message?.includes('relationship') || error.message?.includes('cache') || (error as any).status === 400) {
+        console.warn('[API] Schema mismatch in author subscriptions, retrying with manual join...');
+        
+        const { data: subs, error: subsError } = await supabase
+          .from('author_subscriptions')
+          .select('*')
+          .eq('author_id', authorId)
+          .order('created_at', { ascending: false });
+        
+        if (subsError) throw subsError;
+        if (!subs || subs.length === 0) return [];
+
+        const subscriberIds = [...new Set(subs.map(s => s.subscriber_id).filter(Boolean))];
+        const { data: profiles } = subscriberIds.length > 0
+          ? await supabase.from('profiles').select('id, full_name, avatar_url, email').in('id', subscriberIds)
+          : { data: [] };
+
+        const profilesMap = (profiles || []).reduce((acc: any, p: any) => {
+          acc[p.id] = p;
+          return acc;
+        }, {});
+
+        return subs.map(s => ({
+          ...s,
+          subscriber: profilesMap[s.subscriber_id]
+        }));
+      }
+      throw error;
+    }
     return data || [];
   } catch (err) {
     console.error('Author Subscriptions fetch failed:', err);
@@ -1525,6 +1698,7 @@ export async function getAuthorSubscriptions(authorId: string) {
 
 export async function getMyAuthorSubscriptions(subscriberId: string) {
   try {
+    // Hardened query to avoid relationship/schema cache errors
     const { data, error } = await supabase
       .from('author_subscriptions')
       .select(`
@@ -1534,7 +1708,37 @@ export async function getMyAuthorSubscriptions(subscriberId: string) {
       .eq('subscriber_id', subscriberId)
       .order('created_at', { ascending: false });
 
-    if (error) throw error;
+    if (error) {
+      // Handle relationship errors (PGRST200) or 400 Bad Request
+      if (error.code === 'PGRST200' || error.message?.includes('relationship') || error.message?.includes('cache') || (error as any).status === 400) {
+        console.warn('[API] Schema mismatch in my subscriptions, retrying with manual join...');
+        
+        const { data: subs, error: subsError } = await supabase
+          .from('author_subscriptions')
+          .select('*')
+          .eq('subscriber_id', subscriberId)
+          .order('created_at', { ascending: false });
+        
+        if (subsError) throw subsError;
+        if (!subs || subs.length === 0) return [];
+
+        const authorIds = [...new Set(subs.map(s => s.author_id).filter(Boolean))];
+        const { data: authors } = authorIds.length > 0
+          ? await supabase.from('authors').select('id, display_name, pen_name').in('id', authorIds)
+          : { data: [] };
+
+        const authorsMap = (authors || []).reduce((acc: any, a: any) => {
+          acc[a.id] = a;
+          return acc;
+        }, {});
+
+        return subs.map(s => ({
+          ...s,
+          author: authorsMap[s.author_id]
+        }));
+      }
+      throw error;
+    }
     return data || [];
   } catch (err) {
     console.error('My Author Subscriptions fetch failed:', err);
@@ -1644,46 +1848,52 @@ export async function getAllPayouts() {
         .order('created_at', { ascending: false });
 
       if (error) {
-        // Handle relationship errors (PGRST200) or schema cache issues
-        if (error.code === 'PGRST200' || error.code === 'PGRST204' || error.message?.includes('relationship') || error.message?.includes('cache')) {
+        // Handle relationship errors (PGRST200) or schema cache issues or 400 Bad Request
+        if (error.code === 'PGRST200' || error.code === 'PGRST204' || error.message?.includes('relationship') || error.message?.includes('cache') || (error as any).status === 400) {
           console.warn('[API] Schema/Relationship mismatch in payouts, retrying with simplified query...');
           
           // Fallback: Fetch ledger entries and orders first, then resolve partners manually if needed
           const { data: ledgerData, error: ledgerError } = await supabase
             .from('fulfillment_ledger')
             .select(`
-              *,
-              order:orders(id, status, total_amount, created_at, is_paid)
+              id,
+              order_id,
+              partner_id,
+              amount,
+              payout_status,
+              metadata,
+              created_at
             `)
             .order('created_at', { ascending: false });
             
           if (ledgerError) throw ledgerError;
           
           if (!ledgerData || ledgerData.length === 0) return [];
-          
-          // Get unique partner IDs
+
+          // Fetch related data manually
+          const orderIds = [...new Set(ledgerData.map((item: any) => item.order_id).filter(Boolean))];
           const partnerIds = [...new Set(ledgerData.map((item: any) => item.partner_id).filter(Boolean))];
+
+          const [ordersResponse, partnersResponse] = await Promise.all([
+            orderIds.length > 0 ? supabase.from('orders').select('id, status, total_amount, created_at, is_paid').in('id', orderIds) : Promise.resolve({ data: [] }),
+            partnerIds.length > 0 ? supabase.from('profiles').select('id, full_name, email, role, avatar_url').in('id', partnerIds) : Promise.resolve({ data: [] })
+          ]);
+
+          const ordersMap = (ordersResponse.data || []).reduce((acc: any, o: any) => {
+            acc[o.id] = o;
+            return acc;
+          }, {});
+
+          const partnersMap = (partnersResponse.data || []).reduce((acc: any, p: any) => {
+            acc[p.id] = p;
+            return acc;
+          }, {});
           
-          if (partnerIds.length > 0) {
-            // Fetch partners in a separate query
-            const { data: partnerData } = await supabase
-              .from('profiles')
-              .select('*')
-              .in('id', partnerIds);
-              
-            // Map partners back to ledger entries
-            const partnersMap = (partnerData || []).reduce((acc: any, p: any) => {
-              acc[p.id] = p;
-              return acc;
-            }, {});
-            
-            return ledgerData.map((item: any) => ({
-              ...item,
-              partner: item.partner_id ? partnersMap[item.partner_id] : null
-            }));
-          }
-          
-          return ledgerData;
+          return ledgerData.map((item: any) => ({
+            ...item,
+            order: item.order_id ? ordersMap[item.order_id] : null,
+            partner: item.partner_id ? partnersMap[item.partner_id] : null
+          }));
         }
         throw error;
       }

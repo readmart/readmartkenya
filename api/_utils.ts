@@ -174,22 +174,15 @@ export const calculateOrderCommissions = async (orderId: string) => {
         shipping_zone_id, 
         status, 
         payment_status, 
-        is_paid,
-        order_items(
-          id,
-          product_id,
-          quantity,
-          price,
-          price_at_purchase,
-          product_snapshot
-        )
+        is_paid
       `)
       .eq('id', orderId)
       .single();
     
     if (orderError || !initialOrder) {
-      if (orderError?.code === 'PGRST204' || orderError?.message?.includes('cache')) {
-        console.warn('Orders schema cache issue in calculateOrderCommissions, retrying with minimal selection');
+      // Handle relationship errors (PGRST200) or cache issues (PGRST204)
+      if (orderError?.code === 'PGRST200' || orderError?.code === 'PGRST204' || orderError?.message?.includes('relationship') || orderError?.message?.includes('cache')) {
+        console.warn(`[API] Schema mismatch in calculateOrderCommissions for order ${orderId}, retrying with minimal selection`);
         const { data: fallbackOrder, error: fallbackError } = await supabase
           .from('orders')
           .select('id, user_id, total_amount, shipping_amount, shipping_zone_id, status')
@@ -197,22 +190,29 @@ export const calculateOrderCommissions = async (orderId: string) => {
           .single();
         
         if (fallbackError) throw fallbackError;
-        
-        // Fetch items separately
-        const { data: fallbackItems } = await supabase
-          .from('order_items')
-          .select('id, product_id, quantity, price, price_at_purchase, product_snapshot')
-          .eq('order_id', orderId);
-          
         order = fallbackOrder;
-        if (order) {
-          order.order_items = fallbackItems || [];
-        }
       } else {
         throw orderError || new Error('Order not found');
       }
     } else {
       order = initialOrder;
+    }
+
+    // Always fetch items separately to avoid PGRST200 relationship issues
+    const { data: orderItems, error: itemsError } = await supabase
+      .from('order_items')
+      .select('id, product_id, quantity, price, price_at_purchase, product_snapshot, author_id')
+      .eq('order_id', orderId);
+
+    if (itemsError) {
+      console.warn(`[API] Order items fetch failed for order ${orderId}, trying minimal select:`, itemsError);
+      const { data: fallbackItems } = await supabase
+        .from('order_items')
+        .select('id, product_id, quantity, price_at_purchase')
+        .eq('order_id', orderId);
+      order.order_items = fallbackItems || [];
+    } else {
+      order.order_items = orderItems || [];
     }
     
     if (!order) throw new Error('Order not found after fallback');

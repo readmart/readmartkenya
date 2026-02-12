@@ -1505,9 +1505,19 @@ function AnalyticsView({ data, formatPrice }: any) {
   );
 
   const [shouldRenderChart, setShouldRenderChart] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const timer = setTimeout(() => setShouldRenderChart(true), 500);
+    // We use a small delay but also check if the container is ready
+    const timer = setTimeout(() => {
+      if (containerRef.current && containerRef.current.offsetWidth > 0) {
+        setShouldRenderChart(true);
+      } else {
+        // Retry if container not ready
+        const retryTimer = setTimeout(() => setShouldRenderChart(true), 1000);
+        return () => clearTimeout(retryTimer);
+      }
+    }, 300);
     return () => clearTimeout(timer);
   }, []);
 
@@ -1576,7 +1586,7 @@ function AnalyticsView({ data, formatPrice }: any) {
               </div>
             </div>
           </div>
-          <div className="h-[400px] min-h-[400px] w-full relative">
+          <div className="h-[400px] min-h-[400px] w-full relative" ref={containerRef}>
             {shouldRenderChart && (
               <ResponsiveContainer width="100%" height="100%" minWidth={0}>
                 <AreaChart data={data.salesData}>
