@@ -57,13 +57,22 @@ async function inspectProductsTable() {
     console.table(columns);
   }
 
-  // 3. Test if 'title' specifically can be selected
-  console.log('🧪 Testing "title" column selection...');
-  const { error: titleError } = await supabase.from('products').select('title').limit(1);
-  if (titleError) {
-    console.error('❌ Error selecting "title":', titleError.message);
+  // 4. Test "name" column selection
+  console.log('🧪 Testing "name" column selection...');
+  const { error: nameError } = await supabase.from('products').select('name').limit(1);
+  if (nameError) {
+    console.log('❌ "name" column is NOT selectable (or does not exist):', nameError.message);
   } else {
-    console.log('✅ "title" column is selectable.');
+    console.log('✅ "name" column IS selectable.');
+  }
+
+  // 5. Test "is_published" column selection
+  console.log('🧪 Testing "is_published" column selection...');
+  const { error: pubError } = await supabase.from('products').select('is_published').limit(1);
+  if (pubError) {
+    console.log('❌ "is_published" column is NOT selectable:', pubError.message);
+  } else {
+    console.log('✅ "is_published" column IS selectable.');
   }
 }
 

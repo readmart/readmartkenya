@@ -77,11 +77,28 @@ export async function getPartnershipTiers() {
     const { data, error } = await supabase
       .from('partnership_tiers')
       .select('*')
-      .eq('is_active', true)
-      .order('display_order', { ascending: true });
+      .eq('is_active', true);
 
-    if (error) throw error;
-    return data as PartnershipTier[];
+    if (error) {
+      if (error.message?.includes('is_active') || error.message?.includes('column')) {
+        console.warn('Advanced partnership_tiers columns missing, falling back to basic columns');
+        const { data: fallbackData, error: fallbackError } = await supabase
+          .from('partnership_tiers')
+          .select('id, name, description, benefits');
+        
+        if (fallbackError) throw fallbackError;
+        return fallbackData as PartnershipTier[];
+      }
+      throw error;
+    }
+    
+    // Sort manually if display_order exists in the returned data
+    const sortedData = [...(data || [])];
+    if (sortedData.length > 0 && 'display_order' in sortedData[0]) {
+      sortedData.sort((a, b) => (a.display_order || 0) - (b.display_order || 0));
+    }
+    
+    return sortedData as PartnershipTier[];
   } catch (err) {
     console.error('Failed to fetch partnership tiers:', err);
     return [];
@@ -93,12 +110,23 @@ export async function getPartnershipTiers() {
  */
 export async function getPartners() {
   try {
+    // Try with all columns first
     const { data, error } = await supabase
       .from('partners')
       .select('*, partnership_tiers(name, color_code)')
       .eq('status', 'active');
 
-    if (error) throw error;
+    if (error) {
+      if (error.message?.includes('column') || error.message?.includes('cache')) {
+        console.warn('Advanced partners columns missing, falling back to core columns');
+        const { data: fallbackData, error: fallbackError } = await supabase
+          .from('partners')
+          .select('id, company_name, tier_id, partnership_tiers(name)');
+        if (fallbackError) throw fallbackError;
+        return fallbackData;
+      }
+      throw error;
+    }
     return data;
   } catch (err) {
     console.error('Failed to fetch partners:', err);

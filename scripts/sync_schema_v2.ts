@@ -112,7 +112,166 @@ async function runMigration() {
       recorded_at timestamp with time zone DEFAULT now()
   );
 
-  -- 5. Reload schema cache
+  -- 5. Fix products table
+  DO $$ 
+  BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'products' AND column_name = 'is_published') THEN
+      ALTER TABLE public.products ADD COLUMN is_published boolean DEFAULT true; 
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'products' AND column_name = 'type') THEN
+      ALTER TABLE public.products ADD COLUMN type text DEFAULT 'physical';      
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'products' AND column_name = 'author') THEN
+      ALTER TABLE public.products ADD COLUMN author text;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'products' AND column_name = 'is_featured') THEN
+      ALTER TABLE public.products ADD COLUMN is_featured boolean DEFAULT false;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'products' AND column_name = 'name') THEN
+      ALTER TABLE public.products ADD COLUMN name text;
+      -- Populate name from title if it exists
+      UPDATE public.products SET name = title WHERE name IS NULL;
+    END IF;
+  END $$;
+
+  -- 6. Fix shipping_zones table
+  DO $$ 
+  BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'shipping_zones' AND column_name = 'rate') THEN
+      IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'shipping_zones' AND column_name = 'price') THEN
+        ALTER TABLE public.shipping_zones RENAME COLUMN price TO rate;
+      ELSIF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'shipping_zones' AND column_name = 'base_rate') THEN
+        ALTER TABLE public.shipping_zones RENAME COLUMN base_rate TO rate;
+      ELSE
+        ALTER TABLE public.shipping_zones ADD COLUMN rate decimal(12,2) DEFAULT 0.00;
+      END IF;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'shipping_zones' AND column_name = 'estimated_days') THEN
+      ALTER TABLE public.shipping_zones ADD COLUMN estimated_days integer DEFAULT 3;
+    END IF;
+  END $$;
+
+  -- 7. Fix site_settings table
+  CREATE TABLE IF NOT EXISTS public.site_settings (
+      id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+      site_name text DEFAULT 'ReadMart',
+      created_at timestamp with time zone DEFAULT now()
+  );
+
+  DO $$ 
+  BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'site_settings' AND column_name = 'site_logo') THEN
+      ALTER TABLE public.site_settings ADD COLUMN site_logo text DEFAULT '/assets/logo.jpg';
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'site_settings' AND column_name = 'whatsapp_link') THEN
+      ALTER TABLE public.site_settings ADD COLUMN whatsapp_link text DEFAULT 'https://wa.me/254794129958';
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'site_settings' AND column_name = 'contact_email') THEN
+      ALTER TABLE public.site_settings ADD COLUMN contact_email text DEFAULT 'hello@readmart.com';
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'site_settings' AND column_name = 'contact_phone') THEN
+      ALTER TABLE public.site_settings ADD COLUMN contact_phone text DEFAULT '+254 794 129 958';
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'site_settings' AND column_name = 'secondary_phone') THEN
+      ALTER TABLE public.site_settings ADD COLUMN secondary_phone text DEFAULT '+254 741 658 548';
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'site_settings' AND column_name = 'address') THEN
+      ALTER TABLE public.site_settings ADD COLUMN address text DEFAULT 'Nairobi, Kenya';
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'site_settings' AND column_name = 'working_hours') THEN
+      ALTER TABLE public.site_settings ADD COLUMN working_hours text DEFAULT 'Mon-Fri: 8am - 5pm';
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'site_settings' AND column_name = 'tax_rate') THEN
+      ALTER TABLE public.site_settings ADD COLUMN tax_rate decimal(5,2) DEFAULT 16.00;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'site_settings' AND column_name = 'default_currency') THEN
+      ALTER TABLE public.site_settings ADD COLUMN default_currency text DEFAULT 'KES';
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'site_settings' AND column_name = 'maintenance_mode') THEN
+      ALTER TABLE public.site_settings ADD COLUMN maintenance_mode boolean DEFAULT false;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'site_settings' AND column_name = 'instagram_url') THEN
+      ALTER TABLE public.site_settings ADD COLUMN instagram_url text DEFAULT 'https://www.instagram.com/readmartke';
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'site_settings' AND column_name = 'facebook_url') THEN
+      ALTER TABLE public.site_settings ADD COLUMN facebook_url text DEFAULT 'https://www.facebook.com/share/1LB4jKLTTV/';
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'site_settings' AND column_name = 'x_url') THEN
+      ALTER TABLE public.site_settings ADD COLUMN x_url text DEFAULT 'https://x.com/readmartke';
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'site_settings' AND column_name = 'linkedin_url') THEN
+      ALTER TABLE public.site_settings ADD COLUMN linkedin_url text DEFAULT 'https://linkedin.com/comm/mynetwork/discovery-see-all?usecase=PEOPLE_FOLLOWS&followMember=read-mart-6797423a1';
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'site_settings' AND column_name = 'tiktok_url') THEN
+      ALTER TABLE public.site_settings ADD COLUMN tiktok_url text DEFAULT 'https://www.tiktok.com/@readmartke';
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'site_settings' AND column_name = 'threads_url') THEN
+      ALTER TABLE public.site_settings ADD COLUMN threads_url text DEFAULT 'https://www.threads.net/@readmartke';
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'site_settings' AND column_name = 'global_announcement') THEN
+      ALTER TABLE public.site_settings ADD COLUMN global_announcement text DEFAULT '';
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'site_settings' AND column_name = 'announcement_active') THEN
+      ALTER TABLE public.site_settings ADD COLUMN announcement_active boolean DEFAULT false;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'site_settings' AND column_name = 'membership_wall_active') THEN
+      ALTER TABLE public.site_settings ADD COLUMN membership_wall_active boolean DEFAULT false;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'site_settings' AND column_name = 'membership_price') THEN
+      ALTER TABLE public.site_settings ADD COLUMN membership_price decimal(12,2) DEFAULT 1000.00;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'site_settings' AND column_name = 'membership_duration_days') THEN
+      ALTER TABLE public.site_settings ADD COLUMN membership_duration_days integer DEFAULT 30;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'site_settings' AND column_name = 'membership_title') THEN
+      ALTER TABLE public.site_settings ADD COLUMN membership_title text DEFAULT 'ReadMart Premium Member';
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'site_settings' AND column_name = 'membership_description') THEN
+      ALTER TABLE public.site_settings ADD COLUMN membership_description text DEFAULT 'Get exclusive access to book clubs, insights, and early bird events.';
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'site_settings' AND column_name = 'author_of_the_day_id') THEN
+      ALTER TABLE public.site_settings ADD COLUMN author_of_the_day_id uuid;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'site_settings' AND column_name = 'author_of_the_day_enabled') THEN
+      ALTER TABLE public.site_settings ADD COLUMN author_of_the_day_enabled boolean DEFAULT false;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'site_settings' AND column_name = 'author_of_the_day_books') THEN
+      ALTER TABLE public.site_settings ADD COLUMN author_of_the_day_books text[] DEFAULT '{}'::text[];
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'site_settings' AND column_name = 'author_of_the_day_image') THEN
+      ALTER TABLE public.site_settings ADD COLUMN author_of_the_day_image text;
+    END IF;
+  END $$;
+
+  -- Ensure at least one settings row exists
+  INSERT INTO public.site_settings (site_name)
+  SELECT 'ReadMart'
+  WHERE NOT EXISTS (SELECT 1 FROM public.site_settings);
+
+  -- 8. Fix partnership tables
+  DO $$ 
+  BEGIN
+    -- Fix partnership_tiers
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'partnership_tiers' AND column_name = 'color_code') THEN
+      ALTER TABLE public.partnership_tiers ADD COLUMN color_code text DEFAULT '#808080';
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'partnership_tiers' AND column_name = 'display_order') THEN
+      ALTER TABLE public.partnership_tiers ADD COLUMN display_order integer DEFAULT 0;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'partnership_tiers' AND column_name = 'is_active') THEN
+      ALTER TABLE public.partnership_tiers ADD COLUMN is_active boolean DEFAULT true;
+    END IF;
+
+    -- Fix partners
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'partners' AND column_name = 'category') THEN
+      ALTER TABLE public.partners ADD COLUMN category text;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'partners' AND column_name = 'status') THEN
+      ALTER TABLE public.partners ADD COLUMN status text DEFAULT 'active';
+    END IF;
+  END $$;
+
+  -- 9. Reload schema cache
   NOTIFY pgrst, 'reload schema';
   `;
 

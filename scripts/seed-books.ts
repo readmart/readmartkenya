@@ -4,15 +4,20 @@ import path from 'path';
 
 dotenv.config({ path: path.resolve(process.cwd(), '.env') });
 
-const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-if (!supabaseUrl || !supabaseServiceKey) {
-  console.error('Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY');
-  process.exit(1);
+if (!supabaseUrl || !supabaseServiceKey || supabaseServiceKey === 'YOUR_SERVICE_ROLE_KEY_HERE') {
+  console.error('Missing or placeholder SUPABASE_SERVICE_ROLE_KEY in .env');
+  console.log('Using Anon Key as fallback for testing select...');
+  const anonKey = process.env.VITE_SUPABASE_ANON_KEY;
+  if (!anonKey) {
+    console.error('Missing VITE_SUPABASE_ANON_KEY as well.');
+    process.exit(1);
+  }
 }
 
-const supabase = createClient(supabaseUrl, supabaseServiceKey);
+const supabase = createClient(supabaseUrl!, (supabaseServiceKey && supabaseServiceKey !== 'YOUR_SERVICE_ROLE_KEY_HERE') ? supabaseServiceKey : process.env.VITE_SUPABASE_ANON_KEY!);
 
 const bookFiles = [
   '20240923044324.jpg',
@@ -61,6 +66,12 @@ const authors = [
 async function seedBooks() {
   console.log('🚀 Starting Book Seeding Process...');
 
+  // Check if we have service role key for upsert
+  const isServiceRole = supabaseServiceKey && supabaseServiceKey !== 'YOUR_SERVICE_ROLE_KEY_HERE';
+  if (!isServiceRole) {
+    console.warn('⚠️ No Service Role Key found. Upsert will likely fail due to RLS.');
+  }
+
   // 1. Get categories
   const { data: categories, error: catError } = await supabase
     .from('categories')
@@ -91,13 +102,13 @@ async function seedBooks() {
     const price = Math.floor(Math.random() * (5000 - 500 + 1)) + 500;
 
     return {
+      name: title,
       title,
       slug,
       description: `A premium selection from the ReadMart ${category.name} collection. This book offers profound insights and a captivating reading experience.`,
       price,
       category_id: category.id,
       stock_quantity: Math.floor(Math.random() * 50) + 10,
-      is_published: true,
       image_url: `/assets/books/${filename}`,
       metadata: {
         author,
