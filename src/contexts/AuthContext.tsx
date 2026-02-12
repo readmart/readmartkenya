@@ -64,7 +64,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const fetchProfile = async (userId: string) => {
     try {
-      const columns = 'id, full_name, avatar_url, role, preferences, created_at, updated_at';
+      // Include phone and address which are needed for checkout/profile management
+      const columns = 'id, full_name, avatar_url, role, phone, address, preferences, created_at, updated_at';
       let { data, error } = await supabase
         .from('profiles')
         .select(columns)
@@ -99,7 +100,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         } else {
           console.error('Profile fetch error:', error);
         }
-        // Don't throw, just allow the user to be logged in without a profile
       }
 
       // If profile doesn't exist (e.g., OAuth first time), create it

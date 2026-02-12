@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   User, Package, Heart, Settings, LogOut, 
-  ChevronRight, MapPin, Phone, Mail,
+  ChevronRight, Phone, Mail,
   Shield, Bell, Clock, Star, Trash2, ShoppingCart,
   Loader2, Briefcase, PenTool, ExternalLink, ShieldCheck,
   BookOpen, Download
@@ -42,17 +42,13 @@ export default function Account() {
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [isUpdatingProfile, setIsUpdatingProfile] = useState(false);
   const [profileForm, setProfileForm] = useState({
-    full_name: profile?.full_name || '',
-    phone: profile?.phone || '',
-    address: profile?.address || ''
+    full_name: profile?.full_name || ''
   });
 
   useEffect(() => {
     if (profile) {
       setProfileForm({
-        full_name: profile.full_name || '',
-        phone: profile.phone || '',
-        address: profile.address || ''
+        full_name: profile.full_name || ''
       });
     }
   }, [profile]);
@@ -391,7 +387,7 @@ export default function Account() {
                         <form onSubmit={handleProfileUpdate} className="glass p-8 rounded-[2.5rem] border-primary/30 space-y-6">
                           <h3 className="text-xl font-black uppercase tracking-tight mb-6">Edit Information</h3>
                           <div className="grid md:grid-cols-2 gap-6">
-                            <div className="space-y-2">
+                            <div className="md:col-span-2 space-y-2">
                               <label className="text-xs font-black uppercase tracking-widest text-muted-foreground ml-1">Full Name</label>
                               <input 
                                 type="text" 
@@ -399,26 +395,6 @@ export default function Account() {
                                 onChange={(e) => setProfileForm({ ...profileForm, full_name: e.target.value })}
                                 className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 px-6 font-bold focus:border-primary/50 outline-none transition-all"
                                 required
-                              />
-                            </div>
-                            <div className="space-y-2">
-                              <label className="text-xs font-black uppercase tracking-widest text-muted-foreground ml-1">Phone Number</label>
-                              <input 
-                                type="tel" 
-                                value={profileForm.phone}
-                                onChange={(e) => setProfileForm({ ...profileForm, phone: e.target.value })}
-                                className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 px-6 font-bold focus:border-primary/50 outline-none transition-all"
-                                placeholder="+254..."
-                              />
-                            </div>
-                            <div className="md:col-span-2 space-y-2">
-                              <label className="text-xs font-black uppercase tracking-widest text-muted-foreground ml-1">Address / Location</label>
-                              <input 
-                                type="text" 
-                                value={profileForm.address}
-                                onChange={(e) => setProfileForm({ ...profileForm, address: e.target.value })}
-                                className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 px-6 font-bold focus:border-primary/50 outline-none transition-all"
-                                placeholder="e.g. Nairobi, Kenya"
                               />
                             </div>
                           </div>
@@ -482,20 +458,6 @@ export default function Account() {
                       <div className="glass p-4 rounded-2xl flex items-center gap-4 border-white/5">
                         <Mail className="w-5 h-5 text-primary" />
                         <span className="font-bold">{user?.email}</span>
-                      </div>
-                    </div>
-                    <div className="space-y-4">
-                      <label className="text-xs font-black uppercase tracking-widest text-muted-foreground ml-1">Phone Number</label>
-                      <div className="glass p-4 rounded-2xl flex items-center gap-4 border-white/5">
-                        <Phone className="w-5 h-5 text-primary" />
-                        <span className="font-bold">{profile?.phone || 'Not provided'}</span>
-                      </div>
-                    </div>
-                    <div className="space-y-4">
-                      <label className="text-xs font-black uppercase tracking-widest text-muted-foreground ml-1">Location</label>
-                      <div className="glass p-4 rounded-2xl flex items-center gap-4 border-white/5">
-                        <MapPin className="w-5 h-5 text-primary" />
-                        <span className="font-bold">{profile?.address || 'Not provided'}</span>
                       </div>
                     </div>
                   </div>
