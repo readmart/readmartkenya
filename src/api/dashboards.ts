@@ -1631,23 +1631,69 @@ export async function getProtocolAgreements() {
  * Fetch all payouts for admin review
  */
 export async function getAllPayouts() {
-  try {
-    await verifyAdmin();
-    const { data, error } = await supabase
-      .from('fulfillment_ledger')
-      .select(`
-        *,
-        partner:profiles!partner_id(*),
-        order:orders!inner(*)
-      `)
-      .order('created_at', { ascending: false });
+  return withRetry(async () => {
+    try {
+      await verifyAdmin();
+      
+      const { data, error } = await supabase
+        .from('fulfillment_ledger')
+        .select(`
+          *,
+          partner:profiles!partner_id(*),
+          order:orders!inner(*)
+        `)
+        .order('created_at', { ascending: false });
 
-    if (error) throw error;
-    return data || [];
-  } catch (err) {
-    console.error('All Payouts fetch failed:', err);
-    return [];
-  }
+      if (error) {
+        // Handle relationship errors (PGRST200) or schema cache issues
+        if (error.code === 'PGRST200' || error.code === 'PGRST204' || error.message?.includes('relationship') || error.message?.includes('cache')) {
+          console.warn('[API] Schema/Relationship mismatch in payouts, retrying with simplified query...');
+          
+          // Fallback: Fetch ledger entries and orders first, then resolve partners manually if needed
+          const { data: ledgerData, error: ledgerError } = await supabase
+            .from('fulfillment_ledger')
+            .select(`
+              *,
+              order:orders!inner(*)
+            `)
+            .order('created_at', { ascending: false });
+            
+          if (ledgerError) throw ledgerError;
+          
+          if (!ledgerData || ledgerData.length === 0) return [];
+          
+          // Get unique partner IDs
+          const partnerIds = [...new Set(ledgerData.map((item: any) => item.partner_id).filter(Boolean))];
+          
+          if (partnerIds.length > 0) {
+            // Fetch partners in a separate query
+            const { data: partnerData } = await supabase
+              .from('profiles')
+              .select('*')
+              .in('id', partnerIds);
+              
+            // Map partners back to ledger entries
+            const partnersMap = (partnerData || []).reduce((acc: any, p: any) => {
+              acc[p.id] = p;
+              return acc;
+            }, {});
+            
+            return ledgerData.map((item: any) => ({
+              ...item,
+              partner: item.partner_id ? partnersMap[item.partner_id] : null
+            }));
+          }
+          
+          return ledgerData;
+        }
+        throw error;
+      }
+      return data || [];
+    } catch (err) {
+      console.error('All Payouts fetch failed:', err);
+      return [];
+    }
+  });
 }
 
 /**
