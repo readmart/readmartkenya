@@ -1,7 +1,7 @@
-import Resend from 'resend';
+import { Resend } from 'resend';
 import { supabase } from './_db.js';
 
-let resendInstance: Resend | null = null;
+let resendInstance: any = null;
 
 export const getResend = () => {
   if (!resendInstance) {
@@ -12,7 +12,7 @@ export const getResend = () => {
         emails: {
           send: async () => ({ data: null, error: new Error('RESEND_API_KEY not set') })
         }
-      } as unknown as Resend;
+      } as any;
     }
     resendInstance = new Resend(apiKey);
   }

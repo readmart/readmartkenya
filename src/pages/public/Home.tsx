@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from 'framer-motion';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { 
   BookOpen, Star, ArrowRight, ShoppingBag, 
   Users, Sparkles, Zap, ShieldCheck, Globe, Truck,
@@ -10,6 +10,7 @@ import BookCard from '@/components/shop/BookCard';
 import { getCMSContent } from '@/api/dashboards';
 import { supabase } from '@/lib/supabase/client';
 import { withRetry } from '@/lib/retry';
+import { useProducts } from '@/hooks/useProducts';
 
 const featuredCategories = [
   { name: 'Books', icon: <BookOpen className="w-6 h-6" />, count: '2,000+ Titles', color: 'from-blue-500/20 to-cyan-500/20' },
@@ -18,56 +19,54 @@ const featuredCategories = [
   { name: 'Community', icon: <Users className="w-6 h-6" />, count: '15+ Clubs', color: 'from-green-500/20 to-emerald-500/20' },
 ];
 
+function BookCardSkeleton() {
+  return (
+    <div className="glass rounded-3xl overflow-hidden animate-pulse">
+      <div className="aspect-[3/4] bg-white/5" />
+      <div className="p-6 space-y-4">
+        <div className="flex gap-1">
+          {[...Array(5)].map((_, i) => (
+            <div key={i} className="w-3 h-3 bg-white/5 rounded-full" />
+          ))}
+        </div>
+        <div className="h-6 bg-white/5 rounded-lg w-3/4" />
+        <div className="h-4 bg-white/5 rounded-lg w-1/2" />
+        <div className="flex justify-between items-center pt-4">
+          <div className="h-6 bg-white/5 rounded-lg w-1/4" />
+          <div className="h-10 w-10 bg-white/5 rounded-xl" />
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function Home() {
   const [heroData, setHeroData] = useState<any>(null);
   const [banners, setBanners] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isCmsLoading, setIsCmsLoading] = useState(true);
   const [authorOfDay, setAuthorOfDay] = useState<any>(null);
-  const [featuredBooks, setFeaturedBooks] = useState<any[]>([]);
+
+  // Fetch products with caching
+  const { data: productsData = [], isLoading: isProductsLoading } = useProducts({ 
+    limit: 4,
+    orderBy: 'created_at',
+    ascending: false
+  });
+
+  const featuredBooks = useMemo(() => {
+    return productsData.map((book: any) => ({
+      ...book,
+      category: book.category?.name || 'Uncategorized',
+      author: book.metadata?.author || 'Unknown Author',
+      rating: book.metadata?.rating || 0
+    }));
+  }, [productsData]);
 
   useEffect(() => {
     async function fetchPageData() {
       try {
         const cms = await getCMSContent(true);
         setBanners(cms.filter((item: any) => item.type === 'banner' && item.is_active));
-
-        // Fetch latest books
-        const productColumns = 'id, title, price, sale_price, image_url, category_id, stock_quantity, type, metadata, created_at';
-        let { data: latestBooks, error: latestBooksError } = await supabase
-          .from('products')
-          .select(`${productColumns}, category:categories(name)`)
-          .eq('is_active', true)
-          .order('created_at', { ascending: false })
-          .limit(4);
-        
-        if (latestBooksError) {
-          if (latestBooksError.code === 'PGRST204' || latestBooksError.message?.includes('column') || latestBooksError.message?.includes('cache')) {
-            console.warn('Advanced product columns missing from cache, falling back to core columns');
-            const { data: fallbackBooks, error: fallbackError } = await supabase
-              .from('products')
-              .select('id, title, price, sale_price, image_url, is_active')
-              .eq('is_active', true)
-              .order('created_at', { ascending: false })
-              .limit(4);
-            
-            if (fallbackError) throw fallbackError;
-            latestBooks = fallbackBooks as any;
-          } else {
-            console.error('Latest books fetch error:', latestBooksError);
-          }
-        }
-
-        if (latestBooks) {
-          // Map metadata to top-level props for BookCard
-          const mappedBooks = latestBooks.map((book: any) => ({
-            ...book,
-            category: (book.category as any)?.name || 'Uncategorized',
-            author: (book as any).metadata?.author || 'Unknown Author',
-            rating: (book as any).metadata?.rating || 0
-          }));
-          setFeaturedBooks(mappedBooks);
-        }
 
         // Get site settings for Hero and Author of the Day
         let settings: any = null;
@@ -142,11 +141,13 @@ export default function Home() {
       } catch (error) {
         console.error('Failed to fetch home data:', error);
       } finally {
-        setIsLoading(false);
+        setIsCmsLoading(false);
       }
     }
     fetchPageData();
   }, []);
+
+  const isLoading = isCmsLoading || isProductsLoading;
 
   const defaultHero = {
     title: "EVERY PAGE\nTELLS A STORY",
@@ -395,13 +396,21 @@ export default function Home() {
         </div>
         
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
-          {featuredBooks.map((book) => (
-            <BookCard key={book.id} {...book} />
-          ))}
-          {featuredBooks.length === 0 && !isLoading && (
-            <div className="col-span-full py-12 text-center text-muted-foreground font-medium">
-              New arrivals coming soon...
-            </div>
+          {isLoading ? (
+            [...Array(4)].map((_, i) => (
+              <BookCardSkeleton key={i} />
+            ))
+          ) : (
+            <>
+              {featuredBooks.map((book) => (
+                <BookCard key={book.id} {...book} />
+              ))}
+              {featuredBooks.length === 0 && (
+                <div className="col-span-full py-12 text-center text-muted-foreground font-medium">
+                  New arrivals coming soon...
+                </div>
+              )}
+            </>
           )}
         </div>
       </section>

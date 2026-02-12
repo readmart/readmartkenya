@@ -1,10 +1,31 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, Filter, ChevronDown, X, Loader2 } from 'lucide-react';
+import { Search, Filter, ChevronDown, X } from 'lucide-react';
 import BookCard from '@/components/shop/BookCard';
 import { useCurrency } from '@/contexts/CurrencyContext';
-import { getProducts } from '@/api/products';
+import { useProducts } from '@/hooks/useProducts';
+
+function BookCardSkeleton() {
+  return (
+    <div className="glass rounded-3xl overflow-hidden animate-pulse">
+      <div className="aspect-[3/4] bg-white/5" />
+      <div className="p-6 space-y-4">
+        <div className="flex gap-1">
+          {[...Array(5)].map((_, i) => (
+            <div key={i} className="w-3 h-3 bg-white/5 rounded-full" />
+          ))}
+        </div>
+        <div className="h-6 bg-white/5 rounded-lg w-3/4" />
+        <div className="h-4 bg-white/5 rounded-lg w-1/2" />
+        <div className="flex justify-between items-center pt-4">
+          <div className="h-6 bg-white/5 rounded-lg w-1/4" />
+          <div className="h-10 w-10 bg-white/5 rounded-xl" />
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function Shop() {
   const { formatPrice } = useCurrency();
@@ -12,9 +33,18 @@ export default function Shop() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [selectedGenre, setSelectedGenre] = useState('All Genres');
-  const [products, setProducts] = useState<any[]>([]);
-  const [categories, setCategories] = useState<any[]>(['All']);
-  const [isLoading, setIsLoading] = useState(true);
+  const [categories] = useState<any[]>(['All', 'Books', 'Art', 'Accessories']);
+
+  const { data: productsData = [], isLoading } = useProducts();
+
+  const products = useMemo(() => {
+    return productsData.map((p: any) => ({
+      ...p,
+      category: p.category?.name || 'Uncategorized',
+      author: p.metadata?.author || 'Unknown Author',
+      rating: p.metadata?.rating || 0
+    }));
+  }, [productsData]);
 
   const genres = [
     'All Genres',
@@ -26,32 +56,6 @@ export default function Shop() {
     'Personal Development',
     'Children\'s Books'
   ];
-
-  useEffect(() => {
-    async function loadData() {
-      setIsLoading(true);
-      try {
-        const productsData = await getProducts() || [];
-        // Map metadata to top-level props for BookCard
-        const mappedProducts = productsData.map((p: any) => ({
-          ...p,
-          category: p.category?.name || 'Uncategorized',
-          author: p.metadata?.author || 'Unknown Author',
-          rating: p.metadata?.rating || 0
-        }));
-        setProducts(mappedProducts);
-        
-        // Use user requested categories
-        const requiredCategories = ['All', 'Books', 'Art', 'Accessories'];
-        setCategories(requiredCategories);
-      } catch (error) {
-        console.error('Failed to load shop data:', error);
-      } finally {
-        setIsLoading(false);
-      }
-    }
-    loadData();
-  }, []);
 
   useEffect(() => {
     const category = searchParams.get('category');
@@ -298,9 +302,10 @@ export default function Shop() {
         {/* Product Grid */}
         <main>
           {isLoading ? (
-            <div className="flex flex-col items-center justify-center min-h-[400px] gap-4">
-              <Loader2 className="w-12 h-12 text-primary animate-spin" />
-              <p className="text-muted-foreground font-black uppercase tracking-widest text-xs">Synchronizing Inventory...</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-8">
+              {[...Array(6)].map((_, i) => (
+                <BookCardSkeleton key={i} />
+              ))}
             </div>
           ) : (
             <>
@@ -341,11 +346,11 @@ export default function Shop() {
                         <BookCard 
                           id={book.id}
                           title={book.title}
-                          author={book.author || book.metadata?.author || 'ReadMart Original'}
+                          author={book.author}
                           author_id={book.author_id}
                           price={book.price}
-                          rating={book.metadata?.rating || 5.0}
-                          category={book.category?.name || 'General'}
+                          rating={book.rating}
+                          category={book.category}
                           image={book.image_url || book.metadata?.image_url || 'https://images.unsplash.com/photo-1544947950-fa07a98d237f?auto=format&fit=crop&q=80&w=800'}
                           type={book.type}
                           weight={book.weight}

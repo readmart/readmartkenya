@@ -5,8 +5,7 @@ import {
   Mail, Phone, MapPin, Search, X
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { getPartnershipTiers, getPartners } from '@/api/partnerships';
-import { Loader2 } from 'lucide-react';
+import { usePartnershipTiers, usePartners } from '@/hooks/usePartnerships';
 import { Helmet } from 'react-helmet-async';
 import { track } from '@vercel/analytics';
 
@@ -20,36 +19,87 @@ const CATEGORIES = [
   'Technology'
 ];
 
+function PartnerCardSkeleton() {
+  return (
+    <div className="glass-card overflow-hidden rounded-[2rem] md:rounded-[2.5rem] border-white/5 flex flex-col h-full animate-pulse">
+      <div className="p-6 md:p-8 space-y-6 flex-grow">
+        <div className="flex justify-between items-start gap-4">
+          <div className="w-14 h-14 md:w-16 md:h-16 bg-white/5 rounded-2xl" />
+          <div className="flex flex-col items-end gap-2">
+            <div className="w-16 h-4 bg-white/5 rounded-full" />
+            <div className="w-12 h-3 bg-white/5 rounded" />
+          </div>
+        </div>
+        <div className="space-y-4">
+          <div className="h-6 bg-white/5 rounded w-3/4" />
+          <div className="space-y-2">
+            <div className="h-4 bg-white/5 rounded w-full" />
+            <div className="h-4 bg-white/5 rounded w-5/6" />
+          </div>
+          <div className="space-y-2 pt-4">
+            <div className="h-3 bg-white/5 rounded w-1/4" />
+            <div className="space-y-1">
+              {[...Array(3)].map((_, i) => (
+                <div key={i} className="h-3 bg-white/5 rounded w-1/2" />
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+      <div className="p-8 pt-0 mt-auto">
+        <div className="flex items-center justify-between pt-6 border-t border-white/5">
+          <div className="flex gap-2">
+            {[...Array(3)].map((_, i) => (
+              <div key={i} className="w-8 h-8 bg-white/5 rounded-xl" />
+            ))}
+          </div>
+          <div className="w-24 h-4 bg-white/5 rounded" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TierCardSkeleton() {
+  return (
+    <div className="glass p-10 rounded-[3rem] border-white/10 animate-pulse space-y-8">
+      <div>
+        <div className="h-8 bg-white/5 rounded w-1/2 mb-2" />
+        <div className="h-4 bg-white/5 rounded w-full" />
+      </div>
+      <div className="space-y-4">
+        <div className="h-3 bg-white/5 rounded w-1/4" />
+        <div className="space-y-3">
+          {[...Array(4)].map((_, i) => (
+            <div key={i} className="h-4 bg-white/5 rounded w-full" />
+          ))}
+        </div>
+      </div>
+      <div className="pt-6 border-t border-white/5">
+        <div className="h-3 bg-white/5 rounded w-1/4 mb-1" />
+        <div className="h-4 bg-white/5 rounded w-1/2" />
+      </div>
+    </div>
+  );
+}
+
 export default function Partnerships() {
-  const [tiers, setTiers] = useState<any[]>([]);
-  const [partners, setPartners] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
 
+  // Fetch data with caching
+  const { data: tiers = [], isLoading: isTiersLoading } = usePartnershipTiers();
+  const { data: partners = [], isLoading: isPartnersLoading } = usePartners();
+
   useEffect(() => {
-    async function loadData() {
-      try {
-        const [tiersData, partnersData] = await Promise.all([
-          getPartnershipTiers(),
-          getPartners()
-        ]);
-        setTiers(tiersData);
-        setPartners(partnersData);
-      } catch (error) {
-        console.error('Failed to load partnerships data:', error);
-      } finally {
-        setIsLoading(false);
-      }
-    }
-    loadData();
-    
     // Analytics tracking
     track('page_view_partnerships');
   }, []);
 
+  const isLoading = isTiersLoading || isPartnersLoading;
+
   const filteredPartners = useMemo(() => {
-    return partners.filter(partner => {
+    return partners.filter((partner: any) => {
       const matchesSearch = 
         partner.company_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         partner.description?.toLowerCase().includes(searchQuery.toLowerCase());
@@ -57,14 +107,6 @@ export default function Partnerships() {
       return matchesSearch && matchesCategory;
     });
   }, [partners, searchQuery, selectedCategory]);
-
-  if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <Loader2 className="w-10 h-10 animate-spin text-primary" />
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen pt-24">
@@ -206,7 +248,13 @@ export default function Partnerships() {
       <section className="container mx-auto px-4 mb-24 md:mb-32" aria-labelledby="partners-grid-title">
         <h2 id="partners-grid-title" className="sr-only">Featured Partners</h2>
         <AnimatePresence mode="wait">
-          {filteredPartners.length > 0 ? (
+          {isLoading ? (
+            <div key="loading" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
+              {[...Array(3)].map((_, i) => (
+                <PartnerCardSkeleton key={i} />
+              ))}
+            </div>
+          ) : filteredPartners.length > 0 ? (
             <motion.div 
               key="grid"
               initial={{ opacity: 0 }}
@@ -215,7 +263,7 @@ export default function Partnerships() {
               className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8"
               role="list"
             >
-              {filteredPartners.map((partner, i) => (
+              {filteredPartners.map((partner: any, i: number) => (
                 <motion.div 
                   key={partner.id}
                   initial={{ opacity: 0, y: 20 }}
@@ -358,52 +406,58 @@ export default function Partnerships() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-          {tiers.map((tier, i) => (
-            <motion.div 
-              key={tier.id}
-              initial={{ opacity: 0, y: 30 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ delay: i * 0.1 }}
-              className={`glass p-10 rounded-[3rem] border-white/10 relative overflow-hidden group hover:scale-[1.02] transition-all ${
-                tier.name === 'Gold' ? 'ring-2 ring-primary/50' : ''
-              }`}
-            >
-              {tier.name === 'Gold' && (
-                <div className="absolute top-0 right-0 p-4">
-                  <div className="bg-primary text-white text-[10px] font-black px-4 py-1 rounded-full uppercase tracking-widest">
-                    Elite
-                  </div>
-                </div>
-              )}
-              
-              <div className="space-y-8 relative z-10">
-                <div>
-                  <h3 className="text-3xl font-black mb-2" style={{ color: tier.color_code }}>{tier.name}</h3>
-                  <p className="text-muted-foreground text-sm font-medium">{tier.description}</p>
-                </div>
-
-                <div className="space-y-4">
-                  <p className="text-xs font-black uppercase tracking-widest text-muted-foreground">Key Benefits</p>
-                  <ul className="space-y-3">
-                    {(tier.benefits || []).map((benefit: string, idx: number) => (
-                      <li key={idx} className="flex items-start gap-3 text-sm font-medium">
-                        <CheckCircle2 className="w-4 h-4 text-primary shrink-0 mt-0.5" />
-                        {benefit}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-
-                {tier.min_requirement && (
-                  <div className="pt-6 border-t border-white/5">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-1">Requirement</p>
-                    <p className="text-sm font-bold">{tier.min_requirement}</p>
+          {isLoading ? (
+            [...Array(3)].map((_, i) => (
+              <TierCardSkeleton key={i} />
+            ))
+          ) : (
+            tiers.map((tier: any, i: number) => (
+              <motion.div 
+                key={tier.id}
+                initial={{ opacity: 0, y: 30 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ delay: i * 0.1 }}
+                className={`glass p-10 rounded-[3rem] border-white/10 relative overflow-hidden group hover:scale-[1.02] transition-all ${
+                  tier.name === 'Gold' ? 'ring-2 ring-primary/50' : ''
+                }`}
+              >
+                {tier.name === 'Gold' && (
+                  <div className="absolute top-0 right-0 p-4">
+                    <div className="bg-primary text-white text-[10px] font-black px-4 py-1 rounded-full uppercase tracking-widest">
+                      Elite
+                    </div>
                   </div>
                 )}
-              </div>
-            </motion.div>
-          ))}
+                
+                <div className="space-y-8 relative z-10">
+                  <div>
+                    <h3 className="text-3xl font-black mb-2" style={{ color: tier.color_code }}>{tier.name}</h3>
+                    <p className="text-muted-foreground text-sm font-medium">{tier.description}</p>
+                  </div>
+
+                  <div className="space-y-4">
+                    <p className="text-xs font-black uppercase tracking-widest text-muted-foreground">Key Benefits</p>
+                    <ul className="space-y-3">
+                      {(tier.benefits || []).map((benefit: string, idx: number) => (
+                        <li key={idx} className="flex items-start gap-3 text-sm font-medium">
+                          <CheckCircle2 className="w-4 h-4 text-primary shrink-0 mt-0.5" />
+                          {benefit}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+
+                  {tier.min_requirement && (
+                    <div className="pt-6 border-t border-white/5">
+                      <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-1">Requirement</p>
+                      <p className="text-sm font-bold">{tier.min_requirement}</p>
+                    </div>
+                  )}
+                </div>
+              </motion.div>
+            ))
+          )}
         </div>
       </section>
 

@@ -12,6 +12,8 @@ export async function getProducts(options: {
   minPrice?: number;
   maxPrice?: number;
   limit?: number;
+  orderBy?: string;
+  ascending?: boolean;
 } = {}) {
   let query = supabase
     .from('products')
@@ -48,7 +50,10 @@ export async function getProducts(options: {
     query = query.limit(options.limit);
   }
 
-  const { data, error } = await query.order('created_at', { ascending: false });
+  const orderBy = options.orderBy || 'created_at';
+  const ascending = options.ascending ?? false;
+
+  const { data, error } = await query.order(orderBy, { ascending });
 
   if (error) {
     if (error.code === 'PGRST204' || error.message?.includes('column') || error.message?.includes('cache')) {
