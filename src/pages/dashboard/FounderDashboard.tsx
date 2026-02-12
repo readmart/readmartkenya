@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from 'framer-motion';
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   LayoutDashboard, Package, ShoppingCart, Users, 
   Settings, Image as ImageIcon, Truck, MessageSquare, 
