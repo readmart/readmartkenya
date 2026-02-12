@@ -1,9 +1,9 @@
-import { Resend } from 'resend';
+import Resend from 'resend';
 import { supabase } from './_db.js';
 
 let resendInstance: Resend | null = null;
 
-const getResend = () => {
+export const getResend = () => {
   if (!resendInstance) {
     const apiKey = process.env.RESEND_API_KEY;
     if (!apiKey) {

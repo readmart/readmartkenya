@@ -3,12 +3,13 @@ import { motion } from 'framer-motion';
 import { 
   Handshake, Mail, User, FileText, Send, 
   Loader2, CheckCircle2, Lock, ArrowRight, Upload, X, Phone, MessageSquare,
-  ChevronDown
+  ChevronDown, Globe, Tag
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 import { Link, useNavigate } from 'react-router-dom';
 import { uploadQualificationProof } from '@/api/storage';
+import { getPartnershipTiers, applyToPartnership, type PartnershipTier } from '@/api/partnerships';
 import { Helmet } from 'react-helmet-async';
 import { track } from '@vercel/analytics';
 
@@ -19,19 +20,31 @@ export default function PartnershipApply() {
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [tiers, setTiers] = useState<PartnershipTier[]>([]);
   
   const [formData, setFormData] = useState({
-    full_name: profile?.full_name || '',
-    email: user?.email || '',
-    organization: '',
-    contact_info: '',
-    collaboration_intent: '',
-    type: 'service_provider' as 'author' | 'service_provider'
+    company_name: '',
+    contact_name: profile?.full_name || '',
+    contact_email: user?.email || '',
+    contact_phone: '',
+    website_url: '',
+    category: 'Logistics',
+    description: '',
+    tier_id: ''
   });
 
   useEffect(() => {
     track('partnership_apply_start');
+    loadTiers();
   }, []);
+
+  async function loadTiers() {
+    const data = await getPartnershipTiers();
+    setTiers(data);
+    if (data.length > 0) {
+      setFormData(prev => ({ ...prev, tier_id: data[0].id }));
+    }
+  }
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -77,25 +90,20 @@ export default function PartnershipApply() {
       // 1. Upload the qualification proof
       const proofPath = await uploadQualificationProof(uploadedFile, user.id);
 
-      // 2. Submit application via API to trigger email notifications
-      const response = await fetch('/api/applications?type=partner', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          type: 'partner',
-          full_name: formData.full_name,
-          email: formData.email,
-          organization: formData.organization,
-          service_type: formData.type === 'service_provider' ? 'Logistics' : 'Content',
-          description: formData.collaboration_intent,
-          proof_url: proofPath
-        })
+      // 2. Submit application via API
+      await applyToPartnership({
+        company_name: formData.company_name,
+        contact_name: formData.contact_name,
+        contact_email: formData.contact_email,
+        contact_phone: formData.contact_phone,
+        website_url: formData.website_url,
+        category: formData.category,
+        description: formData.description,
+        tier_id: formData.tier_id,
+        proof_url: proofPath
       });
 
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.error || 'Failed to submit application');
-
-      track('partnership_apply_submit', { type: formData.type });
+      track('partnership_apply_submit', { category: formData.category });
       setIsSubmitted(true);
       toast.success('Application submitted successfully!');
     } catch (error: any) {
@@ -164,7 +172,7 @@ export default function PartnershipApply() {
           </div>
           <h2 className="text-3xl font-black">Application Received!</h2>
           <p className="text-muted-foreground font-medium">
-            Thank you for your interest in partnering with ReadMart. Our team will review your application and get back to you at <strong>{formData.email}</strong> within 3-5 business days.
+            Thank you for your interest in partnering with ReadMart. Our team will review your application and get back to you at <strong>{formData.contact_email}</strong> within 3-5 business days.
           </p>
           <button 
             onClick={() => {
@@ -220,35 +228,35 @@ export default function PartnershipApply() {
           <form onSubmit={handleSubmit} className="space-y-6 md:space-y-8">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8">
               <div className="space-y-2">
-                <label htmlFor="full_name" className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-2">Full Name</label>
+                <label htmlFor="company_name" className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-2">Company / Organization Name</label>
                 <div className="relative">
-                  <User className="absolute left-5 md:left-6 top-1/2 -translate-y-1/2 w-4 h-4 md:w-5 md:h-5 text-muted-foreground" />
+                  <Handshake className="absolute left-5 md:left-6 top-1/2 -translate-y-1/2 w-4 h-4 md:w-5 md:h-5 text-muted-foreground" />
                   <input 
-                    id="full_name"
-                    name="full_name"
+                    id="company_name"
+                    name="company_name"
                     type="text" 
                     required
-                    value={formData.full_name}
-                    onChange={(e) => setFormData({...formData, full_name: e.target.value})}
+                    value={formData.company_name}
+                    onChange={(e) => setFormData({...formData, company_name: e.target.value})}
                     className="glass w-full pl-12 md:pl-14 pr-6 py-3.5 md:py-4 rounded-xl md:rounded-2xl outline-none focus:ring-2 focus:ring-primary font-bold text-sm md:text-base"
-                    placeholder="John Doe"
+                    placeholder="Acme Corp"
                   />
                 </div>
               </div>
 
               <div className="space-y-2">
-                <label htmlFor="email" className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-2">Email Address</label>
+                <label htmlFor="contact_name" className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-2">Contact Person Name</label>
                 <div className="relative">
-                  <Mail className="absolute left-5 md:left-6 top-1/2 -translate-y-1/2 w-4 h-4 md:w-5 md:h-5 text-muted-foreground" />
+                  <User className="absolute left-5 md:left-6 top-1/2 -translate-y-1/2 w-4 h-4 md:w-5 md:h-5 text-muted-foreground" />
                   <input 
-                    id="email"
-                    name="email"
-                    type="email" 
+                    id="contact_name"
+                    name="contact_name"
+                    type="text" 
                     required
-                    value={formData.email}
-                    onChange={(e) => setFormData({...formData, email: e.target.value})}
+                    value={formData.contact_name}
+                    onChange={(e) => setFormData({...formData, contact_name: e.target.value})}
                     className="glass w-full pl-12 md:pl-14 pr-6 py-3.5 md:py-4 rounded-xl md:rounded-2xl outline-none focus:ring-2 focus:ring-primary font-bold text-sm md:text-base"
-                    placeholder="john@example.com"
+                    placeholder="John Doe"
                   />
                 </div>
               </div>
@@ -256,40 +264,100 @@ export default function PartnershipApply() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8">
               <div className="space-y-2">
-                <label htmlFor="contact_info" className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-2">Contact Number</label>
+                <label htmlFor="contact_email" className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-2">Contact Email</label>
                 <div className="relative">
-                  <Phone className="absolute left-5 md:left-6 top-1/2 -translate-y-1/2 w-4 h-4 md:w-5 md:h-5 text-muted-foreground" aria-hidden="true" />
+                  <Mail className="absolute left-5 md:left-6 top-1/2 -translate-y-1/2 w-4 h-4 md:w-5 md:h-5 text-muted-foreground" />
                   <input 
-                    id="contact_info"
-                    name="contact_info"
-                    type="tel" 
+                    id="contact_email"
+                    name="contact_email"
+                    type="email" 
                     required
-                    value={formData.contact_info}
-                    onChange={(e) => setFormData({...formData, contact_info: e.target.value})}
+                    value={formData.contact_email}
+                    onChange={(e) => setFormData({...formData, contact_email: e.target.value})}
                     className="glass w-full pl-12 md:pl-14 pr-6 py-3.5 md:py-4 rounded-xl md:rounded-2xl outline-none focus:ring-2 focus:ring-primary font-bold text-sm md:text-base"
-                    placeholder="+254 794 129 958"
-                    aria-required="true"
+                    placeholder="john@example.com"
                   />
                 </div>
               </div>
 
               <div className="space-y-2">
-                <label htmlFor="application_type" className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-2">Application Type</label>
+                <label htmlFor="contact_phone" className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-2">Contact Phone</label>
                 <div className="relative">
-                  <Handshake className="absolute left-5 md:left-6 top-1/2 -translate-y-1/2 w-4 h-4 md:w-5 md:h-5 text-muted-foreground pointer-events-none" aria-hidden="true" />
-                  <select 
-                    id="application_type"
-                    name="application_type"
-                    value={formData.type}
-                    onChange={(e) => setFormData({...formData, type: e.target.value as any})}
-                    className="glass w-full pl-12 md:pl-14 pr-10 py-3.5 md:py-4 rounded-xl md:rounded-2xl outline-none focus:ring-2 focus:ring-primary font-bold appearance-none cursor-pointer text-sm md:text-base"
-                    aria-required="true"
-                  >
-                    <option value="service_provider">Logistics & Service Provider</option>
-                    <option value="author">Author / Publisher</option>
-                  </select>
-                  <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" aria-hidden="true" />
+                  <Phone className="absolute left-5 md:left-6 top-1/2 -translate-y-1/2 w-4 h-4 md:w-5 md:h-5 text-muted-foreground" />
+                  <input 
+                    id="contact_phone"
+                    name="contact_phone"
+                    type="tel" 
+                    value={formData.contact_phone}
+                    onChange={(e) => setFormData({...formData, contact_phone: e.target.value})}
+                    className="glass w-full pl-12 md:pl-14 pr-6 py-3.5 md:py-4 rounded-xl md:rounded-2xl outline-none focus:ring-2 focus:ring-primary font-bold text-sm md:text-base"
+                    placeholder="+254 700 000 000"
+                  />
                 </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8">
+              <div className="space-y-2">
+                <label htmlFor="website_url" className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-2">Website URL (Optional)</label>
+                <div className="relative">
+                  <Globe className="absolute left-5 md:left-6 top-1/2 -translate-y-1/2 w-4 h-4 md:w-5 md:h-5 text-muted-foreground" />
+                  <input 
+                    id="website_url"
+                    name="website_url"
+                    type="url" 
+                    value={formData.website_url}
+                    onChange={(e) => setFormData({...formData, website_url: e.target.value})}
+                    className="glass w-full pl-12 md:pl-14 pr-6 py-3.5 md:py-4 rounded-xl md:rounded-2xl outline-none focus:ring-2 focus:ring-primary font-bold text-sm md:text-base"
+                    placeholder="https://acme.com"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label htmlFor="category" className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-2">Partnership Category</label>
+                <div className="relative">
+                  <Tag className="absolute left-5 md:left-6 top-1/2 -translate-y-1/2 w-4 h-4 md:w-5 md:h-5 text-muted-foreground pointer-events-none" />
+                  <select 
+                    id="category"
+                    name="category"
+                    value={formData.category}
+                    onChange={(e) => setFormData({...formData, category: e.target.value})}
+                    className="glass w-full pl-12 md:pl-14 pr-10 py-3.5 md:py-4 rounded-xl md:rounded-2xl outline-none focus:ring-2 focus:ring-primary font-bold appearance-none cursor-pointer text-sm md:text-base"
+                  >
+                    <option value="Logistics">Logistics Provider</option>
+                    <option value="Publishing">Publisher / Author</option>
+                    <option value="Distribution">Distributor</option>
+                    <option value="Technology">Technology Partner</option>
+                    <option value="Other">Other</option>
+                  </select>
+                  <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label htmlFor="tier_id" className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-2">Interested Tier</label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {tiers.map((tier) => (
+                  <button
+                    key={tier.id}
+                    type="button"
+                    onClick={() => setFormData({...formData, tier_id: tier.id})}
+                    className={`p-4 rounded-2xl border-2 transition-all text-left space-y-2 ${
+                      formData.tier_id === tier.id 
+                        ? 'border-primary bg-primary/5' 
+                        : 'border-white/5 hover:border-white/10 bg-white/5'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-black uppercase tracking-widest opacity-60">Tier</span>
+                      {formData.tier_id === tier.id && <CheckCircle2 className="w-4 h-4 text-primary" />}
+                    </div>
+                    <h4 className="font-black text-lg" style={{ color: tier.color_code }}>{tier.name}</h4>
+                    <p className="text-xs text-muted-foreground font-medium line-clamp-2">{tier.description}</p>
+                  </button>
+                ))}
               </div>
             </div>
 
@@ -360,15 +428,15 @@ export default function PartnershipApply() {
             </div>
 
             <div className="space-y-2">
-              <label htmlFor="collaboration_intent" className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-2">Collaboration Intent</label>
+              <label htmlFor="description" className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-2">Collaboration Intent</label>
               <div className="relative">
                 <MessageSquare className="absolute left-5 md:left-6 top-5 md:top-6 w-4 h-4 md:w-5 md:h-5 text-muted-foreground" />
                 <textarea 
-                  id="collaboration_intent"
-                  name="collaboration_intent"
+                  id="description"
+                  name="description"
                   required
-                  value={formData.collaboration_intent}
-                  onChange={(e) => setFormData({...formData, collaboration_intent: e.target.value})}
+                  value={formData.description}
+                  onChange={(e) => setFormData({...formData, description: e.target.value})}
                   className="glass w-full pl-12 md:pl-14 pr-6 py-4 md:py-6 rounded-2xl md:rounded-3xl outline-none focus:ring-2 focus:ring-primary font-medium text-sm md:text-base min-h-[140px] md:min-h-[160px] resize-none"
                   placeholder="Describe your vision for partnering with ReadMart, your organization's strengths, and how you can contribute to the ecosystem..."
                 />

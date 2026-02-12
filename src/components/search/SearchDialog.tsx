@@ -102,14 +102,22 @@ export default function SearchDialog({ isOpen, onClose }: SearchDialogProps) {
           .ilike('title', `%${query}%`)
           .limit(5);
 
-        products?.forEach(p => {
+        products?.forEach((p) => {
+          const product = p as { 
+            id: string; 
+            title: string; 
+            author?: string; 
+            metadata?: any; 
+            image_url?: string; 
+            price: number 
+          };
           searchResults.push({
-            id: p.id,
+            id: product.id,
             type: 'product',
-            title: p.title,
-            subtitle: `by ${p.author || p.metadata?.author || 'ReadMart'}`,
-            image: p.image_url || p.metadata?.image_url,
-            link: `/book/${p.id}`
+            title: product.title,
+            subtitle: `by ${product.author || product.metadata?.author || 'ReadMart'}`,
+            image: product.image_url || product.metadata?.image_url,
+            link: `/book/${product.id}`
           });
         });
 
@@ -120,12 +128,13 @@ export default function SearchDialog({ isOpen, onClose }: SearchDialogProps) {
           .ilike('title', `%${query}%`)
           .limit(3);
 
-        events?.forEach(e => {
+        events?.forEach((e) => {
+          const event = e as { id: string; title: string; event_date?: string };
           searchResults.push({
-            id: e.id,
+            id: event.id,
             type: 'event',
-            title: e.title,
-            subtitle: e.event_date ? new Date(e.event_date).toLocaleDateString() : 'Upcoming Event',
+            title: event.title,
+            subtitle: event.event_date ? new Date(event.event_date).toLocaleDateString() : 'Upcoming Event',
             link: `/events`
           });
         });
@@ -155,12 +164,13 @@ export default function SearchDialog({ isOpen, onClose }: SearchDialogProps) {
             .or(`id.ilike.%${query}%, profiles.full_name.ilike.%${query}%`)
             .limit(3);
 
-          orders?.forEach(o => {
+          orders?.forEach((o) => {
+            const order = o as { id: string; profiles: any };
             searchResults.push({
-              id: o.id,
+              id: order.id,
               type: 'order',
-              title: `Order #${o.id.slice(0, 8)}`,
-              subtitle: `Customer: ${Array.isArray(o.profiles) ? o.profiles[0]?.full_name : (o.profiles as any)?.full_name || 'Unknown'}`,
+              title: `Order #${order.id.slice(0, 8)}`,
+              subtitle: `Customer: ${Array.isArray(order.profiles) ? order.profiles[0]?.full_name : (order.profiles as any)?.full_name || 'Unknown'}`,
               link: `/founder-dashboard?tab=orders`,
               badge: 'Founder'
             });
@@ -173,12 +183,13 @@ export default function SearchDialog({ isOpen, onClose }: SearchDialogProps) {
             .or(`full_name.ilike.%${query}%, email.ilike.%${query}%`)
             .limit(3);
 
-          users?.forEach(u => {
+          users?.forEach((u) => {
+            const profile = u as { id: string; full_name?: string; email: string; role: string };
             searchResults.push({
-              id: u.id,
+              id: profile.id,
               type: 'user',
-              title: u.full_name || 'Anonymous',
-              subtitle: `${u.email} (${u.role})`,
+              title: profile.full_name || 'Anonymous',
+              subtitle: `${profile.email} (${profile.role})`,
               link: `/founder-dashboard?tab=users`,
               badge: 'Founder'
             });

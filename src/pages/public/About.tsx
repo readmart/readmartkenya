@@ -137,13 +137,13 @@ export default function About() {
             whileInView={{ opacity: 1, x: 0 }}
             viewport={{ once: true }}
             onClick={() => setIsStoryOpen(true)}
-            className="p-10 glass rounded-[3rem] border-white/5 space-y-6 bg-primary/5 cursor-pointer group hover:border-primary/30 transition-all"
+            className="p-10 bg-primary/5 rounded-[3rem] border border-primary/10 space-y-6 cursor-pointer group hover:border-primary/30 transition-all backdrop-blur-xl"
           >
             <div className="w-16 h-16 bg-primary/10 text-primary rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
               <TrendingUp className="w-8 h-8" />
             </div>
             <h3 className="text-sm font-black uppercase tracking-[0.2em] text-primary/80">Our Mission</h3>
-            <p className="text-2xl font-bold text-white/90 leading-tight italic">
+            <p className="text-2xl font-bold text-slate-900 leading-tight italic">
               "To reimagine how books meet people — at home, in cafes, hospitals and beyond."
             </p>
             <div className="flex items-center gap-2 text-primary text-xs font-black uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity">
@@ -157,13 +157,13 @@ export default function About() {
             whileInView={{ opacity: 1, x: 0 }}
             viewport={{ once: true }}
             onClick={() => setIsStoryOpen(true)}
-            className="p-10 glass rounded-[3rem] border-white/5 space-y-6 bg-secondary/5 cursor-pointer group hover:border-secondary/30 transition-all"
+            className="p-10 bg-secondary/5 rounded-[3rem] border border-secondary/10 space-y-6 cursor-pointer group hover:border-secondary/30 transition-all backdrop-blur-xl"
           >
             <div className="w-16 h-16 bg-secondary/10 text-secondary rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
               <Shield className="w-8 h-8" />
             </div>
             <h3 className="text-sm font-black uppercase tracking-[0.2em] text-secondary/80">Our Vision</h3>
-            <p className="text-2xl font-bold text-white/90 leading-tight">
+            <p className="text-2xl font-bold text-slate-900 leading-tight">
               To lead a reading revolution where books live everywhere and belong to everyone.
             </p>
             <div className="flex items-center gap-2 text-secondary text-xs font-black uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity">

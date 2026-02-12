@@ -24,7 +24,7 @@ async function populateShipping() {
     { name: 'Thika CBD', rate: 400, is_active: true }
   ];
 
-  const { data, error } = await supabase
+  const { error } = await supabase
     .from('shipping_zones')
     .insert(zones);
 
@@ -33,7 +33,7 @@ async function populateShipping() {
   } else {
     console.log('✅ Successfully populated shipping zones.');
     
-    const { data: fetched, error: fetchError } = await supabase
+    const { data: fetched } = await supabase
         .from('shipping_zones')
         .select('*');
     

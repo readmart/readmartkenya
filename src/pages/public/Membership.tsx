@@ -15,6 +15,16 @@ import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 
+// Define types for Supabase Realtime payload and channel status
+interface MembershipPayment {
+  id: string;
+  user_id: string;
+  status: 'pending' | 'completed' | 'failed' | 'cancelled';
+  // Add other relevant fields from your membership_payments table if needed
+}
+
+type RealtimeChannelState = 'SUBSCRIBED' | 'CHANNEL_ERROR' | 'TIMED_OUT' | 'CLOSED';
+
 export default function Membership() {
   const { user, profile, loading: authLoading } = useAuth();
   const { settings, isLoading: settingsLoading } = useSettings();
@@ -120,7 +130,7 @@ export default function Membership() {
               table: 'membership_payments',
               filter: dbRecordId ? `id=eq.${dbRecordId}` : `user_id=eq.${user.id}`
             },
-            (payload) => {
+            (payload: { new: MembershipPayment }) => {
               if (payload.new.status === 'completed') {
                 cleanup();
                 setIsSubmitting(false);
@@ -133,7 +143,7 @@ export default function Membership() {
               }
             }
           )
-          .subscribe((status) => {
+          .subscribe((status: RealtimeChannelState) => {
             if (status !== 'SUBSCRIBED') {
               console.warn('Membership Realtime subscription status:', status);
             }

@@ -45,11 +45,14 @@ export async function createOrder(orderData: OrderData) {
     orderInsertData.shipping_zone_id = orderData.shipping_zone_id;
   }
 
-  const { data: order, error: orderError } = await supabase
+  const { data, error } = await supabase
     .from('orders')
     .insert(orderInsertData)
     .select('*')
     .maybeSingle();
+
+  let order = data;
+  const orderError = error;
 
   if (orderError) {
     console.error('Order creation error details:', orderError);
@@ -63,9 +66,10 @@ export async function createOrder(orderData: OrderData) {
        
        if (retryError) throw retryError;
        if (!retryOrder) throw new Error('Order creation failed after retry');
-       return retryOrder;
+       order = retryOrder;
+    } else {
+      throw orderError;
     }
-    throw orderError;
   }
 
   if (!order) throw new Error('Order creation failed');
@@ -84,7 +88,20 @@ export async function createOrder(orderData: OrderData) {
     .from('order_items')
     .insert(orderItems);
 
-  if (itemsError) throw itemsError;
+  if (itemsError) {
+    console.error('Order items creation error details:', itemsError);
+    // If it's a schema cache error or missing column, try to insert without problematic columns if needed
+    // For now, we'll try a retry if it's a cache issue
+    if (itemsError.message?.includes('cache') || itemsError.message?.includes('column') || itemsError.code === 'PGRST204') {
+       const { error: retryError } = await supabase
+         .from('order_items')
+         .insert(orderItems.map(({ product_snapshot, ...rest }) => rest)); // Try without snapshot as fallback
+       
+       if (retryError) throw retryError;
+    } else {
+      throw itemsError;
+    }
+  }
 
   // Filter VAT for customer
   const { tax_amount, ...orderForCustomer } = order;
@@ -126,11 +143,17 @@ export async function getOrder(orderId: string) {
   const { data, error } = await query.maybeSingle();
   
   if (error) {
-    if (error.code === 'PGRST204' || error.message?.includes('cache')) {
+    if (error.code === 'PGRST204' || error.message?.includes('cache') || error.message?.includes('column')) {
       console.warn('Order fetch schema cache issue, retrying with minimal select');
       const { data: retryData, error: retryError } = await supabase
         .from('orders')
-        .select('id, user_id, total_amount, status, shipping_address, created_at')
+        .select(`
+          id, user_id, total_amount, subtotal_amount, shipping_amount, tax_amount, status, shipping_address, created_at,
+          items:order_items(
+            id, order_id, product_id, quantity, unit_price, price_at_purchase,
+            product:products(id, title, image_url, type, metadata)
+          )
+        `)
         .eq('id', orderId)
         .maybeSingle();
       

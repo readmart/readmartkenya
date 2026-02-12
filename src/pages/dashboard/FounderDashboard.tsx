@@ -17,7 +17,7 @@ import {
   AreaChart, Area, PieChart, Pie, Cell
 } from 'recharts';
 import { toast } from 'sonner';
-import { supabase } from '@/lib/supabase/client';
+import { supabase, type RealtimeChannel } from '@/lib/supabase/client';
 import { useCurrency } from '@/contexts/CurrencyContext';
 import { 
   getGlobalAnalytics, getInventory, getOrders, getAllUsers, 
@@ -44,11 +44,34 @@ import {
   type NewsletterStatus 
 } from '@/api/newsletter';
 
+interface DashboardData {
+  analytics: any;
+  inventory: any[];
+  orders: any[];
+  users: any[];
+  settings: Record<string, any>;
+  inquiries: any[];
+  partnerships: any[];
+  authors: any[];
+  approvedAuthors: any[];
+  categories: any[];
+  shippingZones: any[];
+  promos: any[];
+  clubs: any[];
+  events: any[];
+  banners: any[];
+  announcements: any[];
+  newsletterSubscriptions: any[];
+  protocols: any[];
+  payouts: any[];
+  notificationLogs: any[];
+}
+
 export default function FounderDashboard() {
   const { formatPrice } = useCurrency();
   const [activeTab, setActiveTab] = useState('analytics');
   const [isLoading, setIsLoading] = useState(true);
-  const [data, setData] = useState<any>({
+  const [data, setData] = useState<DashboardData>({
     analytics: null,
     inventory: [],
     orders: [],
@@ -106,7 +129,7 @@ export default function FounderDashboard() {
         .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => fetchAllData())
         .on('postgres_changes', { event: '*', schema: 'public', table: 'products' }, () => fetchAllData())
         .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => fetchAllData())
-        .subscribe((status) => {
+        .subscribe((status: string) => {
           if (status === 'CHANNEL_ERROR') {
             console.warn('Realtime Error (Core): Failed to subscribe to orders/products/profiles');
           }
@@ -120,7 +143,7 @@ export default function FounderDashboard() {
         .on('postgres_changes', { event: '*', schema: 'public', table: 'banners' }, () => fetchAllData())
         .on('postgres_changes', { event: '*', schema: 'public', table: 'announcements' }, () => fetchAllData())
         .on('postgres_changes', { event: '*', schema: 'public', table: 'shipping_zones' }, () => fetchAllData())
-        .subscribe((status) => {
+        .subscribe((status: string) => {
           if (status === 'CHANNEL_ERROR') {
             console.warn('Realtime Error (Content): Failed to subscribe to content tables');
           }
@@ -132,7 +155,7 @@ export default function FounderDashboard() {
         .on('postgres_changes', { event: '*', schema: 'public', table: 'author_applications' }, () => fetchAllData())
         .on('postgres_changes', { event: '*', schema: 'public', table: 'partnership_applications' }, () => fetchAllData())
         .on('postgres_changes', { event: '*', schema: 'public', table: 'partnership_agreements' }, () => fetchAllData())
-        .subscribe((status) => {
+        .subscribe((status: string) => {
           if (status === 'CHANNEL_ERROR') {
             console.warn('Realtime Error (Apps): Failed to subscribe to applications/agreements');
           }
@@ -143,7 +166,7 @@ export default function FounderDashboard() {
         .channel('founder_dashboard_comms')
         .on('postgres_changes', { event: '*', schema: 'public', table: 'contact_messages' }, () => fetchAllData())
         .on('postgres_changes', { event: '*', schema: 'public', table: 'newsletter_subscriptions' }, () => fetchAllData())
-        .subscribe((status) => {
+        .subscribe((status: string) => {
           if (status === 'CHANNEL_ERROR') {
             console.warn('Realtime Error (Comms): Failed to subscribe to messages/subscriptions');
           }
@@ -152,7 +175,7 @@ export default function FounderDashboard() {
       return [coreChannel, contentChannel, appsChannel, commsChannel];
     };
 
-    let channels: any[] = [];
+    let channels: RealtimeChannel[] = [];
     setupSubscriptions().then(subs => {
       if (subs) channels = subs;
     });

@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import { 
   Handshake, Plus, Search, Filter, 
   Edit2, Trash2, Shield, Star, 
-  List, Save, X, Loader2
+  List, Save, X, Loader2, ExternalLink, Eye, FileCheck
 } from 'lucide-react';
 import { 
   getPartnershipTiers, 
@@ -11,22 +11,29 @@ import {
   createPartnershipTier, 
   updatePartnershipTier, 
   deletePartnershipTier,
-  managePartner 
+  deletePartner,
+  managePartner,
+  getPartnershipApplications,
+  updateApplicationStatus 
 } from '@/api/partnerships';
+import { sendEmail, EmailTemplates } from '@/api/email';
 import { toast } from 'sonner';
 
 export default function FounderPartnerships() {
-  const [activeTab, setActiveTab] = useState<'partners' | 'tiers'>('partners');
+  const [activeTab, setActiveTab] = useState<'partners' | 'tiers' | 'applications'>('partners');
   const [partners, setPartners] = useState<any[]>([]);
   const [tiers, setTiers] = useState<any[]>([]);
+  const [applications, setApplications] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  
+
   // Modal states
   const [isTierModalOpen, setIsTierModalOpen] = useState(false);
   const [isPartnerModalOpen, setIsPartnerModalOpen] = useState(false);
+  const [isAppDetailModalOpen, setIsAppDetailModalOpen] = useState(false);
   const [editingTier, setEditingTier] = useState<any>(null);
   const [editingPartner, setEditingPartner] = useState<any>(null);
+  const [selectedApplication, setSelectedApplication] = useState<any>(null);
 
   useEffect(() => {
     loadData();
@@ -35,16 +42,41 @@ export default function FounderPartnerships() {
   const loadData = async () => {
     setIsLoading(true);
     try {
-      const [partnersData, tiersData] = await Promise.all([
+      const [partnersData, tiersData, applicationsData] = await Promise.all([
         getPartners(),
-        getPartnershipTiers()
+        getPartnershipTiers(),
+        getPartnershipApplications()
       ]);
       setPartners(partnersData);
       setTiers(tiersData);
+      setApplications(applicationsData);
     } catch (error) {
       toast.error('Failed to load partnerships data');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleApplicationAction = async (id: string, status: 'approved' | 'rejected') => {
+    try {
+      const application = applications.find(a => a.id === id);
+      if (!application) return;
+
+      await updateApplicationStatus(id, status);
+      
+      // Send notification email
+      if (status === 'approved') {
+        const template = EmailTemplates.partnerApproval(application.company_name);
+        await sendEmail({
+          to: application.contact_email,
+          ...template
+        });
+      }
+
+      toast.success(`Application ${status} successfully`);
+      loadData();
+    } catch (error) {
+      toast.error('Failed to update application status');
     }
   };
 
@@ -110,6 +142,17 @@ export default function FounderPartnerships() {
     }
   };
 
+  const handleDeletePartner = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this partner profile?')) return;
+    try {
+      await deletePartner(id);
+      toast.success('Partner profile deleted successfully');
+      loadData();
+    } catch (error) {
+      toast.error('Failed to delete partner profile');
+    }
+  };
+
   return (
     <div className="space-y-8">
       <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -158,6 +201,19 @@ export default function FounderPartnerships() {
           }`}
         >
           Tiers
+        </button>
+        <button 
+          onClick={() => setActiveTab('applications')}
+          className={`px-8 py-3 rounded-xl font-bold text-sm transition-all ${
+            activeTab === 'applications' ? 'bg-primary text-white shadow-lg' : 'hover:bg-white/5'
+          }`}
+        >
+          Applications
+          {applications.filter(a => a.status === 'pending').length > 0 && (
+            <span className="ml-2 px-2 py-0.5 bg-red-500 text-[10px] rounded-full text-white animate-pulse">
+              {applications.filter(a => a.status === 'pending').length}
+            </span>
+          )}
         </button>
       </div>
 
@@ -268,7 +324,10 @@ export default function FounderPartnerships() {
                             >
                               <Edit2 className="w-4 h-4" />
                             </button>
-                            <button className="p-2 glass rounded-lg hover:text-red-500 transition-all">
+                            <button 
+                              onClick={() => handleDeletePartner(partner.id)}
+                              className="p-2 glass rounded-lg hover:text-red-500 transition-all"
+                            >
                               <Trash2 className="w-4 h-4" />
                             </button>
                           </div>
@@ -279,7 +338,7 @@ export default function FounderPartnerships() {
                 </table>
               </div>
             </motion.div>
-          ) : (
+          ) : activeTab === 'tiers' ? (
             <motion.div 
               key="tiers"
               initial={{ opacity: 0, y: 20 }}
@@ -343,6 +402,113 @@ export default function FounderPartnerships() {
                   </div>
                 </div>
               ))}
+            </motion.div>
+          ) : (
+            <motion.div 
+              key="applications"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="glass rounded-[2.5rem] overflow-hidden"
+            >
+              <div className="overflow-x-auto">
+                <table className="w-full text-left">
+                  <thead>
+                    <tr className="border-b border-white/5 text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+                      <th className="px-8 py-6">Applicant</th>
+                      <th className="px-8 py-6">Requested Tier</th>
+                      <th className="px-8 py-6">Category</th>
+                      <th className="px-8 py-6">Status</th>
+                      <th className="px-8 py-6">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-white/5">
+                    {applications.map((app) => (
+                      <tr key={app.id} className="hover:bg-white/5 transition-all group">
+                        <td className="px-8 py-6">
+                          <div>
+                            <p className="font-bold flex items-center gap-2">
+                              {app.company_name}
+                              {app.website_url && (
+                                <a 
+                                  href={app.website_url} 
+                                  target="_blank" 
+                                  rel="noopener noreferrer"
+                                  className="text-primary hover:scale-110 transition-transform"
+                                >
+                                  <ExternalLink className="w-3 h-3" />
+                                </a>
+                              )}
+                            </p>
+                            <p className="text-xs text-muted-foreground">{app.contact_name} • {app.contact_email}</p>
+                          </div>
+                        </td>
+                        <td className="px-8 py-6">
+                          <span 
+                            className="text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full border"
+                            style={{ 
+                              color: app.partnership_tiers?.color_code, 
+                              borderColor: `${app.partnership_tiers?.color_code}40`,
+                              backgroundColor: `${app.partnership_tiers?.color_code}10`
+                            }}
+                          >
+                            {app.partnership_tiers?.name}
+                          </span>
+                        </td>
+                        <td className="px-8 py-6">
+                          <span className="text-sm font-bold opacity-60">{app.category}</span>
+                        </td>
+                        <td className="px-8 py-6">
+                          <div className="flex items-center gap-2">
+                            <div className={`w-2 h-2 rounded-full ${
+                              app.status === 'approved' ? 'bg-green-500' : 
+                              app.status === 'pending' ? 'bg-yellow-500 animate-pulse' : 'bg-red-500'
+                            }`} />
+                            <span className="text-xs font-black uppercase tracking-widest">{app.status}</span>
+                          </div>
+                        </td>
+                        <td className="px-8 py-6">
+                          <div className="flex items-center gap-2">
+                            <button 
+                              onClick={() => {
+                                setSelectedApplication(app);
+                                setIsAppDetailModalOpen(true);
+                              }}
+                              className="p-2 glass rounded-lg hover:text-primary transition-all"
+                              title="View Details"
+                            >
+                              <Eye className="w-4 h-4" />
+                            </button>
+                            {app.status === 'pending' && (
+                              <div className="flex gap-2">
+                                <button 
+                                  onClick={() => handleApplicationAction(app.id, 'approved')}
+                                  className="px-3 py-1 bg-green-500/10 text-green-500 hover:bg-green-500 hover:text-white rounded-lg text-[10px] font-black uppercase transition-all"
+                                >
+                                  Approve
+                                </button>
+                                <button 
+                                  onClick={() => handleApplicationAction(app.id, 'rejected')}
+                                  className="px-3 py-1 bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white rounded-lg text-[10px] font-black uppercase transition-all"
+                                >
+                                  Reject
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                    {applications.length === 0 && (
+                      <tr>
+                        <td colSpan={5} className="px-8 py-12 text-center text-muted-foreground font-bold">
+                          No applications found.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </motion.div>
           )}
         </AnimatePresence>
@@ -483,6 +649,137 @@ export default function FounderPartnerships() {
                   {editingPartner ? 'Update Partner' : 'Create Partner'}
                 </button>
               </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+      {/* Application Detail Modal */}
+      <AnimatePresence>
+        {isAppDetailModalOpen && selectedApplication && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              className="glass p-8 rounded-[3rem] w-full max-w-2xl border-white/10 max-h-[90vh] overflow-y-auto"
+            >
+              <div className="flex justify-between items-center mb-8">
+                <div>
+                  <h3 className="text-2xl font-black">{selectedApplication.company_name}</h3>
+                  <p className="text-muted-foreground font-medium">Partnership Application Details</p>
+                </div>
+                <button 
+                  onClick={() => setIsAppDetailModalOpen(false)} 
+                  className="p-2 glass rounded-full hover:bg-white/10 transition-all"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="space-y-8">
+                <div className="grid md:grid-cols-2 gap-8">
+                  <div className="space-y-4">
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-1">Contact Person</p>
+                      <p className="font-bold">{selectedApplication.contact_name}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-1">Email Address</p>
+                      <p className="font-bold">{selectedApplication.contact_email}</p>
+                    </div>
+                    {selectedApplication.contact_phone && (
+                      <div>
+                        <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-1">Phone Number</p>
+                        <p className="font-bold">{selectedApplication.contact_phone}</p>
+                      </div>
+                    )}
+                  </div>
+                  <div className="space-y-4">
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-1">Category</p>
+                      <p className="font-bold">{selectedApplication.category}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-1">Requested Tier</p>
+                      <span 
+                        className="text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full border inline-block"
+                        style={{ 
+                          color: selectedApplication.partnership_tiers?.color_code, 
+                          borderColor: `${selectedApplication.partnership_tiers?.color_code}40`,
+                          backgroundColor: `${selectedApplication.partnership_tiers?.color_code}10`
+                        }}
+                      >
+                        {selectedApplication.partnership_tiers?.name}
+                      </span>
+                    </div>
+                    {selectedApplication.website_url && (
+                      <div>
+                        <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-1">Website</p>
+                        <a 
+                          href={selectedApplication.website_url} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="text-primary font-bold flex items-center gap-2 hover:underline"
+                        >
+                          {selectedApplication.website_url}
+                          <ExternalLink className="w-4 h-4" />
+                        </a>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Description / Motivation</p>
+                  <div className="glass p-6 rounded-2xl text-sm leading-relaxed font-medium">
+                    {selectedApplication.description}
+                  </div>
+                </div>
+
+                {selectedApplication.proof_url && (
+                  <div className="space-y-2">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Qualification Proof</p>
+                    <a 
+                      href={selectedApplication.proof_url} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-4 p-4 glass border-white/5 rounded-2xl hover:bg-white/5 transition-all group"
+                    >
+                      <div className="w-12 h-12 bg-primary/10 text-primary rounded-xl flex items-center justify-center">
+                        <FileCheck className="w-6 h-6" />
+                      </div>
+                      <div className="flex-1">
+                        <p className="font-bold group-hover:text-primary transition-colors">View Document</p>
+                        <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-widest">Click to open in new tab</p>
+                      </div>
+                      <ExternalLink className="w-5 h-5 text-muted-foreground" />
+                    </a>
+                  </div>
+                )}
+
+                {selectedApplication.status === 'pending' && (
+                  <div className="pt-4 flex gap-4">
+                    <button 
+                      onClick={() => {
+                        handleApplicationAction(selectedApplication.id, 'approved');
+                        setIsAppDetailModalOpen(false);
+                      }}
+                      className="flex-1 py-4 bg-green-500 text-white rounded-2xl font-black hover:scale-[1.02] transition-all shadow-lg shadow-green-500/20"
+                    >
+                      Approve Application
+                    </button>
+                    <button 
+                      onClick={() => {
+                        handleApplicationAction(selectedApplication.id, 'rejected');
+                        setIsAppDetailModalOpen(false);
+                      }}
+                      className="flex-1 py-4 bg-red-500 text-white rounded-2xl font-black hover:scale-[1.02] transition-all shadow-lg shadow-red-500/20"
+                    >
+                      Reject Application
+                    </button>
+                  </div>
+                )}
+              </div>
             </motion.div>
           </div>
         )}

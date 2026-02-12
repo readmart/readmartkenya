@@ -16,6 +16,53 @@ import { initiatePayment, checkPaymentStatus } from '@/api/payments';
 import { getShippingZones } from '@/api/dashboards';
 import { supabase } from '@/lib/supabase/client';
 
+interface ShippingZone {
+  id: string;
+  name: string;
+  base_rate?: number;
+  price?: number; // Alternative for base_rate
+  rate?: number; // Another alternative for base_rate
+  weight_surcharge?: number;
+  volume_surcharge?: number;
+  postal_codes?: string;
+  is_active?: boolean;
+  shipping_method?: string;
+  region?: string;
+  estimated_days?: number;
+}
+
+interface Order {
+  id: string;
+  full_name: string;
+  email: string;
+  phone: string;
+  address: string;
+  city: string;
+  subtotal_amount: number;
+  shipping_amount: number;
+  shipping_zone_id: string;
+  payment_method: 'm-pesa' | 'card';
+  items: {
+    product_id: string;
+    quantity: number;
+    price: number;
+    product_snapshot: CartItem;
+  }[];
+  total_amount?: number; // This is calculated by a backend trigger
+  status?: string; // This is updated by payment processing
+}
+
+interface CartItem {
+  id: string;
+  name: string;
+  price: number;
+  quantity: number;
+  image_url?: string;
+  weight?: number;
+  volume?: number;
+  type?: 'physical' | 'ebook';
+}
+
 type CheckoutStep = 'shipping' | 'payment' | 'confirmation';
 
 export default function Checkout() {
@@ -25,9 +72,10 @@ export default function Checkout() {
   const { user, profile, loading } = useAuth();
   const { settings } = useSettings();
   const [isProcessing, setIsProcessing] = useState(false);
+  const [paymentStatusMessage, setPaymentStatusMessage] = useState('Initiating payment...');
   const [orderNumber, setOrderNumber] = useState('');
   const [paymentMethod] = useState<'m-pesa' | 'card'>('m-pesa');
-  const [shippingZones, setShippingZones] = useState<any[]>([]);
+  const [shippingZones, setShippingZones] = useState<ShippingZone[]>([]);
   const [selectedZoneId, setSelectedZoneId] = useState<string>('');
   const [sessionId, setSessionId] = useState<string | null>(null);
   const navigate = useNavigate();
@@ -41,6 +89,14 @@ export default function Checkout() {
     phone: '',
   });
 
+  const [validationErrors, setValidationErrors] = useState({
+    fullName: '',
+    address: '',
+    city: '',
+    phone: '',
+    shippingZone: '',
+  });
+
   // Track checkout session
   useEffect(() => {
     if (!user || cartItems.length === 0) return;
@@ -49,7 +105,7 @@ export default function Checkout() {
       try {
         if (!sessionId) {
           let session: any = null;
-          let sessionError: any = null;
+          let sessionError: { code?: string; message?: string; status?: number } | null = null;
 
           try {
             const { data, error } = await supabase
@@ -67,8 +123,8 @@ export default function Checkout() {
               .maybeSingle();
             session = data;
             sessionError = error;
-          } catch (e: any) {
-            sessionError = e;
+          } catch (e: unknown) {
+            sessionError = e as { code?: string; message?: string; status?: number };
           }
           
           if (sessionError) {
@@ -78,8 +134,8 @@ export default function Checkout() {
               sessionError.code === 'PGRST100' ||
               sessionError.message?.includes('column') || 
               sessionError.message?.includes('cache') ||
-              (sessionError as any).status === 404 ||
-              (sessionError as any).status === 400;
+              (sessionError as { status?: number }).status === 404 ||
+              (sessionError as { status?: number }).status === 400;
 
             if (isSchemaError) {
               console.warn('Schema cache issue on checkout session creation, retrying with minimal select');
@@ -143,7 +199,7 @@ export default function Checkout() {
         
         // Default to first active zone if nothing selected
         if (zones && zones.length > 0 && !selectedZoneId) {
-          const activeZone = zones.find((z: any) => z.is_active) || zones[0];
+          const activeZone = zones.find((z: ShippingZone) => z.is_active) || zones[0];
           if (activeZone) {
             console.log('Setting default zone:', activeZone.name);
             setSelectedZoneId(activeZone.id);
@@ -154,7 +210,7 @@ export default function Checkout() {
       }
     }
     loadShippingZones();
-  }, []); // Reverted dependencies to avoid potential loops
+  }, [selectedZoneId]);
 
   // Auto-match shipping zone based on city or postal code
   useEffect(() => {
@@ -166,7 +222,7 @@ export default function Checkout() {
     if (!city && !pCode) return;
 
     // Try to find a zone that matches the city name or postal code
-    const matchedZone = shippingZones.find((zone: any) => {
+    const matchedZone = shippingZones.find((zone: ShippingZone) => {
       if (!zone.is_active) return false;
       
       const zoneName = zone.name.toLowerCase();
@@ -185,7 +241,7 @@ export default function Checkout() {
       setSelectedZoneId(matchedZone.id);
       toast.info(`Shipping zone updated to: ${matchedZone.name}`, { duration: 2000 });
     }
-  }, [formData.city, formData.postalCode, shippingZones]);
+  }, [formData.city, formData.postalCode, shippingZones, selectedZoneId]);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -260,16 +316,43 @@ export default function Checkout() {
 
   const handleNext = () => {
     if (step === 'shipping') {
-      if (!formData.fullName || !formData.address || !formData.city) {
-        toast.error('Please fill in all shipping details');
-        return;
+      let hasErrors = false;
+      const newErrors = {
+        fullName: '',
+        address: '',
+        city: '',
+        phone: '',
+        shippingZone: '',
+      };
+
+      if (!formData.fullName) {
+        newErrors.fullName = 'Full Name is required';
+        hasErrors = true;
+      }
+      if (!formData.address) {
+        newErrors.address = 'Delivery Address is required';
+        hasErrors = true;
+      }
+      if (!formData.city) {
+        newErrors.city = 'City / Town is required';
+        hasErrors = true;
+      }
+      if (!formData.phone) {
+        newErrors.phone = 'Phone Number is required';
+        hasErrors = true;
+      } else if (!kenyanPhoneRegex.test(formData.phone)) {
+        newErrors.phone = 'Please enter a valid Kenyan phone number';
+        hasErrors = true;
       }
       if (!selectedZoneId) {
-        toast.error('Please select a shipping zone');
-        return;
+        newErrors.shippingZone = 'Please select a shipping zone';
+        hasErrors = true;
       }
-      if (!kenyanPhoneRegex.test(formData.phone)) {
-        toast.error('Please enter a valid Kenyan phone number');
+
+      setValidationErrors(newErrors);
+
+      if (hasErrors) {
+        toast.error('Please correct the errors in the shipping details.');
         return;
       }
       setStep('payment');
@@ -278,10 +361,11 @@ export default function Checkout() {
 
   const handlePayment = async () => {
     setIsProcessing(true);
+    setPaymentStatusMessage('Creating your order...');
     try {
       // 1. Create the order in Supabase
       // The backend trigger handles tax_amount and total_amount calculation
-      const order = await createOrder({
+      const order: Order = await createOrder({
         full_name: formData.fullName,
         email: formData.email,
         phone: formData.phone,
@@ -307,8 +391,9 @@ export default function Checkout() {
 
       // 2. Initiate payment based on selected method
       // Use calculated total as fallback if the order object doesn't have it (schema cache issues)
-      const paymentAmount = (order as any).total_amount || (cartTotal + shippingAmount);
+      const paymentAmount: number = order.total_amount || (cartTotal + shippingAmount);
       
+      setPaymentStatusMessage('Initiating M-Pesa payment...');
       const result = await initiatePayment(
         order.id, 
         formData.phone, 
@@ -317,20 +402,24 @@ export default function Checkout() {
       );
       
       if (result.error) {
-        toast.error(result.error);
+        toast.error(result.error || 'Failed to initiate payment. Please try again or check your phone number.');
         setIsProcessing(false);
+        setPaymentStatusMessage('Payment initiation failed.');
         return;
       }
 
       if (result.demo) {
+        setPaymentStatusMessage('Demo Mode: Payment simulated...');
         toast.info('Demo Mode: Payment simulated');
         setTimeout(() => {
           setIsProcessing(false);
           setStep('confirmation');
           clearCart();
           toast.success('Order placed successfully!');
+          setPaymentStatusMessage('Payment successful!');
         }, 2000);
       } else {
+        setPaymentStatusMessage('Waiting for M-Pesa prompt on your phone...');
         toast.success('M-Pesa request sent! Please enter your PIN.');
         
         // Use Realtime for instant updates
@@ -343,24 +432,26 @@ export default function Checkout() {
               schema: 'public',
               table: 'orders',
               filter: `id=eq.${order.id}`
-            },
-            (payload) => {
-              const newStatus = payload.new.status;
-              if (newStatus === 'paid' || newStatus === 'processing') {
-                cleanup();
-                setIsProcessing(false);
-                setStep('confirmation');
-                clearCart();
-                toast.success('Payment received! Order placed successfully.');
-              } else if (newStatus === 'failed') {
-                cleanup();
-                setIsProcessing(false);
-                toast.error('Payment failed. Please try again.');
-              }
+          },
+          (payload: { new: { status: string } }) => {
+            const newStatus = payload.new.status;
+            if (newStatus === 'paid' || newStatus === 'processing') {
+              cleanup();
+              setIsProcessing(false);
+              setStep('confirmation');
+              clearCart();
+              toast.success('Payment received! Order placed successfully.');
+              setPaymentStatusMessage('Payment successful!');
+            } else if (newStatus === 'failed') {
+              cleanup();
+              setIsProcessing(false);
+              toast.error('Payment failed. Please try again.');
+              setPaymentStatusMessage('Payment failed.');
             }
-          )
-          .subscribe((status) => {
-            if (status !== 'SUBSCRIBED') {
+          }
+        )
+        .subscribe((status: string) => {
+          if (status !== 'SUBSCRIBED') {
               console.warn('Checkout Realtime subscription status:', status);
             }
           });
@@ -370,6 +461,7 @@ export default function Checkout() {
         const maxAttempts = 20;
         const pollInterval = setInterval(async () => {
           attempts++;
+          setPaymentStatusMessage(`Verifying payment status... (Attempt ${attempts}/${maxAttempts})`);
           const orderStatus = await checkPaymentStatus(order.id);
           if (orderStatus?.status === 'paid' || orderStatus?.status === 'processing') {
             cleanup();
@@ -377,14 +469,17 @@ export default function Checkout() {
             setStep('confirmation');
             clearCart();
             toast.success('Payment received! Order placed successfully.');
+            setPaymentStatusMessage('Payment successful!');
           } else if (orderStatus?.status === 'failed') {
             cleanup();
             setIsProcessing(false);
             toast.error('Payment failed. Please try again.');
+            setPaymentStatusMessage('Payment failed.');
           } else if (attempts >= maxAttempts) {
             cleanup();
             setIsProcessing(false);
-            toast.error('Payment timeout. If you paid, please check your order history.');
+            toast.error('Payment timed out. Please check your order history or contact support if you believe payment was successful.');
+            setPaymentStatusMessage('Payment timed out. Please check your order history.');
           }
         }, 3000);
 
@@ -394,9 +489,11 @@ export default function Checkout() {
         };
       }
 
-    } catch (error: any) {
-      toast.error(error.message || 'Checkout failed');
+    } catch (error: unknown) {
+      console.error('Checkout error:', error);
+      toast.error((error as Error).message || 'An unexpected error occurred during checkout. Please try again.');
       setIsProcessing(false);
+      setPaymentStatusMessage('Checkout failed. Please try again.');
     }
   };
 
@@ -450,10 +547,16 @@ export default function Checkout() {
                       name="fullName"
                       type="text" 
                       value={formData.fullName}
-                      onChange={e => setFormData({...formData, fullName: e.target.value})}
-                      className="glass w-full px-4 py-3 rounded-xl outline-none focus:ring-2 focus:ring-primary" 
+                      onChange={e => {
+                        setFormData({...formData, fullName: e.target.value});
+                        setValidationErrors(prev => ({...prev, fullName: ''}));
+                      }}
+                      className={`glass w-full px-4 py-3 rounded-xl outline-none focus:ring-2 focus:ring-primary ${validationErrors.fullName ? 'border border-red-500' : ''}`} 
                       placeholder="John Doe"
                     />
+                    {validationErrors.fullName && (
+                      <p className="text-red-500 text-xs mt-1">{validationErrors.fullName}</p>
+                    )}
                   </div>
                   <div className="space-y-2">
                     <label htmlFor="phone" className="text-sm font-medium">Phone Number (M-Pesa)</label>
@@ -462,10 +565,16 @@ export default function Checkout() {
                       name="phone"
                       type="tel" 
                       value={formData.phone}
-                      onChange={e => setFormData({...formData, phone: e.target.value})}
-                      className="glass w-full px-4 py-3 rounded-xl outline-none focus:ring-2 focus:ring-primary" 
+                      onChange={e => {
+                        setFormData({...formData, phone: e.target.value});
+                        setValidationErrors(prev => ({...prev, phone: ''}));
+                      }}
+                      className={`glass w-full px-4 py-3 rounded-xl outline-none focus:ring-2 focus:ring-primary ${validationErrors.phone ? 'border border-red-500' : ''}`} 
                       placeholder="0712345678"
                     />
+                    {validationErrors.phone && (
+                      <p className="text-red-500 text-xs mt-1">{validationErrors.phone}</p>
+                    )}
                   </div>
                   <div className="md:col-span-2 space-y-2">
                     <label htmlFor="address" className="text-sm font-medium">Delivery Address</label>
@@ -473,10 +582,16 @@ export default function Checkout() {
                       id="address"
                       name="address"
                       value={formData.address}
-                      onChange={e => setFormData({...formData, address: e.target.value})}
-                      className="glass w-full px-4 py-3 rounded-xl outline-none focus:ring-2 focus:ring-primary min-h-[100px]" 
+                      onChange={e => {
+                        setFormData({...formData, address: e.target.value});
+                        setValidationErrors(prev => ({...prev, address: ''}));
+                      }}
+                      className={`glass w-full px-4 py-3 rounded-xl outline-none focus:ring-2 focus:ring-primary min-h-[100px] ${validationErrors.address ? 'border border-red-500' : ''}`} 
                       placeholder="Street, Apartment, Suite, etc."
                     />
+                    {validationErrors.address && (
+                      <p className="text-red-500 text-xs mt-1">{validationErrors.address}</p>
+                    )}
                   </div>
                   <div className="space-y-2">
                     <label htmlFor="city" className="text-sm font-medium">City / Town</label>
@@ -485,10 +600,16 @@ export default function Checkout() {
                       name="city"
                       type="text" 
                       value={formData.city}
-                      onChange={e => setFormData({...formData, city: e.target.value})}
-                      className="glass w-full px-4 py-3 rounded-xl outline-none focus:ring-2 focus:ring-primary" 
+                      onChange={e => {
+                        setFormData({...formData, city: e.target.value});
+                        setValidationErrors(prev => ({...prev, city: ''}));
+                      }}
+                      className={`glass w-full px-4 py-3 rounded-xl outline-none focus:ring-2 focus:ring-primary ${validationErrors.city ? 'border border-red-500' : ''}`} 
                       placeholder="e.g. Nairobi, Mombasa"
                     />
+                    {validationErrors.city && (
+                      <p className="text-red-500 text-xs mt-1">{validationErrors.city}</p>
+                    )}
                   </div>
                   <div className="space-y-2">
                     <label htmlFor="postalCode" className="text-sm font-medium">Postal Code (Optional)</label>
@@ -508,8 +629,11 @@ export default function Checkout() {
                       id="shippingZone"
                       name="shippingZone"
                       value={selectedZoneId}
-                      onChange={e => setSelectedZoneId(e.target.value)}
-                      className="glass w-full px-4 py-3 rounded-xl outline-none focus:ring-2 focus:ring-primary bg-transparent font-bold"
+                      onChange={e => {
+                        setSelectedZoneId(e.target.value);
+                        setValidationErrors(prev => ({...prev, shippingZone: ''}));
+                      }}
+                      className={`glass w-full px-4 py-3 rounded-xl outline-none focus:ring-2 focus:ring-primary bg-transparent font-bold ${validationErrors.shippingZone ? 'border border-red-500' : ''}`}
                     >
                       <option value="" disabled className="bg-background">Select delivery option</option>
                       {shippingZones.filter(z => z.is_active).map(zone => (
@@ -518,6 +642,9 @@ export default function Checkout() {
                         </option>
                       ))}
                     </select>
+                    {validationErrors.shippingZone && (
+                      <p className="text-red-500 text-xs mt-1">{validationErrors.shippingZone}</p>
+                    )}
                     <div className="flex flex-wrap gap-2 mt-2">
                       {selectedZone && (
                         <>
@@ -615,12 +742,19 @@ export default function Checkout() {
                       <p className="text-sm font-bold">How it works:</p>
                       <p className="text-xs text-muted-foreground leading-relaxed">
                         1. Click "Authorize Payment" below.<br/>
-                        2. Check your phone <strong>{formData.phone}</strong> for a prompt.<br/>
+                        2. Check your phone <strong className="text-white">{formData.phone}</strong> for a prompt.<br/>
                         3. Enter your M-Pesa PIN to confirm.
                       </p>
                     </div>
                   </div>
                 </div>
+
+                {isProcessing && (
+                  <div className="glass p-6 rounded-2xl bg-primary/5 border border-primary/10 flex items-center gap-4">
+                    <Loader2 className="w-6 h-6 text-primary animate-spin" />
+                    <p className="text-primary font-bold">{paymentStatusMessage}</p>
+                  </div>
+                )}
 
                 <button 
                   onClick={handlePayment}

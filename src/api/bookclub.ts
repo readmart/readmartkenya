@@ -66,7 +66,7 @@ export async function getMyBookClubs() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return [];
 
-  let { data, error } = await supabase
+  const { data, error } = await supabase
     .from('book_club_memberships')
     .select(`
       club_id,
@@ -78,7 +78,7 @@ export async function getMyBookClubs() {
 
   if (error) throw error;
 
-  return (data || []).map(m => {
+  return (data || []).map((m: any) => {
     const club = Array.isArray(m.club) ? m.club[0] : m.club;
     return {
       club_id: m.club_id,
@@ -98,7 +98,7 @@ export async function getMyBookClubs() {
 }
 
 export async function getBookClub(id: string) {
-  let { data, error } = await supabase
+  const { data, error } = await supabase
     .from('book_clubs')
     .select('id, name, description, image_url, metadata, is_active, created_at')
     .eq('id', id)

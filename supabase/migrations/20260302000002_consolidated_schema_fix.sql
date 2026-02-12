@@ -31,6 +31,10 @@ END $$;
 -- 2. Add ALL missing columns to site_settings used by the frontend
 -- We add them all at once to ensure the schema matches the useSettings hook
 ALTER TABLE public.site_settings 
+ADD COLUMN IF NOT EXISTS site_name text DEFAULT 'ReadMart',
+ADD COLUMN IF NOT EXISTS site_logo text DEFAULT '/assets/logo.jpg',
+ADD COLUMN IF NOT EXISTS contact_email text DEFAULT 'hello@readmart.com',
+ADD COLUMN IF NOT EXISTS whatsapp_link text DEFAULT 'https://wa.me/254794129958',
 ADD COLUMN IF NOT EXISTS maintenance_mode boolean DEFAULT false,
 ADD COLUMN IF NOT EXISTS contact_phone text DEFAULT '+254 794 129 958',
 ADD COLUMN IF NOT EXISTS secondary_phone text DEFAULT '+254 741 658 548',
@@ -65,6 +69,9 @@ ALTER TABLE public.products
 ADD COLUMN IF NOT EXISTS title text,
 ADD COLUMN IF NOT EXISTS author text,
 ADD COLUMN IF NOT EXISTS description text,
+ADD COLUMN IF NOT EXISTS price decimal,
+ADD COLUMN IF NOT EXISTS image_url text,
+ADD COLUMN IF NOT EXISTS category_id uuid,
 ADD COLUMN IF NOT EXISTS type text DEFAULT 'physical',
 ADD COLUMN IF NOT EXISTS metadata jsonb DEFAULT '{}'::jsonb,
 ADD COLUMN IF NOT EXISTS sale_price decimal,
@@ -72,19 +79,17 @@ ADD COLUMN IF NOT EXISTS is_active boolean DEFAULT true,
 ADD COLUMN IF NOT EXISTS stock_quantity integer DEFAULT 0;
 
 -- 4. Ensure the 'global' record exists and is unique
--- First, make sure we don't have multiple records if we just converted from UUID
-DO $$
-BEGIN
-    IF (SELECT count(*) FROM public.site_settings) > 1 THEN
-        DELETE FROM public.site_settings WHERE id != 'global' AND id != (SELECT id FROM public.site_settings LIMIT 1);
-    END IF;
-END $$;
+-- First, clean up any records that are not 'global' to avoid confusion
+DELETE FROM public.site_settings WHERE id != 'global';
 
-INSERT INTO public.site_settings (id, site_name)
-VALUES ('global', 'ReadMart')
+-- Insert or update the global settings record
+INSERT INTO public.site_settings (id, site_name, site_logo, contact_email, whatsapp_link)
+VALUES ('global', 'ReadMart', '/assets/logo.jpg', 'hello@readmart.com', 'https://wa.me/254794129958')
 ON CONFLICT (id) DO UPDATE SET 
-    site_name = EXCLUDED.site_name
-    WHERE public.site_settings.site_name IS NULL;
+    site_name = COALESCE(public.site_settings.site_name, EXCLUDED.site_name),
+    site_logo = COALESCE(public.site_settings.site_logo, EXCLUDED.site_logo),
+    contact_email = COALESCE(public.site_settings.contact_email, EXCLUDED.contact_email),
+    whatsapp_link = COALESCE(public.site_settings.whatsapp_link, EXCLUDED.whatsapp_link);
 
 -- 5. Force PostgREST to reload the schema cache
 -- This is critical to resolve PGRST205 errors immediately

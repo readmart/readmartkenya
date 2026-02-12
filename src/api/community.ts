@@ -178,13 +178,13 @@ export async function getWishlist() {
  */
 export async function getAvailableBookClubs(): Promise<BookClub[]> {
   try {
-    let { data, error } = await supabase
+    const { data, error } = await supabase
       .from('book_clubs')
       .select('id, name, description, image_url, is_active, metadata, created_at, membership_price, founder_id');
 
     if (error) throw error;
 
-    return (data || []).map(item => ({
+    return (data || []).map((item: any) => ({
       id: item.id,
       name: item.name,
       description: item.description,
@@ -206,7 +206,7 @@ export async function getAvailableBookClubs(): Promise<BookClub[]> {
  */
 export async function getBookClubById(id: string): Promise<BookClub | null> {
   try {
-    let { data, error } = await supabase
+    const { data, error } = await supabase
       .from('book_clubs')
       .select('id, name, description, image_url, is_active, metadata, created_at, membership_price, founder_id')
       .eq('id', id)
@@ -304,7 +304,7 @@ export async function getUserMembership(): Promise<BookClubMembership | null> {
   if (!user) return null;
 
   try {
-    let { data, error } = await supabase
+    const { data, error } = await supabase
       .from('book_club_memberships')
       .select(`
         id, user_id, club_id, status, created_at, expires_at,
@@ -366,7 +366,7 @@ export async function getInsights(): Promise<CMSContent[]> {
         throw error;
       }
     }
-    return (data || []).map(d => ({ ...d, type: 'announcement' })) as CMSContent[];
+    return (data || []).map((d: any) => ({ ...d, type: 'announcement' })) as CMSContent[];
   } catch (error) {
     console.warn('Announcements fetch failed, returning empty list');
     return [];
@@ -419,7 +419,7 @@ export async function getRecentReviews(): Promise<Review[]> {
     const columns = 'id, user_id, product_id, rating, comment, created_at';
     const productColumns = 'title';
     let data: any[] = [];
-    let { data: reviews, error } = await supabase
+    const { data: reviews, error } = await supabase
       .from('reviews')
       .select(`
         ${columns},
@@ -430,14 +430,14 @@ export async function getRecentReviews(): Promise<Review[]> {
 
     if (!error && reviews) {
       // Manually fetch profiles from the secure public view
-      const userIds = [...new Set(reviews.map(r => r.user_id))];
+      const userIds = [...new Set(reviews.map((r: any) => r.user_id))];
       const { data: profiles } = await supabase
         .from('public_profiles')
         .select('id, full_name, avatar_url')
         .in('id', userIds);
       
-      const profileMap = Object.fromEntries(profiles?.map(p => [p.id, p]) || []);
-      data = reviews.map(r => ({
+      const profileMap = Object.fromEntries(profiles?.map((p: any) => [p.id, p]) || []);
+      data = reviews.map((r: any) => ({
         ...r,
         profile: profileMap[r.user_id] || null
       }));
@@ -478,7 +478,7 @@ export async function getProductReviews(productId: string): Promise<Review[]> {
   try {
     const columns = 'id, user_id, product_id, rating, comment, created_at';
     let data: any[] = [];
-    let { data: reviews, error } = await supabase
+    const { data: reviews, error } = await supabase
       .from('reviews')
       .select(columns)
       .eq('product_id', productId)
@@ -486,14 +486,14 @@ export async function getProductReviews(productId: string): Promise<Review[]> {
 
     if (!error && reviews) {
       // Manually fetch profiles from the secure public view
-      const userIds = [...new Set(reviews.map(r => r.user_id))];
+      const userIds = [...new Set(reviews.map((r: any) => r.user_id))];
       const { data: profiles } = await supabase
         .from('public_profiles')
         .select('id, full_name, avatar_url')
         .in('id', userIds);
       
-      const profileMap = Object.fromEntries(profiles?.map(p => [p.id, p]) || []);
-      data = reviews.map(r => ({
+      const profileMap = Object.fromEntries(profiles?.map((p: any) => [p.id, p]) || []);
+      data = reviews.map((r: any) => ({
         ...r,
         profile: profileMap[r.user_id] || null
       }));
@@ -588,21 +588,21 @@ export async function getEventRSVPs(eventId: string): Promise<(EventRSVP & { pro
   try {
     const columns = 'id, user_id, event_id, status, created_at';
     let data: any[] = [];
-    let { data: rsvps, error } = await supabase
+    const { data: rsvps, error } = await supabase
       .from('event_rsvps')
       .select(columns)
       .eq('event_id', eventId);
 
     if (!error && rsvps) {
       // Manually fetch profiles from the secure public view
-      const userIds = [...new Set(rsvps.map(r => r.user_id))];
+      const userIds = [...new Set(rsvps.map((r: any) => r.user_id))];
       const { data: profiles } = await supabase
         .from('public_profiles')
         .select('id, full_name, avatar_url')
         .in('id', userIds);
       
-      const profileMap = Object.fromEntries(profiles?.map(p => [p.id, p]) || []);
-      data = rsvps.map(r => ({
+      const profileMap = Object.fromEntries(profiles?.map((p: any) => [p.id, p]) || []);
+      data = rsvps.map((r: any) => ({
         ...r,
         profile: profileMap[r.user_id] || null
       }));
@@ -640,7 +640,7 @@ export async function getClubDiscussions(clubId: string): Promise<ClubDiscussion
   try {
     const columns = 'id, club_id, author_id, title, content, image_url, is_pinned, created_at';
     let data: any[] = [];
-    let { data: discussions, error } = await supabase
+    const { data: discussions, error } = await supabase
       .from('club_discussions')
       .select(columns)
       .eq('club_id', clubId)
@@ -649,14 +649,14 @@ export async function getClubDiscussions(clubId: string): Promise<ClubDiscussion
 
     if (!error && discussions) {
       // Manually fetch profiles from the secure public view
-      const authorIds = [...new Set(discussions.map(d => d.author_id))];
+      const authorIds = [...new Set(discussions.map((d: any) => d.author_id))];
       const { data: profiles } = await supabase
         .from('public_profiles')
         .select('id, full_name, avatar_url')
         .in('id', authorIds);
       
-      const profileMap = Object.fromEntries(profiles?.map(p => [p.id, p]) || []);
-      data = discussions.map(d => ({
+      const profileMap = Object.fromEntries(profiles?.map((p: any) => [p.id, p]) || []);
+      data = discussions.map((d: any) => ({
         ...d,
         author: profileMap[d.author_id] || null
       }));

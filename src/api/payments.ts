@@ -33,38 +33,44 @@ export async function initiatePayment(orderId: string, phoneNumber: string, amou
         } else {
           errorMessage = error.error || error.message || errorMessage;
         }
-      } catch (e) {
-        // Not a JSON error, maybe HTML?
-        if (text.includes('A server error occurred')) {
-          errorMessage = 'Server error (500) occurred while initiating payment. Please try again later.';
-        } else {
-          errorMessage = `HTTP Error ${response.status}: ${text.slice(0, 100)}`;
-        }
+      } catch (_e) {
+      // Not a JSON error, maybe HTML?
+      if (text.includes('A server error occurred')) {
+        errorMessage = 'Server error (500) occurred while initiating payment. Please try again later.';
+      } else {
+        errorMessage = `HTTP Error ${response.status}: ${text.slice(0, 100)}`;
       }
+    }
       throw new Error(errorMessage);
     }
 
     try {
       return JSON.parse(text);
-    } catch (e) {
+    } catch (_e) {
       throw new Error('Received invalid JSON response from server');
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Payment Error:', error);
-    return { error: error.message || 'Failed to initiate payment' };
+    return { error: (error as Error).message || 'Failed to initiate payment' };
   }
 }
 
 /**
  * Checks the status of a payment/order
  */
+interface OrderStatus {
+  status: string;
+  payment_id?: string;
+  payment_status?: string;
+}
+
 export async function checkPaymentStatus(orderId: string) {
   try {
     let { data: order, error } = await supabase
       .from('orders')
       .select('status, payment_id, payment_status')
       .eq('id', orderId)
-      .maybeSingle();
+      .maybeSingle<OrderStatus>();
 
     if (error) {
       if (error.code === 'PGRST204' || error.message?.includes('column') || error.message?.includes('cache')) {
@@ -73,16 +79,16 @@ export async function checkPaymentStatus(orderId: string) {
           .from('orders')
           .select('status, payment_status')
           .eq('id', orderId)
-          .maybeSingle();
+          .maybeSingle<OrderStatus>();
         
         if (fallbackError) throw fallbackError;
-        order = fallbackOrder as any;
+        order = fallbackOrder;
       } else {
         throw error;
       }
     }
     return order;
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Status Check Error:', error);
     return null;
   }
@@ -91,6 +97,11 @@ export async function checkPaymentStatus(orderId: string) {
 /**
  * Checks the status of a membership payment by record ID or user ID
  */
+interface MembershipPaymentStatus {
+  status: string;
+  payment_id?: string;
+}
+
 export async function checkMembershipStatus(userId: string, paymentId?: string, recordId?: string) {
   try {
     let query = supabase
@@ -109,7 +120,7 @@ export async function checkMembershipStatus(userId: string, paymentId?: string, 
     let { data, error } = await query
       .order('created_at', { ascending: false })
       .limit(1)
-      .maybeSingle();
+      .maybeSingle<MembershipPaymentStatus>();
 
     if (error) {
       if (error.code === 'PGRST204' || error.message?.includes('column') || error.message?.includes('cache')) {
@@ -130,16 +141,16 @@ export async function checkMembershipStatus(userId: string, paymentId?: string, 
         const { data: fallbackData, error: fallbackError } = await fallbackQuery
           .order('created_at', { ascending: false })
           .limit(1)
-          .maybeSingle();
+          .maybeSingle<MembershipPaymentStatus>();
           
         if (fallbackError) throw fallbackError;
-        data = fallbackData as any;
+        data = fallbackData;
       } else {
         throw error;
       }
     }
     return data;
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Membership Status Check Error:', error);
     return null;
   }
@@ -166,9 +177,9 @@ export async function registerWebhooks() {
     }
 
     return JSON.parse(text);
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Webhook Registration Error:', error);
-    return { error: error.message };
+    return { error: (error as Error).message };
   }
 }
 
@@ -199,7 +210,7 @@ export async function initiateMembershipPayment(phoneNumber: string, amount: num
       try {
         const error = await response.json();
         errorMessage = error.error || error.message || errorMessage;
-      } catch (e) {
+      } catch (_e) {
         const text = await response.text();
         if (text.includes('A server error occurred')) {
           errorMessage = 'Server error (500) occurred. Please try again later.';
@@ -212,11 +223,11 @@ export async function initiateMembershipPayment(phoneNumber: string, amount: num
 
     try {
       return await response.json();
-    } catch (e) {
+    } catch (_e) {
       throw new Error('Received invalid JSON response from server');
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Membership Payment Error:', error);
-    return { error: error.message || 'Failed to initiate membership payment' };
+    return { error: (error as Error).message || 'Failed to initiate membership payment' };
   }
 }

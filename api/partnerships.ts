@@ -67,54 +67,62 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (req.method === 'POST') {
       if (!isAdmin) return unauthorized(res, 'Admin access required');
       
+      const table = action === 'tiers' ? 'partnership_tiers' : 'partners';
       const { data, error } = await supabase
-        .from('partners')
+        .from(table)
         .insert([req.body])
         .select()
         .single();
       
       if (error) throw error;
-      await logAction(req, user.id, 'create_partner', 'partners', { partnerId: data.id });
+      await logAction(req, user.id, `create_${table.slice(0, -1)}`, table, { recordId: data.id });
       return json(res, 201, data);
     }
 
     if (req.method === 'PUT') {
-      if (!id) return badRequest(res, 'Missing partner ID');
+      if (!id) return badRequest(res, 'Missing record ID');
       
-      // Partners can update their own, admins can update any
-      const { data: existingPartner } = await supabase
-        .from('partners')
-        .select('user_id')
-        .eq('id', id)
-        .single();
+      const table = action === 'tiers' ? 'partnership_tiers' : 'partners';
 
-      if (!isAdmin && existingPartner?.user_id !== user.id) {
-        return unauthorized(res, 'You do not have permission to update this partner');
+      // For partners table, check ownership if not admin
+      if (table === 'partners' && !isAdmin) {
+        const { data: existingPartner } = await supabase
+          .from('partners')
+          .select('user_id')
+          .eq('id', id)
+          .single();
+
+        if (existingPartner?.user_id !== user.id) {
+          return unauthorized(res, 'You do not have permission to update this partner');
+        }
+      } else if (table === 'partnership_tiers' && !isAdmin) {
+        return unauthorized(res, 'Admin access required to update tiers');
       }
 
       const { data, error } = await supabase
-        .from('partners')
+        .from(table)
         .update(req.body)
         .eq('id', id)
         .select()
         .single();
       
       if (error) throw error;
-      await logAction(req, user.id, 'update_partner', 'partners', { partnerId: id });
+      await logAction(req, user.id, `update_${table.slice(0, -1)}`, table, { recordId: id });
       return json(res, 200, data);
     }
 
     if (req.method === 'DELETE') {
       if (!isAdmin) return unauthorized(res, 'Admin access required');
-      if (!id) return badRequest(res, 'Missing partner ID');
+      if (!id) return badRequest(res, 'Missing record ID');
 
+      const table = action === 'tiers' ? 'partnership_tiers' : 'partners';
       const { error } = await supabase
-        .from('partners')
+        .from(table)
         .delete()
         .eq('id', id);
       
       if (error) throw error;
-      await logAction(req, user.id, 'delete_partner', 'partners', { partnerId: id });
+      await logAction(req, user.id, `delete_${table.slice(0, -1)}`, table, { recordId: id });
       return json(res, 204, null);
     }
 

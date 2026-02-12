@@ -42,7 +42,7 @@ async function verifyProductFlow() {
 
     // 2. Update product to be an ebook and add metadata
     console.log('2. Updating product to ebook and adding metadata...');
-    const { data: updatedProduct, error: updateError } = await supabase
+    const { error: updateError } = await supabase
       .from('products')
       .update({
         type: 'ebook',

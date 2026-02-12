@@ -115,12 +115,12 @@ const StoryModal = ({ isOpen, onClose }: StoryModalProps) => {
                       transition={{ delay: 0.9 }}
                       className="space-y-6"
                     >
-                      <p>From that question, our mission was born:</p>
-                      <div className="p-8 glass rounded-3xl border-primary/20 bg-primary/5 relative overflow-hidden group">
+                      <p className="text-slate-400">From that question, our mission was born:</p>
+                      <div className="p-8 bg-white/5 backdrop-blur-xl rounded-3xl border border-white/10 relative overflow-hidden group">
                         <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
                           <Crosshair className="w-24 h-24 text-primary" />
                         </div>
-                        <p className="text-2xl md:text-3xl font-black text-white leading-tight relative z-10">
+                        <p className="text-2xl md:text-3xl font-black text-primary leading-tight relative z-10">
                           To reimagine how books meet people through innovation, community, personalized services, and unforgettable literary experiences.
                         </p>
                       </div>

@@ -96,7 +96,7 @@ async function bootstrap() {
     const bucketsToCreate = ['products'];
 
     for (const bucketName of bucketsToCreate) {
-      const { data: bucket, error: bucketError } = await supabase.storage.getBucket(bucketName);
+      const { error: bucketError } = await supabase.storage.getBucket(bucketName);
 
       if (bucketError && bucketError.message.includes('not found')) {
         console.log(`Creating ${bucketName} bucket...`);

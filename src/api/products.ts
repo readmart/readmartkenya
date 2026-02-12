@@ -48,7 +48,7 @@ export async function getProducts(options: {
     query = query.limit(options.limit);
   }
 
-  let { data, error } = await query.order('created_at', { ascending: false });
+  const { data, error } = await query.order('created_at', { ascending: false });
 
   if (error) {
     if (error.code === 'PGRST204' || error.message?.includes('column') || error.message?.includes('cache')) {
@@ -94,7 +94,7 @@ export async function getProducts(options: {
  */
 export async function getProductById(id: string) {
   try {
-    let { data, error } = await supabase
+    const { data, error } = await supabase
       .from('products')
       .select(`${PRODUCT_COLUMNS}, category:categories(name)`)
       .eq('id', id)
@@ -125,7 +125,7 @@ export async function getProductById(id: string) {
  * Fetch a single product by slug with hardening
  */
 export async function getProductBySlug(slug: string) {
-  let { data, error } = await supabase
+  const { data, error } = await supabase
     .from('products')
     .select(`${PRODUCT_COLUMNS}, category:categories(name)`)
     .eq('slug', slug)

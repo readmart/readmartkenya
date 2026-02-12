@@ -1,8 +1,101 @@
 
 
+
 // @ts-nocheck
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
+import { serve } from "jsr:@std/http/server@1.0.24"
+import { createClient } from "jsr:@supabase/supabase-js@2"
+
+interface K2WebhookData {
+  webhookEventId: string;
+  transactionId: string;
+  eventType: string;
+  status: string;
+  amount: number;
+  currency: string;
+  phone: string;
+  senderName: string;
+  orderId: string;
+  isSuccess: boolean;
+}
+
+interface ShippingAddress {
+  full_name?: string;
+  phone?: string;
+  address?: string;
+  city?: string;
+}
+
+interface ProductSnapshot {
+  title?: string;
+  type?: string;
+  metadata?: {
+    ebook_password?: string;
+  };
+  author_id?: string;
+}
+
+interface OrderItem {
+  product?: {
+    type?: string;
+    metadata?: {
+      ebook_password?: string;
+    };
+  };
+  product_snapshot?: ProductSnapshot;
+  is_ebook?: boolean;
+  ebook_password?: string;
+  quantity: number;
+  price_at_purchase: number;
+}
+
+interface Order {
+  id: string;
+  total_amount: number;
+  shipping_address?: ShippingAddress;
+}
+
+interface OrderConfirmationData {
+  order: Order;
+  items: OrderItem[];
+}
+
+interface FailedPaymentData {
+  order: Order;
+}
+
+interface OrderItemCommission {
+  id: string;
+  product_id: string;
+  quantity: number;
+  price: number;
+  price_at_purchase: number;
+  product_snapshot: ProductSnapshot;
+  author_id?: string;
+}
+
+interface OrderCommission {
+  id: string;
+  user_id: string;
+  total_amount: number;
+  subtotal_amount: number;
+  shipping_amount: number;
+  shipping_zone_id: string;
+  status: string;
+  payment_status: string;
+  is_paid: boolean;
+  order_items: OrderItemCommission[];
+}
+
+interface PartnershipService {
+  id: string;
+  name: string;
+  commission_rate: number;
+  is_active: boolean;
+}
+
+interface SiteSettings {
+  author_commission_rate: number;
+}
 
 const KOPOKOPO_API_KEY = Deno.env.get("KOPOKOPO_API_KEY") || ""
 const KOPOKOPO_WEBHOOK_SECRET = Deno.env.get("KOPOKOPO_WEBHOOK_SECRET") || ""
@@ -64,28 +157,12 @@ async function sendK2SmsNotification(webhookEventId: string, message: string) {
         content: message
       })
     });
-  } catch (e) {
-    console.error('Failed to send K2 SMS:', e);
+  } catch (e: unknown) {
+    console.error('Failed to send K2 SMS:', (e as Error).message);
   }
 }
 
-const K2_EVENT_TYPES = {
-  STK_PUSH_SUCCESS: 'incoming_payment',
-  BUYGOODS_RECEIVED: 'buygoods_transaction_received',
-  PAYBILL_RECEIVED: 'paybill_transaction_received',
-  CARD_RECEIVED: 'card_transaction_received',
-  CARD_VOIDED: 'card_transaction_voided',
-  CARD_REVERSED: 'card_transaction_reversed',
-  BUYGOODS_REVERSED: 'buygoods_transaction_reversed',
-  B2B_RECEIVED: 'b2b_transaction_received',
-  CUSTOMER_CREATED: 'customer_created',
-  SETTLEMENT_COMPLETED: 'settlement_transfer_completed',
-  M_PESA_PAYMENT_RECEIVED: 'm-pesa_payment_received',
-  TRANSACTION_SMS_NOTIFICATION: 'transaction_sms_notification',
-  B2C_PAYMENT_SUCCESS: 'b2c_payment_success',
-  B2C_PAYMENT_FAILED: 'b2c_payment_failed',
-  PAYMENT_RESULT: 'payment_result'
-};
+
 
 async function verifySignature(body: string, signature: string | null): Promise<boolean> {
   const secret = (KOPOKOPO_WEBHOOK_SECRET || KOPOKOPO_API_KEY).trim()
@@ -112,8 +189,8 @@ async function verifySignature(body: string, signature: string | null): Promise<
       encoder.encode(body)
     )
     if (isValidHex) return true
-  } catch (e) {
-    // Fall through to Base64
+  } catch (e: unknown) {
+    // Fall through to Base64 verification if Hex verification fails
   }
 
   // Fallback to Base64 verification
@@ -129,12 +206,13 @@ async function verifySignature(body: string, signature: string | null): Promise<
       signatureBytes,
       encoder.encode(body)
     )
-  } catch (e) {
+  } catch (e: unknown) {
+    // Return false if both Hex and Base64 verification methods fail
     return false
   }
 }
 
-function extractK2WebhookData(payload: any) {
+function extractK2WebhookData(payload: Record<string, any>): K2WebhookData {
   const data = payload.data?.attributes || payload.attributes || payload;
   const event = payload.event || data.event || {};
   const resource = event.resource || data.resource || payload.resource || {};
@@ -203,8 +281,8 @@ async function sendEmail(params: {
       .maybeSingle();
     
     if (!error && data) logEntry = data as { id: string };
-  } catch (e) {
-    console.warn('Notification logging failed, proceeding:', e);
+  } catch (e: unknown) {
+    console.warn('Notification logging failed, proceeding:', (e as Error).message);
   }
 
   try {
@@ -245,8 +323,8 @@ async function sendEmail(params: {
     }
 
     return { success: true, data: result };
-  } catch (err) {
-    console.error('Failed to send email:', err);
+  } catch (err: unknown) {
+    console.error('Failed to send email:', (err as Error).message);
     if (logEntry?.id) {
       await supabase.from('notification_logs').update({ 
         status: 'failed', 
@@ -302,12 +380,12 @@ function wrapEmailTemplate(content: string, previewText: string = '') {
   `;
 }
 
-function renderOrderConfirmationEmail(data: any) {
+function renderOrderConfirmationEmail(data: OrderConfirmationData) {
   const { order, items } = data;
   const id = order.id.slice(0, 8).toUpperCase();
   const formatPrice = (amount: number) => `KES ${Number(amount).toLocaleString()}`;
   
-  const itemsHtml = items.map((item: any) => {
+  const itemsHtml = items.map((item: OrderItem) => {
     const isEbook = item.product?.type === 'ebook' || item.product_snapshot?.type === 'ebook' || item.is_ebook;
     const password = item.product?.metadata?.ebook_password || item.product_snapshot?.metadata?.ebook_password || item.ebook_password;
     
@@ -372,7 +450,7 @@ function renderOrderConfirmationEmail(data: any) {
   return wrapEmailTemplate(html, `Order Confirmed - #${id}`);
 }
 
-function renderFailedPaymentEmail(data: any) {
+function renderFailedPaymentEmail(data: FailedPaymentData) {
   const { order } = data;
   const id = order.id.slice(0, 8).toUpperCase();
   const formatPrice = (amount: number) => `KES ${Number(amount).toLocaleString()}`;
@@ -422,8 +500,8 @@ async function createNotification(params: {
       }
     }
     return data;
-  } catch (e) {
-    console.error('Notification exception:', e);
+  } catch (e: unknown) {
+    console.error('Notification exception:', (e as Error).message);
   }
 }
 
@@ -435,8 +513,8 @@ async function logAction(action: string, resource?: string, payload?: Record<str
       resource, 
       payload: payload || {} 
     }]);
-  } catch (e) {
-    console.error('Audit log failed:', e);
+  } catch (e: unknown) {
+    console.error('Audit log failed:', (e as Error).message);
   }
 }
 
@@ -444,17 +522,17 @@ async function calculateCommissions(orderId: string) {
   console.log(`Calculating commissions for order: ${orderId}`)
   
   // 1. Fetch order and items with hardening
-  let order: any = null
+  let order: OrderCommission | null = null
   const { data: initialOrder, error: orderError } = await supabase
     .from('orders')
     .select(`
       id, user_id, total_amount, subtotal_amount, shipping_amount, shipping_zone_id, status, payment_status, is_paid,
       order_items (
-        id, product_id, quantity, price, price_at_purchase, product_snapshot
+        id, product_id, quantity, price, price_at_purchase, product_snapshot, author_id
       )
     `)
     .eq('id', orderId)
-    .single()
+    .single() as { data: OrderCommission | null, error: any }
 
   if (orderError || !initialOrder) {
     if (orderError?.code === 'PGRST204' || orderError?.message?.includes('cache')) {
@@ -463,7 +541,7 @@ async function calculateCommissions(orderId: string) {
         .from('orders')
         .select('id, user_id, total_amount, shipping_amount, shipping_zone_id, status')
         .eq('id', orderId)
-        .single()
+        .single() as { data: OrderCommission | null, error: any }
       
       const { data: fallbackItems } = await supabase
         .from('order_items')
@@ -498,11 +576,11 @@ async function calculateCommissions(orderId: string) {
   const { data: services } = await supabase
     .from('partnership_services')
     .select('id, name, commission_rate, is_active')
-    .eq('is_active', true)
+    .eq('is_active', true) as { data: PartnershipService[] | null, error: any }
 
-  const platformService = services?.find((s: any) => s.name.toLowerCase().includes('platform') || s.name.toLowerCase().includes('readmart'))
-  const authorService = services?.find((s: any) => s.name.toLowerCase().includes('author') || s.name.toLowerCase().includes('royalty'))
-  const logisticsService = services?.find((s: any) => s.name.toLowerCase().includes('logistics') || s.name.toLowerCase().includes('shipping'))
+  const platformService = services?.find((s: PartnershipService) => s.name.toLowerCase().includes('platform') || s.name.toLowerCase().includes('readmart'))
+  const authorService = services?.find((s: PartnershipService) => s.name.toLowerCase().includes('author') || s.name.toLowerCase().includes('royalty'))
+  const logisticsService = services?.find((s: PartnershipService) => s.name.toLowerCase().includes('logistics') || s.name.toLowerCase().includes('shipping'))
 
   const ledgerEntries = []
 
@@ -529,9 +607,11 @@ async function calculateCommissions(orderId: string) {
   // 5. Item commissions (Platform & Author)
   let defaultAuthorRate = 70
   try {
-    const { data: settings } = await supabase.from('site_settings').select('author_commission_rate').single()
+    const { data: settings } = await supabase.from('site_settings').select('author_commission_rate').single() as { data: SiteSettings | null, error: any }
     if (settings?.author_commission_rate) defaultAuthorRate = Number(settings.author_commission_rate)
-  } catch (e) {}
+  } catch (e: unknown) {
+    console.error('Error fetching site settings:', (e as Error).message);
+  }
 
   for (const item of order.order_items || []) {
     const price = Number(item.price_at_purchase || item.price || 0)
@@ -658,8 +738,8 @@ async function finalizeOrder(orderId: string, transactionId: string, payload: an
     } else {
       items = data || []
     }
-  } catch (e) {
-    console.error('Failed to fetch items:', e)
+  } catch (e: unknown) {
+    console.error('Error fetching items:', (e as Error).message)
   }
 
   // 5. Digital order activation
@@ -702,8 +782,8 @@ async function finalizeOrder(orderId: string, transactionId: string, payload: an
         html
       })
     }
-  } catch (e) {
-    console.error('Email confirmation failed:', e)
+  } catch (e: unknown) {
+     console.error('Email confirmation failed:', (e as Error).message)
   }
 
   console.log(`Order ${orderId} finalized.`)
@@ -954,8 +1034,8 @@ async function handleAuthorPayoutRequest(authorId: string, amount: number, phone
     }).eq('id', payout.id)
 
     return { success: true, payoutId: payout.id }
-  } catch (err) {
-    console.error('K2 B2C payout trigger failed:', err)
+  } catch (e: unknown) {
+    console.error('K2 B2C payout trigger failed:', (e as Error).message)
     
     // Rollback balance update
     await supabase.from('author_earnings').update({
@@ -966,10 +1046,10 @@ async function handleAuthorPayoutRequest(authorId: string, amount: number, phone
 
     await supabase.from('author_payouts').update({ 
       status: 'failed', 
-      error_message: String(err) 
+      error_message: String(e) 
     }).eq('id', payout.id)
 
-    return { success: false, error: String(err) }
+    return { success: false, error: String(e) }
   }
 }
 
@@ -1001,15 +1081,15 @@ serve(async (req: Request) => {
     })
 
     // 1. Handle B2C Payouts
-    if (eventType === K2_EVENT_TYPES.B2C_PAYMENT_SUCCESS || 
-        eventType === K2_EVENT_TYPES.B2C_PAYMENT_FAILED || 
-        eventType === K2_EVENT_TYPES.PAYMENT_RESULT) {
+    if (eventType === "b2c_payment_received" || 
+        eventType === "b2c_payment_failed" || 
+        eventType === "payment_result") {
       await handleB2CPayout(payload, webhookData)
       return new Response(JSON.stringify({ received: true }), { status: 200 })
     }
 
     // 2. Handle SMS Notification Result
-    if (eventType === K2_EVENT_TYPES.TRANSACTION_SMS_NOTIFICATION) {
+    if (eventType === "transaction_sms_notification") {
       console.log(`K2 SMS Notification Result: ${status} for event ${webhookEventId}`)
       return new Response(JSON.stringify({ received: true }), { status: 200 })
     }
@@ -1128,8 +1208,8 @@ serve(async (req: Request) => {
       }
 
       return new Response(JSON.stringify({ success: true, payoutId: result.payoutId }), { status: 200 })
-    } catch (e) {
-      console.error('Author payout error:', e)
+    } catch (e: unknown) {
+      console.error('Author payout error:', (e as Error).message)
       return new Response(JSON.stringify({ error: "Internal Server Error" }), { status: 500 })
     }
   }

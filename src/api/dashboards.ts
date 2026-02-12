@@ -10,6 +10,137 @@ import {
 } from '@/lib/utils/api-helpers';
 import { deleteProductImage, deleteEbookFile } from './storage';
 
+export interface Profile {
+  id: string;
+  created_at: string;
+  full_name?: string;
+  email?: string;
+  role?: string;
+  avatar_url?: string;
+}
+
+export interface Product {
+  id: string;
+  created_at: string;
+  title?: string;
+  image_url?: string;
+  author_id?: string;
+  stock_quantity?: number;
+  category?: { name: string } | string;
+  category_name?: string;
+  price?: number;
+}
+
+export interface Order {
+  id: string;
+  created_at: string;
+  is_paid: boolean;
+  status: string;
+  total_amount: number;
+  subtotal_amount: number;
+  shipping_amount: number;
+  tax_amount: number;
+  shipping_address: any; // Define a more specific type if available
+  profiles: { full_name: string; email: string };
+  order_items: OrderItem[];
+}
+
+export interface Transaction {
+  id: string;
+  created_at: string;
+  amount: number;
+  status: string;
+}
+
+export interface OrderItem {
+  id: string;
+  order_id: string;
+  product_id: string;
+  quantity: number;
+  unit_price: number;
+  price_at_purchase: number;
+  created_at: string;
+  product_snapshot: Product;
+  orders?: Order; // Optional, as it's sometimes joined
+  product?: Product; // Optional, as it's sometimes joined
+}
+
+export interface ShippingZone {
+  id: string;
+  created_at: string;
+  name: string;
+  country_code: string;
+  estimated_days: number;
+  shipping_method: string;
+  weight_surcharge: number;
+  volume_surcharge: number;
+  price: number;
+  partner_id?: string;
+}
+
+export interface UnifiedProductSale {
+  title: string;
+  quantity: number;
+  revenue: number;
+}
+
+export type NewsletterStatus = 'subscribed' | 'unsubscribed' | 'bounced' | 'active';
+
+export interface NewsletterSubscription {
+  id: string;
+  created_at: string;
+  email: string;
+  status: NewsletterStatus;
+}
+
+export async function getNewsletterSubscriptions() {
+  await verifyAdmin();
+  return withRetry(async () => {
+    const { data, error } = await supabase
+      .from('newsletter_subscriptions')
+      .select('*')
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    return data as NewsletterSubscription[];
+  });
+}
+
+export async function updateNewsletterStatus(id: string, status: NewsletterStatus) {
+  await verifyAdmin();
+  return withRetry(async () => {
+    const { data, error } = await supabase
+      .from('newsletter_subscriptions')
+      .update({ status })
+      .eq('id', id)
+      .select()
+      .single();
+    if (error) throw error;
+    await logAudit('update_newsletter_status', 'newsletter_subscriptions', JSON.stringify({ id, status }));
+    return data as NewsletterSubscription;
+  });
+}
+
+export async function batchUpdateNewsletterStatus(ids: string[], status: NewsletterStatus) {
+  await verifyAdmin();
+  return withRetry(async () => {
+    const { data, error } = await supabase
+      .from('newsletter_subscriptions')
+      .update({ status })
+      .in('id', ids)
+      .select();
+    if (error) throw error;
+    await logAudit('batch_update_newsletter_status', 'newsletter_subscriptions', JSON.stringify({ ids, status }));
+    return data as NewsletterSubscription[];
+  });
+}
+
+// --- Utilities ---
+
+/**
+ * Simple slug generator
+ */
+
+
 // --- Founder Services ---
 
 /**
@@ -46,8 +177,8 @@ export async function getGlobalAnalytics() {
     ] = await Promise.allSettled([
       supabase.from('profiles').select('*', { count: 'exact', head: true }),
       supabase.from('products').select('*', { count: 'exact', head: true }),
-      supabase.from('products').select('created_at').gte('created_at', sixtyDaysAgo.toISOString()),
-      supabase.from('profiles').select('created_at').gte('created_at', sixtyDaysAgo.toISOString())
+      supabase.from('products').select('id, created_at').gte('created_at', sixtyDaysAgo.toISOString()),
+      supabase.from('profiles').select('id, created_at').gte('created_at', sixtyDaysAgo.toISOString())
     ]);
 
     // Check for results in parallel queries
@@ -67,13 +198,13 @@ export async function getGlobalAnalytics() {
     const usersData = recentUsers.data || [];
 
     // Product trends
-    const currentProducts = productsData?.filter(p => new Date(p.created_at) >= thirtyDaysAgo).length || 0;
-    const previousProducts = productsData?.filter(p => new Date(p.created_at) < thirtyDaysAgo).length || 0;
+    const currentProducts = productsData?.filter((p: Product) => new Date(p.created_at) >= thirtyDaysAgo).length || 0;
+    const previousProducts = productsData?.filter((p: Product) => new Date(p.created_at) < thirtyDaysAgo).length || 0;
     const productsTrend = calculateTrend(currentProducts, previousProducts);
 
     // User trends
-    const currentUsers = usersData?.filter(u => new Date(u.created_at) >= thirtyDaysAgo).length || 0;
-    const previousUsers = usersData?.filter(u => new Date(u.created_at) < thirtyDaysAgo).length || 0;
+    const currentUsers = usersData?.filter((u: Profile) => new Date(u.created_at) >= thirtyDaysAgo).length || 0;
+    const previousUsers = usersData?.filter((u: Profile) => new Date(u.created_at) < thirtyDaysAgo).length || 0;
     const usersTrend = calculateTrend(currentUsers, previousUsers);
 
     // 3. Process revenue and order trends
@@ -90,19 +221,19 @@ export async function getGlobalAnalytics() {
     }
 
     // Filter paid orders for accurate count (webhook verified)
-    const currentPaidOrders = orders?.filter(o => o.is_paid === true && new Date(o.created_at) >= thirtyDaysAgo) || [];
-    const previousPaidOrders = orders?.filter(o => o.is_paid === true && new Date(o.created_at) < thirtyDaysAgo) || [];
+    const currentPaidOrders = orders?.filter((o: Order) => o.is_paid === true && new Date(o.created_at) >= thirtyDaysAgo) || [];
+    const previousPaidOrders = orders?.filter((o: Order) => o.is_paid === true && new Date(o.created_at) < thirtyDaysAgo) || [];
 
     // Revenue from actual completed transactions (webhooks)
-    const currentTx = transactions?.filter(t => new Date(t.created_at) >= thirtyDaysAgo) || [];
-    const previousTx = transactions?.filter(t => new Date(t.created_at) < thirtyDaysAgo) || [];
+    const currentTx = transactions?.filter((t: Transaction) => new Date(t.created_at) >= thirtyDaysAgo) || [];
+    const previousTx = transactions?.filter((t: Transaction) => new Date(t.created_at) < thirtyDaysAgo) || [];
 
-    const currentRevenue = currentTx.reduce((acc, curr) => {
+    const currentRevenue = currentTx.reduce((acc: number, curr: Transaction) => {
       const val = Number(curr.amount);
       return acc + (isNaN(val) ? 0 : val);
     }, 0);
     
-    const previousRevenue = previousTx.reduce((acc, curr) => {
+    const previousRevenue = previousTx.reduce((acc: number, curr: Transaction) => {
       const val = Number(curr.amount);
       return acc + (isNaN(val) ? 0 : val);
     }, 0);
@@ -112,7 +243,7 @@ export async function getGlobalAnalytics() {
 
     // Group sales data by day for the trajectory chart based on completed transactions
     const salesByDay: Record<string, number> = {};
-    currentTx.forEach(tx => {
+    currentTx.forEach((tx: Transaction) => {
       const day = new Date(tx.created_at).toISOString().split('T')[0];
       const val = Number(tx.amount);
       salesByDay[day] = (salesByDay[day] || 0) + (isNaN(val) ? 0 : val);
@@ -128,7 +259,7 @@ export async function getGlobalAnalytics() {
     // 4. Detailed Metrics: AOV, Order Status, Low Stock
     const aov = currentPaidOrders.length > 0 ? currentRevenue / currentPaidOrders.length : 0;
     
-    const orderStatusCount = currentPaidOrders.reduce((acc: Record<string, number>, curr) => {
+    const orderStatusCount = currentPaidOrders.reduce((acc: Record<string, number>, curr: Order) => {
       const status = curr.status || 'unknown';
       acc[status] = (acc[status] || 0) + 1;
       return acc;
@@ -158,27 +289,46 @@ export async function getGlobalAnalytics() {
     }
 
     // 6. Analytics Processing (Categories & Top Products)
-    let categoryStats: any[] = [];
+    let categoryStats: { name: string; value: number }[] = [];
     const unifiedProductSales: Record<string, { title: string, quantity: number, revenue: number }> = {};
     const unifiedCategoryRevenue: Record<string, number> = {};
 
     try {
-      const { data: unifiedData, error: unifiedError } = await supabase
-        .from('order_items')
-        .select(`
-          *,
-          orders!inner(*)
-        `)
-        .filter('orders.created_at', 'gte', thirtyDaysAgo.toISOString());
+      const { data: unifiedData, error: unifiedError } = await withRetry(async () => {
+        const { data, error } = await supabase
+          .from('order_items')
+          .select(`
+            *,
+            orders!inner(*)
+          `)
+          .filter('orders.created_at', 'gte', thirtyDaysAgo.toISOString());
+        
+        if (error && (error.code === 'PGRST204' || error.message?.includes('column'))) {
+           console.warn('[API] Schema mismatch in unified analytics, retrying with minimal select...');
+           return await supabase
+            .from('order_items')
+            .select(`
+              id,
+              quantity,
+              unit_price,
+              price_at_purchase,
+              product_snapshot,
+              orders!inner(id, created_at, is_paid, status)
+            `)
+            .filter('orders.created_at', 'gte', thirtyDaysAgo.toISOString());
+        }
+        return { data, error };
+      });
 
       if (unifiedError) {
         console.error('Unified Analytics Query Error:', unifiedError);
         throw unifiedError;
       }
 
-      unifiedData?.forEach(item => {
-        const orderStatus = (item.orders as any)?.status?.toLowerCase() || 'pending';
-        const isPaid = (item.orders as any)?.is_paid === true;
+      unifiedData?.forEach((item: OrderItem) => {
+        const order = item.orders as any;
+        const orderStatus = order?.status?.toLowerCase() || 'pending';
+        const isPaid = order?.is_paid === true;
         
         // Only count revenue from paid orders (webhook verified)
         if (!isPaid || ['cancelled', 'failed', 'refunded'].includes(orderStatus)) return;
@@ -213,7 +363,7 @@ export async function getGlobalAnalytics() {
     }
 
     const topProducts = Object.values(unifiedProductSales)
-      .sort((a, b) => b.revenue - a.revenue)
+      .sort((a: UnifiedProductSale, b: UnifiedProductSale) => b.revenue - a.revenue)
       .slice(0, 5);
 
     return {
@@ -313,16 +463,16 @@ export async function getShippingZones() {
       }
       
       // Normalize the data to ensure 'price' is always present and other fields have defaults
-      const normalizedData = (data || []).map(zone => {
+      const normalizedData = (data || []).map((zone: ShippingZone) => {
         // Handle different column names for price (legacy support)
         const price = (zone as any).price ?? (zone as any).rate ?? (zone as any).base_rate ?? 0;
         return {
           ...zone,
-          country_code: (zone as any).country_code || 'KE',
-          estimated_days: (zone as any).estimated_days || 3,
-          shipping_method: (zone as any).shipping_method || 'Standard',
-          weight_surcharge: (zone as any).weight_surcharge || 0,
-          volume_surcharge: (zone as any).volume_surcharge || 0,
+          country_code: zone.country_code || 'KE',
+          estimated_days: zone.estimated_days || 3,
+          shipping_method: zone.shipping_method || 'Standard',
+          weight_surcharge: zone.weight_surcharge || 0,
+          volume_surcharge: zone.volume_surcharge || 0,
           price
         };
       });
@@ -419,15 +569,15 @@ async function getAllRecords(table: string, orderBy: string = 'created_at') {
 
       // Normalize shipping_zones if fetched successfully
       if (table === 'shipping_zones' && data) {
-        return data.map(zone => {
+        return (data as any[]).map((zone: ShippingZone) => {
           const price = (zone as any).price ?? (zone as any).rate ?? (zone as any).base_rate ?? 0;
           return {
             ...zone,
-            country_code: (zone as any).country_code || 'KE',
-            estimated_days: (zone as any).estimated_days || 3,
-            shipping_method: (zone as any).shipping_method || 'Standard',
-            weight_surcharge: (zone as any).weight_surcharge || 0,
-            volume_surcharge: (zone as any).volume_surcharge || 0,
+            country_code: zone.country_code || 'KE',
+            estimated_days: zone.estimated_days || 3,
+            shipping_method: zone.shipping_method || 'Standard',
+            weight_surcharge: zone.weight_surcharge || 0,
+            volume_surcharge: zone.volume_surcharge || 0,
             price
           };
         });
@@ -497,7 +647,10 @@ export async function getOrders(partnerId?: string) {
           .select('id')
           .eq('partner_id', partnerId);
         
-        const zoneIds = zones?.map(z => z.id) || [];
+        interface ZoneId {
+          id: string;
+        }
+        const zoneIds = zones?.map((z: ZoneId) => z.id) || [];
         
         if (zoneIds.length === 0) return [];
 
@@ -516,8 +669,31 @@ export async function getOrders(partnerId?: string) {
           .in('shipping_zone_id', zoneIds)
           .order('created_at', { ascending: false });
         
-        if (error) throw error;
-        data = orders || [];
+        if (error) {
+          console.error('[API] Partner orders fetch error:', error);
+          if (error.code === 'PGRST204' || error.message?.includes('column')) {
+            console.warn('[API] Schema mismatch in partner orders, retrying with minimal select...');
+            const { data: fallback, error: fallbackError } = await supabase
+              .from('orders')
+              .select(`
+                id, created_at, status, total_amount, subtotal_amount, shipping_amount, tax_amount, is_paid, shipping_address,
+                profiles(full_name, email),
+                order_items(
+                  id, order_id, product_id, quantity, unit_price, price_at_purchase,
+                  product:products(id, title, image_url)
+                )
+              `)
+              .in('shipping_zone_id', zoneIds)
+              .order('created_at', { ascending: false });
+            
+            if (fallbackError) throw fallbackError;
+            data = fallback || [];
+          } else {
+            throw error;
+          }
+        } else {
+          data = orders || [];
+        }
       } else {
         // ONLY admins/founders should be able to fetch all orders without a partnerId filter
         if (!isAdmin) {
@@ -539,10 +715,29 @@ export async function getOrders(partnerId?: string) {
           .order('created_at', { ascending: false });
 
         if (error) {
-          console.error('Error fetching all orders:', error);
-          throw error;
+          console.error('[API] Admin orders fetch error:', error);
+          if (error.code === 'PGRST204' || error.message?.includes('column')) {
+            console.warn('[API] Schema mismatch in admin orders, retrying with minimal select...');
+            const { data: fallback, error: fallbackError } = await supabase
+              .from('orders')
+              .select(`
+                id, created_at, status, total_amount, subtotal_amount, shipping_amount, tax_amount, is_paid, shipping_address,
+                profiles(full_name, email),
+                order_items(
+                  id, order_id, product_id, quantity, unit_price, price_at_purchase,
+                  product:products(id, title, image_url)
+                )
+              `)
+              .order('created_at', { ascending: false });
+            
+            if (fallbackError) throw fallbackError;
+            data = fallback || [];
+          } else {
+            throw error;
+          }
+        } else {
+          data = orders || [];
         }
-        data = orders || [];
       }
 
       // Map the data to include flattened customer info and formatted address
@@ -597,7 +792,7 @@ export async function getAllUsers() {
 export async function getClubs() {
   try {
     await verifyAdmin();
-    let { data, error, status } = await supabase
+    const { data, error, status } = await supabase
       .from('book_clubs')
       .select('*')
       .order('created_at', { ascending: false });
@@ -616,7 +811,7 @@ export async function getClubs() {
 export async function getEvents() {
   try {
     await verifyAdmin();
-    let { data, error, status } = await supabase
+    const { data, error, status } = await supabase
       .from('events')
       .select('*')
       .order('event_date', { ascending: false });
@@ -636,7 +831,7 @@ export async function getAgreements() {
   try {
     await verifyAdmin();
     // Try fetching from 'agreements' (the main table for instances)
-    let { data, error, status } = await supabase
+    const { data, error, status } = await supabase
       .from('agreements')
       .select(`*, partner:profiles(full_name, email)`)
       .order('created_at', { ascending: false });
@@ -650,7 +845,7 @@ export async function getAgreements() {
         .order('created_at', { ascending: false });
       
       if (fallbackError) return [];
-      return (fallbackData || []).map(p => ({ ...p, partner: { full_name: 'Template', email: 'N/A' } }));
+      return (fallbackData || []).map((p: any) => ({ ...p, partner: { full_name: 'Template', email: 'N/A' } }));
     }
 
     if (error) throw error;
@@ -666,7 +861,7 @@ export async function getAgreements() {
  */
 export async function getUserAgreements(userId: string) {
   try {
-    let { data, error, status } = await supabase
+    const { data, error, status } = await supabase
       .from('agreements')
       .select('*')
       .eq('partner_id', userId)
@@ -761,7 +956,7 @@ export async function updateAgreementStatus(agreementId: string, status: 'approv
 export async function getBanners() {
   try {
     await verifyAdmin();
-    let { data, error } = await supabase
+    const { data, error } = await supabase
       .from('banners')
       .select('*')
       .order('created_at', { ascending: false });
@@ -779,7 +974,7 @@ export async function getBanners() {
 export async function getAnnouncements() {
   try {
     await verifyAdmin();
-    let { data, error } = await supabase
+    const { data, error } = await supabase
       .from('announcements')
       .select('*')
       .order('created_at', { ascending: false });
@@ -819,8 +1014,8 @@ export async function getCMSContent(forcePublic: boolean = false) {
     ]);
 
     // Format them back to the legacy structure for compatibility
-    const formattedBanners = (banners.data || []).map(b => ({ ...b, type: 'banner' }));
-    const formattedAnnouncements = (announcements.data || []).map(a => ({ ...a, type: 'announcement' }));
+    const formattedBanners = (banners.data || []).map((b: any) => ({ ...b, type: 'banner' }));
+    const formattedAnnouncements = (announcements.data || []).map((a: any) => ({ ...a, type: 'announcement' }));
 
     return [...formattedBanners, ...formattedAnnouncements];
   } catch (err) {
@@ -835,7 +1030,7 @@ export async function getPromos() {
       await verifyAdmin();
       // Fetch from promos table using select('*') to avoid 400 errors if specific columns are missing
       // This is more robust against schema mismatches (e.g. missing discount_type)
-      let { data, error } = await supabase
+      const { data, error } = await supabase
         .from('promos')
         .select('*')
         .order('created_at', { ascending: false });
@@ -843,7 +1038,7 @@ export async function getPromos() {
       if (error) throw error;
       
       // Normalize data for UI with safe defaults
-      const normalizedData = (data || []).map(p => ({
+      const normalizedData = (data || []).map((p: any) => ({
         ...p,
         title: p.code,
         status: p.status || (p.is_active ? 'active' : 'inactive'),
@@ -915,7 +1110,7 @@ export async function getPromoMetrics(promoId: string) {
   try {
     await verifyAdmin();
     // Use select('*') for schema resilience
-    let { data, error } = await supabase
+    const { data, error } = await supabase
       .from('promo_metrics')
       .select('*')
       .eq('promo_id', promoId)
@@ -935,7 +1130,7 @@ export async function getPromoAuditLogs(promoId: string) {
   try {
     await verifyAdmin();
     // Use select('*') for schema resilience but include relation
-    let { data, error } = await supabase
+    const { data, error } = await supabase
       .from('promo_audit_logs')
       .select(`*, actor:profiles(full_name)`)
       .eq('promo_id', promoId)
@@ -998,20 +1193,48 @@ export async function getInquiries() {
 export async function getAuthorSalesReport(authorId: string) {
   try {
     await verifyRole(['author', 'admin', 'founder']);
-    // Use the author_id column on products table instead of metadata
-    const { data, error } = await supabase
-      .from('order_items')
-      .select(`
-        *,
-        order:orders!inner(*),
-        product:products!inner(*)
-      `)
-      .eq('product.author_id', authorId)
-      .eq('order.is_paid', true); // Only fetch paid orders
     
-    if (error) throw error;
-
-    return data || [];
+    return withRetry(async () => {
+      // Hardened query to avoid schema cache issues and fix alias-related 400 errors
+      const { data, error } = await supabase
+        .from('order_items')
+        .select(`
+          *,
+          orders!inner(*),
+          products!inner(*)
+        `)
+        .eq('products.author_id', authorId)
+        .eq('orders.is_paid', true);
+      
+      if (error) {
+        console.error('[API] Author Sales Report fetch error:', error);
+        
+        // Handle specific schema cache errors (PGRST204/PGRST205)
+        if (error.code === 'PGRST204' || error.message?.includes('column')) {
+           console.warn('[API] Schema mismatch in order_items, retrying with minimal select...');
+           const { data: fallback, error: fallbackError } = await supabase
+            .from('order_items')
+            .select(`
+              id,
+              order_id,
+              product_id,
+              quantity,
+              unit_price,
+              price_at_purchase,
+              created_at,
+              orders!inner(id, created_at, is_paid),
+              products!inner(id, title, author_id)
+            `)
+            .eq('products.author_id', authorId)
+            .eq('orders.is_paid', true);
+            
+            if (fallbackError) throw fallbackError;
+            return fallback || [];
+        }
+        throw error;
+      }
+      return data || [];
+    });
   } catch (err) {
     console.error('Author Sales Report fetch failed:', err);
     return [];
@@ -1253,7 +1476,7 @@ export async function requestAuthorPayout(authorId: string, amount: number, deta
     const { data: { session: authSession } } = await supabase.auth.getSession();
     if (!authSession) throw new Error('No active session');
 
-    const response = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/payments/author-payout`, {
+    const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/payments/author-payout`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -1381,7 +1604,7 @@ export async function getProtocolAgreements() {
   try {
     await verifyAdmin();
     // Use select('*') for schema resilience
-    let { data, error, status } = await supabase
+    const { data, error, status } = await supabase
       .from('partnership_agreements')
       .select('*')
       .order('created_at', { ascending: false });
@@ -1728,7 +1951,7 @@ export async function getSiteSettings() {
 export async function createRecord(table: string, record: any) {
   await verifyAdmin();
   
-  let currentRecord = { ...record };
+  const currentRecord = { ...record };
   
   return withRetry(async () => {
     try {
@@ -1756,7 +1979,7 @@ export async function createRecord(table: string, record: any) {
                         error.message.match(/column ([^ ]+) does not exist/);
           
           if (match && match[1]) {
-            let missingCol = match[1];
+            const missingCol = match[1];
             
             if (missingCol !== table) {
               console.warn(`Column ${missingCol} missing in ${table}, filtering and retrying...`);
@@ -1784,7 +2007,7 @@ export async function createRecord(table: string, record: any) {
     }
   }, {
     retries: 10,
-    onRetry: (error, attempt) => {
+    onRetry: (error: any, attempt: number) => {
       console.warn(`Retry attempt ${attempt} for createRecord on ${table}:`, error.message);
     }
   });
@@ -1796,7 +2019,7 @@ export async function createRecord(table: string, record: any) {
 export async function updateRecord(table: string, id: string, updates: any) {
   await verifyAdmin();
   
-  let currentUpdates = { ...updates };
+  const currentUpdates = { ...updates };
   
   return withRetry(async () => {
     try {
@@ -1882,7 +2105,7 @@ export async function updateRecord(table: string, id: string, updates: any) {
     }
   }, {
     retries: 10,
-    onRetry: (error, attempt) => {
+    onRetry: (error: any, attempt: number) => {
       console.warn(`Retry attempt ${attempt} for updateRecord on ${table}:`, error.message);
     }
   });
@@ -1935,7 +2158,7 @@ export async function deleteRecord(table: string, id: string) {
     
     return true;
   }, {
-    onRetry: (error, attempt) => {
+    onRetry: (error: any, attempt: number) => {
       console.warn(`Retry attempt ${attempt} for deleteRecord on ${table}:`, error);
     }
   });
@@ -2119,7 +2342,7 @@ export async function createProduct(product: any) {
     productData.slug = `${generateSlug(productData.title)}-${Math.random().toString(36).substring(2, 7)}`;
   }
   
-  let currentData = { ...productData };
+  const currentData = { ...productData };
 
   return withRetry(async () => {
     console.log('[API] Creating product with payload:', currentData);
@@ -2214,7 +2437,7 @@ export async function updateProduct(id: string, product: any) {
     console.warn('Failed to fetch oldData for product update audit, proceeding...');
   }
 
-  let currentData = { ...productData };
+  const currentData = { ...productData };
 
   return withRetry(async () => {
     console.log(`[API] Updating product ${id} with payload:`, currentData);
@@ -2287,7 +2510,7 @@ export async function updateProduct(id: string, product: any) {
 export async function bulkUpdateProducts(ids: string[], updates: any) {
   await verifyAdmin();
   
-  let currentUpdates = { ...updates };
+  const currentUpdates = { ...updates };
   
   return withRetry(async () => {
     const { data, error } = await supabase
@@ -2326,7 +2549,7 @@ export async function bulkUpdateProducts(ids: string[], updates: any) {
     
     return data;
   }, {
-    onRetry: (error, attempt) => {
+    onRetry: (error: any, attempt: number) => {
       console.warn(`Retry attempt ${attempt} for bulkUpdateProducts:`, error.message);
     }
   });

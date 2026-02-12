@@ -19,7 +19,7 @@ async function inspectProductsTable() {
   console.log(`🔍 Inspecting table "products" at ${supabaseUrl}...`);
 
   // 1. Check if table exists
-  const { data: tableExists, error: tableError } = await supabase
+  const { error: tableError } = await supabase
     .from('products')
     .select('count')
     .limit(0);

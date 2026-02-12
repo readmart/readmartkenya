@@ -582,7 +582,11 @@ export default function AuthorDashboard() {
               {myBooks.slice(0, 5).map(book => {
                 const bookSales = salesReport.filter(s => s.product_id === book.id);
                 const authorRate = (settings?.author_commission_rate || 70) / 100;
-                const totalEarned = bookSales.reduce((acc, curr) => acc + (curr.price * curr.quantity * authorRate), 0);
+                const totalEarned = bookSales.reduce((acc, curr) => {
+                  const price = Number(curr.price_at_purchase || curr.unit_price || 0);
+                  const qty = Number(curr.quantity || 0);
+                  return acc + (price * qty * authorRate);
+                }, 0);
                 
                 return (
                   <div key={book.id} className="p-6 flex items-center justify-between hover:bg-white/5 transition-all">

@@ -28,7 +28,7 @@ async function checkPolicies() {
     console.log('Trying to select with anon key to see if it works without "title"...');
     
     const anonClient = createClient(supabaseUrl!, process.env.VITE_SUPABASE_ANON_KEY!);
-    const { data: simple, error: simpleError } = await anonClient.from('products').select('id').limit(1);
+    const { error: simpleError } = await anonClient.from('products').select('id').limit(1);
     
     if (simpleError) {
       console.error('❌ Even selecting "id" failed for anon:', simpleError.message);

@@ -3,13 +3,31 @@ import { motion } from 'framer-motion';
 import { Package, ChevronRight, Calendar, CreditCard, Loader2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useCurrency } from '@/contexts/CurrencyContext';
-import { supabase } from '@/lib/supabase/client';
+import { supabase, type PostgrestError } from '@/lib/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+
+interface ProductSnapshot {
+  title?: string;
+  // Add other properties of product_snapshot if known
+}
+
+interface OrderItem {
+  product_snapshot?: ProductSnapshot;
+  // Add other properties of order_items if known, e.g., quantity, price
+}
+
+interface Order {
+  id: string;
+  total_amount: number;
+  status: string;
+  created_at: string;
+  order_items?: OrderItem[];
+}
 
 export default function OrderHistory() {
   const { formatPrice } = useCurrency();
   const { user } = useAuth();
-  const [orders, setOrders] = useState<any[]>([]);
+  const [orders, setOrders] = useState<Order[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -32,7 +50,7 @@ export default function OrderHistory() {
           )
         `)
         .eq('user_id', user?.id)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false }) as { data: Order[] | null, error: PostgrestError | null };
 
       if (error) throw error;
       setOrders(data || []);
@@ -97,7 +115,7 @@ export default function OrderHistory() {
                     </div>
 
                     <div className="flex flex-wrap gap-2">
-                      {order.order_items?.map((item: any, i: number) => (
+                      {order.order_items?.map((item: OrderItem, i: number) => (
                         <span key={i} className="glass px-3 py-1 rounded-full text-xs font-medium">
                           {item.product_snapshot?.title || 'Product'}
                         </span>

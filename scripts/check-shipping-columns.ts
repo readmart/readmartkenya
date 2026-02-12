@@ -31,7 +31,7 @@ async function checkShippingZones() {
   }
   
   // 2. Try selecting country_code explicitly
-  const { data: ccData, error: ccError } = await supabase
+  const { error: ccError } = await supabase
     .from('shipping_zones')
     .select('country_code')
     .limit(1);

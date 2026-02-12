@@ -27,7 +27,7 @@ async function checkSchema() {
   ];
 
   for (const table of tables) {
-    const { data, error } = await supabase.from(table).select('*').limit(0);
+    const { error } = await supabase.from(table).select('*').limit(0);
     if (error) {
       console.log(`❌ Table "${table}" error:`, error.message);
     } else {

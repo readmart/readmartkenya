@@ -529,7 +529,7 @@ export const getK2TransactionStatus = async (transactionId: string) => {
   const token = await getK2Token();
   
   // Try incoming_payments first (standard for STK Push)
-  let response = await fetchWithBackoff(`${getK2BaseUrl()}/api/v1/incoming_payments/${transactionId}`, {
+  const response = await fetchWithBackoff(`${getK2BaseUrl()}/api/v1/incoming_payments/${transactionId}`, {
     method: 'GET',
     headers: {
       'Authorization': `Bearer ${token}`,

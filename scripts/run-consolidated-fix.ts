@@ -25,7 +25,7 @@ async function runFix() {
   console.log('📡 Executing SQL via RPC...');
   
   // Try to use the exec_sql RPC if it exists
-  const { data, error } = await supabase.rpc('exec_sql', { sql_query: sql });
+  const { error } = await supabase.rpc('exec_sql', { sql_query: sql });
   
   if (error) {
     console.error('❌ Fix failed:', error.message);

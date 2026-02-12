@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { execSync } from 'child_process';
+
 
 const rootDir = process.cwd();
 const srcDir = path.join(rootDir, 'src');

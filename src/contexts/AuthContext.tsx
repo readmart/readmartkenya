@@ -1,6 +1,5 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
-import { supabase } from '@/lib/supabase/client';
-import type { User } from '@supabase/supabase-js';
+import { createContext, useContext, useState, useEffect } from 'react';
+import { supabase, type User, type Session } from '@/lib/supabase/client';
 
 export type UserRole = 'customer' | 'admin' | 'founder' | 'author' | 'partner';
 
@@ -44,14 +43,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(({ data: { session } }: { data: { session: Session | null } }) => {
       setUser(session?.user ?? null);
       if (session?.user) fetchProfile(session.user.id);
       else setLoading(false);
     });
 
     // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event: string, session: Session | null) => {
       setUser(session?.user ?? null);
       if (session?.user) fetchProfile(session.user.id);
       else {
@@ -78,6 +77,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           error.code === 'PGRST204' || 
           error.code === 'PGRST205' || 
           error.code === 'PGRST100' || 
+          error.code === '42703' || 
           error.message?.includes('column') || 
           error.message?.includes('cache') || 
           (error as any).status === 404 ||

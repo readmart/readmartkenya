@@ -6,19 +6,28 @@ import { Trash2, ShoppingCart, Heart, ArrowRight, Zap } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 
+interface WishlistItem {
+  id: string;
+  title: string;
+  image: string;
+  category: string;
+  author: string;
+  price: number;
+}
+
 export default function Wishlist() {
   const navigate = useNavigate();
   const { wishlistItems, removeFromWishlist, clearWishlist } = useWishlist();
   const { addToCart, buyNow } = useCart();
   const { formatPrice } = useCurrency();
 
-  const handleMoveToCart = (item: any) => {
+  const handleMoveToCart = (item: WishlistItem) => {
     addToCart(item);
     removeFromWishlist(item.id);
     toast.success(`${item.title} moved to cart!`);
   };
 
-  const handleBuyNow = (item: any) => {
+  const handleBuyNow = (item: WishlistItem) => {
     buyNow(item);
     removeFromWishlist(item.id);
     navigate('/checkout');

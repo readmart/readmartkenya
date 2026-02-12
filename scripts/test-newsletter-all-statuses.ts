@@ -19,7 +19,7 @@ async function testAllStatuses() {
   const statuses = ['active', 'unconfirmed', 'unsubscribed', 'paused', 'deleted', 'pending', 'confirmed'];
   for (const status of statuses) {
     console.log(`Trying status: ${status}`);
-    const { data, error } = await supabase
+    const { error } = await supabase
       .from('newsletter_subscriptions')
       .insert([{ email: `test-stat-${status}-${Date.now()}@example.com`, status }]);
     

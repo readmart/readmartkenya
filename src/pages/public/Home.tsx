@@ -60,7 +60,7 @@ export default function Home() {
 
         if (latestBooks) {
           // Map metadata to top-level props for BookCard
-          const mappedBooks = latestBooks.map(book => ({
+          const mappedBooks = latestBooks.map((book: any) => ({
             ...book,
             category: (book.category as any)?.name || 'Uncategorized',
             author: (book as any).metadata?.author || 'Unknown Author',
@@ -74,7 +74,7 @@ export default function Home() {
         try {
           const data = await withRetry(async () => {
             const settingsColumns = 'site_logo, site_name, hero_headline, hero_subtext, hero_image_url, author_of_the_day_id, author_of_the_day_enabled, author_of_the_day_books, author_of_the_day_image';
-            let { data, error } = await supabase
+            const { data, error } = await supabase
               .from('site_settings')
               .select(settingsColumns)
               .maybeSingle();

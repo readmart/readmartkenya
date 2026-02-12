@@ -2,6 +2,8 @@
   "files": [],
   "compilerOptions": {
     "baseUrl": ".",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
     "paths": {
       "@/*": ["./src/*"]
     }
@@ -9,7 +11,7 @@
   "references": [
     { "path": "./tsconfig.app.json" },
     { "path": "./tsconfig.node.json" },
-    { "path": "./supabase/functions" }
+
   ],
-  "exclude": ["supabase/migrations", "supabase/seed.sql", "supabase/config.toml"]
+  "exclude": ["supabase/migrations", "supabase/seed.sql", "supabase/config.toml", "supabase/functions"]
 }
