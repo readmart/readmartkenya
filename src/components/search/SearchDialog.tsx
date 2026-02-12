@@ -102,7 +102,7 @@ export default function SearchDialog({ isOpen, onClose }: SearchDialogProps) {
           .ilike('title', `%${query}%`)
           .limit(5);
 
-        products?.forEach((p) => {
+        products?.forEach((p: any) => {
           const product = p as { 
             id: string; 
             title: string; 
@@ -128,7 +128,7 @@ export default function SearchDialog({ isOpen, onClose }: SearchDialogProps) {
           .ilike('title', `%${query}%`)
           .limit(3);
 
-        events?.forEach((e) => {
+        events?.forEach((e: any) => {
           const event = e as { id: string; title: string; event_date?: string };
           searchResults.push({
             id: event.id,
@@ -164,7 +164,7 @@ export default function SearchDialog({ isOpen, onClose }: SearchDialogProps) {
             .or(`id.ilike.%${query}%, profiles.full_name.ilike.%${query}%`)
             .limit(3);
 
-          orders?.forEach((o) => {
+          orders?.forEach((o: any) => {
             const order = o as { id: string; profiles: any };
             searchResults.push({
               id: order.id,
@@ -183,7 +183,7 @@ export default function SearchDialog({ isOpen, onClose }: SearchDialogProps) {
             .or(`full_name.ilike.%${query}%, email.ilike.%${query}%`)
             .limit(3);
 
-          users?.forEach((u) => {
+          users?.forEach((u: any) => {
             const profile = u as { id: string; full_name?: string; email: string; role: string };
             searchResults.push({
               id: profile.id,
