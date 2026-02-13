@@ -171,7 +171,24 @@ export async function getGlobalAnalytics() {
           .select('id, created_at, is_paid')
           .gte('created_at', sixtyDaysAgo.toISOString());
         if (fallbackError) throw fallbackError;
-        (orders as any) = fallbackOrders;
+        return {
+          totalRevenue: 0,
+          totalOrders: (fallbackOrders as any[])?.filter((o: any) => o.is_paid === true && new Date(o.created_at) >= thirtyDaysAgo).length || 0,
+          totalUsers: 0,
+          totalProducts: 0,
+          revenueTrend: '0%',
+          ordersTrend: '0%',
+          usersTrend: '0%',
+          productsTrend: '0%',
+          salesData: [],
+          topProducts: [],
+          aov: 0,
+          orderStatusCount: {},
+          lowStockProducts: [],
+          clubMembersCount: 0,
+          categoryStats: [],
+          isInitialized: true
+        };
       } else {
         console.error('Database Error (Orders):', ordersError);
         throw ordersError;
@@ -234,19 +251,50 @@ export async function getGlobalAnalytics() {
     }
 
     // Filter paid orders for accurate count (webhook verified)
-    const currentPaidOrders = (orders as any[])?.filter((o: any) => o.is_paid === true && new Date(o.created_at) >= thirtyDaysAgo) || [];
-    const previousPaidOrders = (orders as any[])?.filter((o: any) => o.is_paid === true && new Date(o.created_at) < thirtyDaysAgo) || [];
+    // Only count orders that are both paid AND completed/delivered
+    const validStatuses = ['completed', 'delivered', 'shipped', 'processing'];
+    const currentPaidOrders = (orders as any[])?.filter((o: any) => 
+      o.is_paid === true && 
+      validStatuses.includes(o.status?.toLowerCase()) &&
+      new Date(o.created_at) >= thirtyDaysAgo
+    ) || [];
+    
+    const previousPaidOrders = (orders as any[])?.filter((o: any) => 
+      o.is_paid === true && 
+      validStatuses.includes(o.status?.toLowerCase()) &&
+      new Date(o.created_at) < thirtyDaysAgo
+    ) || [];
 
     // Revenue from actual completed transactions (webhooks)
-    const currentTx = (transactions as any[])?.filter((t: any) => new Date(t.created_at) >= thirtyDaysAgo) || [];
-    const previousTx = (transactions as any[])?.filter((t: any) => new Date(t.created_at) < thirtyDaysAgo) || [];
+    let currentTx = (transactions as any[])?.filter((t: any) => new Date(t.created_at) >= thirtyDaysAgo) || [];
+    let previousTx = (transactions as any[])?.filter((t: any) => new Date(t.created_at) < thirtyDaysAgo) || [];
 
-    const currentRevenue = currentTx.reduce((acc: number, curr: Transaction) => {
+    // FALLBACK: If transactions table is empty but we have paid orders, use orders for revenue
+    if (currentTx.length === 0 && currentPaidOrders.length > 0) {
+      console.log('[Analytics] Falling back to paid orders for revenue calculation');
+      currentTx = currentPaidOrders.map(o => ({
+        id: o.id,
+        created_at: o.created_at,
+        amount: o.total_amount || 0,
+        status: 'completed'
+      }));
+    }
+    
+    if (previousTx.length === 0 && previousPaidOrders.length > 0) {
+      previousTx = previousPaidOrders.map(o => ({
+        id: o.id,
+        created_at: o.created_at,
+        amount: o.total_amount || 0,
+        status: 'completed'
+      }));
+    }
+
+    const currentRevenue = currentTx.reduce((acc: number, curr: any) => {
       const val = Number(curr.amount);
       return acc + (isNaN(val) ? 0 : val);
     }, 0);
     
-    const previousRevenue = previousTx.reduce((acc: number, curr: Transaction) => {
+    const previousRevenue = previousTx.reduce((acc: number, curr: any) => {
       const val = Number(curr.amount);
       return acc + (isNaN(val) ? 0 : val);
     }, 0);
@@ -256,7 +304,7 @@ export async function getGlobalAnalytics() {
 
     // Group sales data by day for the trajectory chart based on completed transactions
     const salesByDay: Record<string, number> = {};
-    currentTx.forEach((tx: Transaction) => {
+    currentTx.forEach((tx: any) => {
       const day = new Date(tx.created_at).toISOString().split('T')[0];
       const val = Number(tx.amount);
       salesByDay[day] = (salesByDay[day] || 0) + (isNaN(val) ? 0 : val);

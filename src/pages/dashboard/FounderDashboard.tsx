@@ -1742,7 +1742,7 @@ function AnalyticsView({ data, formatPrice }: any) {
       <div className="grid lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2 bg-white p-10 rounded-[40px] border border-slate-100 shadow-sm">
           <div className="flex justify-between items-center mb-10">
-            <h3 className="text-xl font-black tracking-tighter uppercase">Revenue Overview</h3>
+            <h3 className="text-xl font-black tracking-tighter uppercase">Revenue Trajectory</h3>
           </div>
           <div className="h-[300px] w-full">
             <ResponsiveContainer width="100%" height="100%">
@@ -1794,7 +1794,7 @@ function AnalyticsView({ data, formatPrice }: any) {
         </div>
 
         <div className="bg-white p-10 rounded-[40px] border border-slate-100 shadow-sm">
-          <h3 className="text-xl font-black tracking-tighter uppercase mb-10">Category Distribution</h3>
+          <h3 className="text-xl font-black tracking-tighter uppercase mb-10">Category Saturation</h3>
           <div className="h-[300px] w-full">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
