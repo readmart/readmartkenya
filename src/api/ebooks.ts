@@ -32,22 +32,27 @@ export async function getMyEbooks() {
     .headers({ 'X-PostgREST-Schema-Cache-Reload': 'true' });
 
   if (error) {
-    if (error.code === 'PGRST204' || error.message?.includes('column') || error.message?.includes('cache')) {
+    if (error.code === 'PGRST204' || error.message?.toLowerCase().includes('column') || error.message?.toLowerCase().includes('cache')) {
       console.warn('Advanced ebook query columns missing, falling back to core columns');
       const { data: fallbackData, error: fallbackError } = await supabase
         .from('order_items')
         .select(`
           id,
           product_id,
-          products!inner (id, title, is_ebook),
+          products!inner (id, title, metadata),
           orders!inner (status, user_id, created_at)
         `)
         .eq('orders.user_id', user.id)
-        .eq('products.is_ebook', true)
         .in('orders.status', ['completed', 'paid', 'delivered']);
       
       if (fallbackError) throw fallbackError;
-      data = fallbackData as any;
+      
+      // Filter manually for ebooks if is_ebook column was missing
+      data = (fallbackData || []).filter((item: any) => 
+        item.products?.is_ebook === true || 
+        item.products?.metadata?.is_ebook === true ||
+        item.products?.metadata?.type === 'ebook'
+      ) as any;
     } else {
       console.error('Error in getMyEbooks:', error);
       throw error;

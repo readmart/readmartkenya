@@ -266,9 +266,10 @@ export async function getOrder(orderId: string) {
   const query = supabase
     .from('orders')
     .select(`
-      *,
+      id, user_id, status, total_amount, subtotal_amount, shipping_amount, tax_amount, 
+      shipping_address, payment_method, payment_status, created_at,
       items:order_items(
-        *,
+        id, order_id, product_id, quantity, price_at_purchase, product_snapshot,
         product:products(id, title, image_url, type, metadata)
       )
     `)
