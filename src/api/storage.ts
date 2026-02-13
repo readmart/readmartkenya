@@ -130,13 +130,17 @@ export async function uploadEbookFile(file: File, identifier: string, options: U
   
   console.log(`[Storage] Starting ${useTus ? 'TUS ' : ''}upload for ${file.name} (${(file.size / 1024 / 1024).toFixed(2)}MB) to ebooks bucket`);
 
+  // Explicitly handle content type to avoid binary/octet-stream issues
+  const contentType = file.type || (fileExt === 'epub' ? 'application/epub+zip' : 'application/pdf');
+
   return withRetry(async () => {
-    console.log(`[Storage] Uploading ebook: ${filePath} (${file.size} bytes, useTus: ${useTus})`);
+    console.log(`[Storage] Uploading ebook: ${filePath} (${file.size} bytes, useTus: ${useTus}, contentType: ${contentType})`);
     const { data, error } = await supabase.storage
       .from('ebooks')
       .upload(filePath, file, {
         cacheControl: '3600',
         upsert: true,
+        contentType,
         // @ts-ignore
         onUploadProgress: options.onProgress,
         useTus: useTus,

@@ -1,6 +1,11 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { 
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, 
+  Tooltip, ResponsiveContainer, Cell,
+  AreaChart, Area, PieChart, Pie
+} from 'recharts';
+import { 
   LayoutDashboard, Package, ShoppingCart, Users, 
   Settings, Image as ImageIcon, Truck, MessageSquare, 
   Users2, Calendar, FileText, Tag, Loader2, Plus, 
@@ -37,8 +42,10 @@ import {
   getNewsletterSubscriptions, 
   updateNewsletterStatus,
   batchUpdateNewsletterStatus,
+  syncStemeSubscribers,
   type NewsletterStatus 
 } from '@/api/newsletter';
+import { sendCustomEmail } from '@/api/dashboards';
 
 interface DashboardData {
   analytics: any;
@@ -67,6 +74,7 @@ export default function FounderDashboard() {
   const { formatPrice } = useCurrency();
   const [activeTab, setActiveTab] = useState('analytics');
   const [isLoading, setIsLoading] = useState(true);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [data, setData] = useState<DashboardData>({
     analytics: null,
     inventory: [],
@@ -109,15 +117,19 @@ export default function FounderDashboard() {
 
   // Fetch all required data
   
+  const channelsRef = useRef<RealtimeChannel[]>([]);
+  
   useEffect(() => {
     fetchAllData();
 
     // Set up Realtime synchronization for critical tables
-    // Consolidated into fewer channels for better stability
-    
     const setupSubscriptions = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return;
+
+      // Clear any existing channels
+      channelsRef.current.forEach(ch => supabase.removeChannel(ch));
+      channelsRef.current = [];
 
       // 1. Core Data
       const coreChannel = supabase
@@ -168,16 +180,14 @@ export default function FounderDashboard() {
           }
         });
 
-      return [coreChannel, contentChannel, appsChannel, commsChannel];
+      channelsRef.current = [coreChannel, contentChannel, appsChannel, commsChannel];
     };
 
-    let channels: RealtimeChannel[] = [];
-    setupSubscriptions().then(subs => {
-      if (subs) channels = subs;
-    });
+    setupSubscriptions();
 
     return () => {
-      channels.forEach(ch => supabase.removeChannel(ch));
+      channelsRef.current.forEach(ch => supabase.removeChannel(ch));
+      channelsRef.current = [];
     };
   }, []);
 
@@ -248,6 +258,8 @@ export default function FounderDashboard() {
         payouts: payouts || [],
         notificationLogs: notificationLogs || []
       });
+
+      setLastUpdated(new Date());
 
       if (results.some(res => res.status === 'rejected')) {
         const failedIndices = results
@@ -425,7 +437,7 @@ export default function FounderDashboard() {
           })}
         </nav>
 
-        <div className="p-4 border-t border-slate-100 space-y-2">
+        <div className="p-4 border-t border-slate-100 space-y-3">
           <button 
             onClick={handleGlobalSync}
             className="w-full flex items-center justify-center gap-2 bg-slate-900 text-white py-3 rounded-xl font-bold text-sm hover:bg-slate-800 transition-all shadow-xl shadow-slate-900/10"
@@ -433,6 +445,13 @@ export default function FounderDashboard() {
             <RefreshCw className="w-4 h-4" />
             Global Sync
           </button>
+          
+          {lastUpdated && (
+            <div className="flex items-center justify-center gap-1.5 text-[10px] text-slate-400 font-bold uppercase tracking-widest">
+              <Clock className="w-3 h-3" />
+              Synced {lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            </div>
+          )}
         </div>
       </aside>
 
@@ -663,10 +682,18 @@ function AuthorOfDayView({ settings, authors, inventory, onUpdate }: any) {
   const [isUploading, setIsUploading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
-  // Filter books by selected author
+  // Sync local state with settings if settings change externally
+  useEffect(() => {
+    setSelectedAuthorId(settings.author_of_the_day_id || '');
+    setIsEnabled(settings.author_of_the_day_enabled || false);
+    setSelectedBooks(settings.author_of_the_day_books || []);
+    setCustomImage(settings.author_of_the_day_image || '');
+  }, [settings]);
+
+  // Filter books by selected author with safety checks
   const authorBooks = useMemo(() => {
-    if (!selectedAuthorId) return [];
-    return inventory.filter((book: any) => book.author_id === selectedAuthorId);
+    if (!selectedAuthorId || !Array.isArray(inventory)) return [];
+    return inventory.filter((book: any) => book && book.author_id === selectedAuthorId);
   }, [selectedAuthorId, inventory]);
 
   const handleAuthorChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -871,6 +898,144 @@ function AuthorOfDayView({ settings, authors, inventory, onUpdate }: any) {
   );
 }
 
+// --- Campaign Composer Modal ---
+function CampaignComposer({ isOpen, onClose, recipients = [], onUpdate }: any) {
+  const [subject, setSubject] = useState('');
+  const [message, setMessage] = useState('');
+  const [previewText, setPreviewText] = useState('');
+  const [useTemplate, setUseTemplate] = useState(true);
+  const [isSending, setIsSending] = useState(false);
+
+  const handleSend = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!recipients.length || !subject || !message) {
+      toast.error('Please fill in all fields and ensure recipients are selected');
+      return;
+    }
+
+    setIsSending(true);
+    const loadingToast = toast.loading(`Dispatching campaign to ${recipients.length} recipients...`);
+    try {
+      await sendCustomEmail({
+        to: recipients,
+        subject,
+        message,
+        previewText,
+        useTemplate
+      });
+      toast.success('Campaign dispatched successfully', { id: loadingToast });
+      setSubject('');
+      setMessage('');
+      setPreviewText('');
+      onUpdate?.();
+      onClose();
+    } catch (error: any) {
+      console.error('Campaign dispatch failed:', error);
+      toast.error(error.message || 'Failed to dispatch campaign', { id: loadingToast });
+    } finally {
+      setIsSending(false);
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.95, y: 20 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        className="bg-white rounded-[40px] shadow-2xl w-full max-w-4xl overflow-hidden flex flex-col max-h-[90vh]"
+      >
+        <div className="p-8 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+          <div>
+            <h2 className="text-2xl font-black uppercase tracking-tighter flex items-center gap-3">
+              <Zap className="w-6 h-6 text-primary" />
+              Campaign Composer
+            </h2>
+            <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mt-1">Targeting {recipients.length} verified subscribers</p>
+          </div>
+          <button onClick={onClose} className="p-3 hover:bg-white rounded-2xl transition-all shadow-sm">
+            <XCircle className="w-6 h-6 text-slate-300" />
+          </button>
+        </div>
+
+        <form onSubmit={handleSend} className="p-8 space-y-6 overflow-y-auto">
+          <div className="space-y-2">
+            <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-2">Email Subject</label>
+            <input 
+              type="text" 
+              placeholder="The heartbeat of your message..."
+              value={subject}
+              onChange={(e) => setSubject(e.target.value)}
+              className="w-full px-6 py-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:ring-4 focus:ring-primary/10 font-bold transition-all text-sm"
+              required
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-2">Preview Text (Snippet)</label>
+            <input 
+              type="text" 
+              placeholder="Visible in inbox previews..."
+              value={previewText}
+              onChange={(e) => setPreviewText(e.target.value)}
+              className="w-full px-6 py-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:ring-4 focus:ring-primary/10 font-bold transition-all text-sm"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-2">Intelligence Payload (Markdown Supported)</label>
+            <textarea 
+              placeholder="Draft your system-wide communication here..."
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              className="w-full px-6 py-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:ring-4 focus:ring-primary/10 font-bold transition-all text-sm min-h-[250px] resize-none"
+              required
+            />
+          </div>
+
+          <div className="flex items-center justify-between p-6 bg-slate-50 rounded-3xl">
+            <div className="flex items-center gap-4">
+              <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-sm">
+                <LayoutDashboard className="w-5 h-5 text-primary" />
+              </div>
+              <div>
+                <p className="text-sm font-black uppercase tracking-tighter">Use Master Template</p>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Apply ReadMart branding and footer</p>
+              </div>
+            </div>
+            <button 
+              type="button"
+              onClick={() => setUseTemplate(!useTemplate)}
+              className={`w-14 h-8 rounded-full transition-all relative ${useTemplate ? 'bg-primary' : 'bg-slate-200'}`}
+            >
+              <div className={`absolute top-1 w-6 h-6 bg-white rounded-full shadow-sm transition-all ${useTemplate ? 'right-1' : 'left-1'}`} />
+            </button>
+          </div>
+
+          <div className="flex justify-end gap-4 pt-4">
+            <button 
+              type="button"
+              onClick={onClose}
+              className="px-8 py-4 text-slate-400 font-black text-xs uppercase tracking-widest hover:text-slate-600 transition-all"
+            >
+              Abort Mission
+            </button>
+            <button 
+              type="submit"
+              disabled={isSending || !recipients.length}
+              className="bg-primary text-white px-10 py-4 rounded-2xl font-black text-xs uppercase tracking-widest hover:opacity-90 transition-all flex items-center gap-2 shadow-xl shadow-primary/20 disabled:opacity-50"
+            >
+              {isSending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
+              Dispatch Campaign
+            </button>
+          </div>
+        </form>
+      </motion.div>
+    </div>
+  );
+}
+
 function NewsletterView({ data, onUpdate }: any) {
   const [searchTerm, setSearchTerm] = useState('');
   const [isMounted, setIsMounted] = useState(false);
@@ -899,31 +1064,29 @@ function NewsletterView({ data, onUpdate }: any) {
   // Pagination logic
   const [isSyncing, setIsSyncing] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
+  const [isComposerOpen, setIsComposerOpen] = useState(false);
+  const [campaignRecipients, setCampaignRecipients] = useState<string[]>([]);
+
+  const handleOpenComposer = (emails: string[]) => {
+    if (emails.length === 0) {
+      toast.error('No recipients selected for campaign');
+      return;
+    }
+    setCampaignRecipients(emails);
+    setIsComposerOpen(true);
+  };
 
   // Sync to Steme System
   const handleStemeSync = async () => {
     setIsSyncing(true);
     const loadingToast = toast.loading('Synchronizing with Steme Newsletter Ecosystem...');
     try {
-      // Simulate API call to Steme
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      // In a real scenario, this would call an endpoint like /api/steme/sync
-      // For now we log it to our audit logs
-      const { data: { session } } = await supabase.auth.getSession();
-      await supabase.from('newsletter_logs').insert([{
-        action: 'steme_sync',
-        metadata: { 
-          subscriber_count: data.length, 
-          synced_by: session?.user?.email,
-          timestamp: new Date().toISOString()
-        }
-      }]);
-
-      toast.success(`Successfully synchronized ${data.length} subscribers to Steme`, { id: loadingToast });
+      const result = await syncStemeSubscribers();
+      toast.success(result.message || `Successfully synchronized ${result.count} subscribers to Steme`, { id: loadingToast });
       onUpdate();
-    } catch (error) {
-      toast.error('Steme synchronization failed', { id: loadingToast });
+    } catch (error: any) {
+      console.error('Steme sync error:', error);
+      toast.error(error.message || 'Steme synchronization failed', { id: loadingToast });
     } finally {
       setIsSyncing(false);
     }
@@ -1052,6 +1215,14 @@ function NewsletterView({ data, onUpdate }: any) {
         </div>
         
         <div className="flex flex-wrap gap-3">
+          <button 
+            onClick={() => handleOpenComposer(data.filter((s: any) => s.status === 'active').map((s: any) => s.email))}
+            className="bg-white border border-slate-200 text-slate-900 px-6 py-4 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-slate-50 transition-all flex items-center gap-2 shadow-sm"
+          >
+            <Zap className="w-4 h-4 text-primary" />
+            New Campaign
+          </button>
+
           <button 
             onClick={() => setShowHelp(!showHelp)}
             className="bg-white border border-slate-200 text-slate-600 px-6 py-4 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-slate-50 transition-all flex items-center gap-2 shadow-sm"
@@ -1190,6 +1361,13 @@ function NewsletterView({ data, onUpdate }: any) {
               <p className="font-bold text-sm">{selectedIds.length} subscribers selected for protocol update</p>
             </div>
             <div className="flex gap-2">
+              <button 
+                onClick={() => handleOpenComposer(data.filter((s: any) => selectedIds.includes(s.id)).map((s: any) => s.email))}
+                className="px-4 py-2 bg-slate-900 text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-slate-800 transition-all flex items-center gap-2"
+              >
+                <Zap className="w-3 h-3 text-primary" />
+                Campaign
+              </button>
               <button onClick={() => handleBatchAction('active')} className="px-4 py-2 bg-white text-primary rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-slate-50 transition-all">Activate</button>
               <button onClick={() => handleBatchAction('unsubscribed')} className="px-4 py-2 bg-white/20 text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-white/30 transition-all">Unsubscribe</button>
               <button onClick={() => setSelectedIds([])} className="px-4 py-2 text-white/60 font-bold text-[10px] uppercase tracking-widest hover:text-white transition-all">Cancel</button>
@@ -1334,6 +1512,13 @@ function NewsletterView({ data, onUpdate }: any) {
           </div>
         )}
       </div>
+
+      <CampaignComposer 
+        isOpen={isComposerOpen}
+        onClose={() => setIsComposerOpen(false)}
+        recipients={campaignRecipients}
+        onUpdate={onUpdate}
+      />
     </div>
   );
 }
@@ -1559,33 +1744,95 @@ function AnalyticsView({ data, formatPrice }: any) {
           <div className="flex justify-between items-center mb-10">
             <h3 className="text-xl font-black tracking-tighter uppercase">Revenue Overview</h3>
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-            {data.salesData.slice(-4).map((day: any, i: number) => (
-              <div key={i} className="bg-slate-50 p-6 rounded-3xl border border-slate-100">
-                <p className="text-[10px] font-black uppercase text-slate-400 mb-1">
-                  {new Date(day.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-                </p>
-                <p className="text-xl font-black text-slate-900">{formatPrice(day.total_amount)}</p>
-              </div>
-            ))}
+          <div className="h-[300px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={data.salesData}>
+                <defs>
+                  <linearGradient id="colorRev" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#2563eb" stopOpacity={0.3}/>
+                    <stop offset="95%" stopColor="#2563eb" stopOpacity={0}/>
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                <XAxis 
+                  dataKey="created_at" 
+                  tickFormatter={(str) => new Date(str).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                  axisLine={false}
+                  tickLine={false}
+                  tick={{ fill: '#64748b', fontSize: 12, fontWeight: 600 }}
+                  dy={10}
+                />
+                <YAxis 
+                  tickFormatter={(val) => `KES ${val}`}
+                  axisLine={false}
+                  tickLine={false}
+                  tick={{ fill: '#64748b', fontSize: 12, fontWeight: 600 }}
+                />
+                <Tooltip 
+                  contentStyle={{ 
+                    backgroundColor: '#fff', 
+                    border: '1px solid #f1f5f9',
+                    borderRadius: '20px',
+                    boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)',
+                    padding: '12px'
+                  }}
+                  formatter={(value: any) => [formatPrice(value), 'Revenue']}
+                  labelFormatter={(label) => new Date(label).toLocaleDateString(undefined, { dateStyle: 'long' })}
+                />
+                <Area 
+                  type="monotone" 
+                  dataKey="total_amount" 
+                  stroke="#2563eb" 
+                  strokeWidth={4}
+                  fillOpacity={1} 
+                  fill="url(#colorRev)" 
+                  animationDuration={2000}
+                />
+              </AreaChart>
+            </ResponsiveContainer>
           </div>
         </div>
 
         <div className="bg-white p-10 rounded-[40px] border border-slate-100 shadow-sm">
           <h3 className="text-xl font-black tracking-tighter uppercase mb-10">Category Distribution</h3>
-          <div className="space-y-4">
-            {data.categoryStats.slice(0, 6).map((cat: any, i: number) => (
-              <div key={cat.name} className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-bold text-slate-600">{cat.name}</span>
-                  <span className="text-sm font-black text-slate-900">{formatPrice(cat.value)}</span>
-                </div>
-                <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
-                  <div 
-                    className="h-full bg-primary" 
-                    style={{ width: `${Math.min(100, (cat.value / (data.totalRevenue || 1)) * 100)}%` }}
-                  />
-                </div>
+          <div className="h-[300px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={data.categoryStats}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={60}
+                  outerRadius={100}
+                  paddingAngle={5}
+                  dataKey="value"
+                  animationDuration={1500}
+                >
+                  {data.categoryStats.map((entry: any, index: number) => (
+                    <Cell key={`cell-${index}`} fill={[
+                      '#2563eb', '#7c3aed', '#db2777', '#ea580c', '#16a34a', '#0891b2'
+                    ][index % 6]} />
+                  ))}
+                </Pie>
+                <Tooltip 
+                  contentStyle={{ 
+                    backgroundColor: '#fff', 
+                    border: '1px solid #f1f5f9',
+                    borderRadius: '20px',
+                    boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'
+                  }}
+                  formatter={(value: any) => [formatPrice(value), 'Sales']}
+                />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+          <div className="grid grid-cols-2 gap-4 mt-6">
+            {data.categoryStats.slice(0, 4).map((cat: any, i: number) => (
+              <div key={cat.name} className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full" style={{ backgroundColor: [
+                  '#2563eb', '#7c3aed', '#db2777', '#ea580c', '#16a34a', '#0891b2'
+                ][i % 6] }} />
+                <span className="text-xs font-bold text-slate-600 truncate">{cat.name}</span>
               </div>
             ))}
           </div>

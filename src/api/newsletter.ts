@@ -162,6 +162,29 @@ export async function batchUpdateNewsletterStatus(ids: string[], status: Newslet
 }
 
 /**
+ * Synchronize newsletter subscribers with the Steme Ecosystem
+ * Calls the backend API which handles the external integration
+ */
+export async function syncStemeSubscribers() {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.access_token) throw new Error('Not authenticated');
+
+  const response = await fetch('/api/steme?action=sync', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${session.access_token}`,
+      'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY
+    }
+  });
+
+  const result = await response.json();
+  if (!response.ok) throw new Error(result.error || result.message || 'Failed to sync with Steme');
+  
+  return result;
+}
+
+/**
  * Search and filter newsletter subscriptions
  */
 export async function searchNewsletterSubscriptions(options: {

@@ -1,6 +1,10 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { useState, useEffect, useMemo } from 'react';
 import { 
+  AreaChart, Area, XAxis, YAxis, CartesianGrid, 
+  Tooltip, ResponsiveContainer 
+} from 'recharts';
+import { 
   Package, Truck, CheckCircle, 
   MapPin, DollarSign,
   AlertCircle, ChevronRight, Search, Loader2, Globe,
@@ -114,6 +118,20 @@ export default function PartnerDashboard() {
     }
   };
 
+  const performanceData = useMemo(() => {
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const grouped = assignments.reduce((acc: any, curr: any) => {
+      const month = months[new Date(curr.created_at).getMonth()];
+      acc[month] = (acc[month] || 0) + 1;
+      return acc;
+    }, {});
+
+    return months.slice(0, new Date().getMonth() + 1).map(month => ({
+      month,
+      deliveries: grouped[month] || 0
+    }));
+  }, [assignments]);
+
   const hasDefaultMpesa = useMemo(() => {
     return paymentMethods.some(m => m.type === 'mpesa' && m.is_default);
   }, [paymentMethods]);
@@ -213,6 +231,65 @@ export default function PartnerDashboard() {
 
       <div className="grid lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2 space-y-8">
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="glass p-8 rounded-3xl"
+          >
+            <div className="flex justify-between items-center mb-8">
+              <h3 className="text-xl font-bold">Delivery Performance</h3>
+              <span className="text-xs font-bold text-secondary px-3 py-1 bg-secondary/10 rounded-full uppercase tracking-wider">
+                Monthly Volume
+              </span>
+            </div>
+            <div className="h-[300px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={performanceData}>
+                  <defs>
+                    <linearGradient id="deliveryGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="var(--color-secondary)" stopOpacity={0.4}/>
+                      <stop offset="100%" stopColor="var(--color-secondary)" stopOpacity={0}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
+                  <XAxis 
+                    dataKey="month" 
+                    axisLine={false} 
+                    tickLine={false} 
+                    tick={{ fill: 'rgba(255,255,255,0.4)', fontSize: 12, fontWeight: 600 }}
+                    dy={10}
+                  />
+                  <YAxis 
+                    axisLine={false} 
+                    tickLine={false} 
+                    tick={{ fill: 'rgba(255,255,255,0.4)', fontSize: 12, fontWeight: 600 }}
+                  />
+                  <Tooltip 
+                    cursor={{ stroke: 'var(--color-secondary)', strokeWidth: 2 }}
+                    contentStyle={{ 
+                      backgroundColor: 'rgba(15, 23, 42, 0.9)', 
+                      border: '1px solid rgba(255,255,255,0.1)',
+                      borderRadius: '16px',
+                      backdropFilter: 'blur(12px)',
+                      color: '#fff',
+                      fontWeight: 'bold'
+                    }}
+                    itemStyle={{ color: '#fff' }}
+                  />
+                  <Area 
+                    type="monotone" 
+                    dataKey="deliveries" 
+                    stroke="var(--color-secondary)" 
+                    strokeWidth={3}
+                    fillOpacity={1} 
+                    fill="url(#deliveryGradient)" 
+                    animationDuration={1500}
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          </motion.div>
+
           <motion.div 
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}

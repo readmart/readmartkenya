@@ -38,7 +38,9 @@ DECLARE
     'author_applications', 'partnership_applications', 'partnership_agreements',
     'contact_messages', 'newsletter_subscriptions', 'events', 'audit_logs',
     'book_clubs', 'book_club_events', 'book_club_discussions', 'banners', 'announcements',
-    'fulfillment_ledger', 'transactions'
+    'fulfillment_ledger', 'transactions', 'agreements', 'partnership_services',
+    'event_rsvps', 'newsletter_subscriptions', 'reviews', 'ebook_metadata',
+    'cms_content', 'categories', 'order_items', 'partners', 'book_club_members'
   ];
   t TEXT;
 BEGIN
@@ -77,7 +79,26 @@ BEGIN
         );
 END $$;
 
--- 5. Force PostgREST to reload schema to reflect all changes
+-- 5. Unified Storage Security: Apply is_admin_or_founder() to all buckets
+-- This ensures admins can always manage files regardless of bucket-specific RLS
+DO $$ 
+DECLARE
+    b text;
+    buckets text[] := ARRAY['products', 'site_assets', 'banners', 'ebooks', 'agreements', 'signed_agreements', 'partnership_documents', 'contact_attachments', 'avatars'];
+BEGIN
+    FOREACH b IN ARRAY buckets LOOP
+        -- Remove old policy if it exists
+        EXECUTE format('DROP POLICY IF EXISTS "Admins manage %I" ON storage.objects', b);
+        
+        -- Create unified policy using the SECURITY DEFINER helper
+        EXECUTE format('CREATE POLICY "Admins manage %I" ON storage.objects 
+            FOR ALL TO authenticated 
+            USING (bucket_id = %L AND public.is_admin_or_founder())
+            WITH CHECK (bucket_id = %L AND public.is_admin_or_founder())', b, b, b);
+    END LOOP;
+END $$;
+
+-- 6. Force PostgREST to reload schema to reflect all changes
 NOTIFY pgrst, 'reload schema';
 
 COMMIT;

@@ -87,7 +87,12 @@ DECLARE
         'site_settings',
         'fulfillment_ledger',
         'reviews',
-        'ebook_metadata'
+        'ebook_metadata',
+        'cms_content',
+        'categories',
+        'products',
+        'orders',
+        'order_items'
     ];
 BEGIN
     FOREACH t IN ARRAY tables_to_fix LOOP

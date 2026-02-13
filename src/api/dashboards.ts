@@ -649,7 +649,7 @@ export async function getInventory(authorId?: string) {
           console.warn('[API] Inventory schema mismatch, retrying with minimal select...');
           const { data: fallback, error: fallbackError } = await supabase
             .from('products')
-            .select('id, title, price, stock_quantity, image_url, created_at')
+            .select('id, title, price, stock_quantity, image_url, author_id, created_at')
             .order('created_at', { ascending: false });
           
           if (fallbackError) throw fallbackError;

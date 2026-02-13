@@ -1,6 +1,10 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { useState, useEffect, useMemo } from 'react';
 import { 
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, 
+  Tooltip, ResponsiveContainer, Cell 
+} from 'recharts';
+import { 
   BookOpen, DollarSign, TrendingUp,
   Award, MessageSquare, Plus, Loader2, Shield,
   FileCheck, Star, XCircle, Image as ImageIcon, FileUp,
@@ -539,13 +543,48 @@ export default function AuthorDashboard() {
             <div className="flex justify-between items-center mb-8">
               <h3 className="text-xl font-bold">Sales Overview</h3>
             </div>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {performanceData.slice(-4).map((data: any, i: number) => (
-                <div key={i} className="glass p-6 rounded-2xl border border-white/5">
-                  <p className="text-[10px] font-bold uppercase text-white/40 mb-1">{data.month}</p>
-                  <p className="text-xl font-bold text-white">{data.sales} Sales</p>
-                </div>
-              ))}
+            <div className="h-[300px] w-full mt-4">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={performanceData}>
+                  <defs>
+                    <linearGradient id="barGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="var(--color-primary)" stopOpacity={0.8}/>
+                      <stop offset="100%" stopColor="var(--color-primary)" stopOpacity={0.2}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
+                  <XAxis 
+                    dataKey="month" 
+                    axisLine={false} 
+                    tickLine={false} 
+                    tick={{ fill: 'rgba(255,255,255,0.4)', fontSize: 12, fontWeight: 600 }}
+                    dy={10}
+                  />
+                  <YAxis 
+                    axisLine={false} 
+                    tickLine={false} 
+                    tick={{ fill: 'rgba(255,255,255,0.4)', fontSize: 12, fontWeight: 600 }}
+                  />
+                  <Tooltip 
+                    cursor={{ fill: 'rgba(255,255,255,0.05)', radius: 8 }}
+                    contentStyle={{ 
+                      backgroundColor: 'rgba(15, 23, 42, 0.9)', 
+                      border: '1px solid rgba(255,255,255,0.1)',
+                      borderRadius: '16px',
+                      backdropFilter: 'blur(12px)',
+                      color: '#fff',
+                      fontWeight: 'bold'
+                    }}
+                    itemStyle={{ color: '#fff' }}
+                  />
+                  <Bar 
+                    dataKey="sales" 
+                    fill="url(#barGradient)" 
+                    radius={[8, 8, 0, 0]}
+                    animationDuration={1500}
+                  />
+                </BarChart>
+              </ResponsiveContainer>
             </div>
           </motion.div>
 
