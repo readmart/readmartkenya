@@ -50,10 +50,37 @@ export default function OrderHistory() {
           )
         `)
         .eq('user_id', user?.id)
-        .order('created_at', { ascending: false }) as { data: Order[] | null, error: PostgrestError | null };
+        .order('created_at', { ascending: false })
+        .headers({ 'X-PostgREST-Schema-Cache-Reload': 'true' }) as { data: Order[] | null, error: PostgrestError | null };
 
-      if (error) throw error;
-      setOrders(data || []);
+      if (error) {
+        // Fallback for schema cache issues (PGRST204 or missing column errors)
+        if (error.code === 'PGRST204' || error.message?.toLowerCase().includes('column') || error.message?.toLowerCase().includes('cache')) {
+          console.warn('Order items schema cache issue, falling back to minimal order fetch');
+          const { data: fallbackData, error: fallbackError } = await supabase
+            .from('orders')
+            .select(`
+              id,
+              total_amount,
+              status,
+              created_at,
+              order_items (
+                id,
+                quantity,
+                price_at_purchase
+              )
+            `)
+            .eq('user_id', user?.id)
+            .order('created_at', { ascending: false });
+          
+          if (fallbackError) throw fallbackError;
+          setOrders(fallbackData || []);
+        } else {
+          throw error;
+        }
+      } else {
+        setOrders(data || []);
+      }
     } catch (error) {
       console.error('Error fetching orders:', error);
     } finally {

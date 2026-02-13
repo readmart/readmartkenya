@@ -62,6 +62,7 @@ export default function Account() {
   const fetchOrders = async () => {
     setIsLoadingOrders(true);
     try {
+      // Use the resilient pattern with schema cache reload header
       const { data, error } = await supabase
         .from('orders')
         .select(`
@@ -74,12 +75,40 @@ export default function Account() {
           )
         `)
         .eq('user_id', user?.id)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .headers({ 'X-PostgREST-Schema-Cache-Reload': 'true' });
 
-      if (error) throw error;
-      setOrders(data || []);
+      if (error) {
+        // Fallback for schema cache issues (PGRST204 or missing column errors)
+        if (error.code === 'PGRST204' || error.message?.toLowerCase().includes('column') || error.message?.toLowerCase().includes('cache')) {
+          console.warn('Order items schema cache issue, falling back to minimal order fetch');
+          const { data: fallbackData, error: fallbackError } = await supabase
+            .from('orders')
+            .select(`
+              id,
+              total_amount,
+              status,
+              created_at,
+              order_items (
+                id,
+                quantity,
+                price_at_purchase
+              )
+            `)
+            .eq('user_id', user?.id)
+            .order('created_at', { ascending: false });
+          
+          if (fallbackError) throw fallbackError;
+          setOrders(fallbackData || []);
+        } else {
+          throw error;
+        }
+      } else {
+        setOrders(data || []);
+      }
     } catch (error) {
       console.error('Error fetching orders:', error);
+      toast.error('Failed to load your orders. Please try again later.');
     } finally {
       setIsLoadingOrders(false);
     }

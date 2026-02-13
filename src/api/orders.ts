@@ -279,7 +279,9 @@ export async function getOrder(orderId: string) {
     query.eq('user_id', user?.id);
   }
 
-  const { data, error } = await query.maybeSingle();
+  const { data, error } = await query
+    .headers({ 'X-PostgREST-Schema-Cache-Reload': 'true' })
+    .maybeSingle();
   
   if (error) {
     if (error.code === 'PGRST204' || error.message?.includes('cache') || error.message?.includes('column')) {
