@@ -1293,19 +1293,22 @@ export async function getPartnerPayouts(partnerId: string) {
       // First Principles: Fetch ledger entries directly to avoid relationship errors
       const { data: ledgerData, error: ledgerError } = await supabase
         .from('fulfillment_ledger')
-        .select(`
-          id,
-          order_id,
-          partner_id,
-          amount,
-          payout_status,
-          metadata,
-          created_at
-        `)
+        .select(`*`)
         .eq('partner_id', partnerId)
         .order('created_at', { ascending: false });
       
-      if (ledgerError) throw ledgerError;
+      if (ledgerError) {
+        if (ledgerError.code === '42703') {
+          const { data: fallbackData, error: fallbackError } = await supabase
+            .from('fulfillment_ledger')
+            .select('id, amount, payout_status, created_at')
+            .eq('partner_id', partnerId)
+            .order('created_at', { ascending: false });
+          if (fallbackError) throw fallbackError;
+          return fallbackData || [];
+        }
+        throw ledgerError;
+      }
       if (!ledgerData || ledgerData.length === 0) return [];
 
       // Manually fetch related orders
@@ -1862,18 +1865,21 @@ export async function getAllPayouts() {
       // First Principles: Fetch ledger entries directly to avoid relationship errors
       const { data: ledgerData, error: ledgerError } = await supabase
         .from('fulfillment_ledger')
-        .select(`
-          id,
-          order_id,
-          partner_id,
-          amount,
-          payout_status,
-          metadata,
-          created_at
-        `)
+        .select(`*`)
         .order('created_at', { ascending: false });
         
-      if (ledgerError) throw ledgerError;
+      if (ledgerError) {
+        // Fallback: If order_id or other columns really don't exist yet, fetch what's available
+        if (ledgerError.code === '42703') {
+           const { data: fallbackData, error: fallbackError } = await supabase
+             .from('fulfillment_ledger')
+             .select('id, amount, payout_status, created_at')
+             .order('created_at', { ascending: false });
+           if (fallbackError) throw fallbackError;
+           return fallbackData || [];
+        }
+        throw ledgerError;
+      }
       if (!ledgerData || ledgerData.length === 0) return [];
 
       // Fetch related data manually
