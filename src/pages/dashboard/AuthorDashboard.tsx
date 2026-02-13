@@ -6,7 +6,6 @@ import {
   FileCheck, Star, XCircle, Image as ImageIcon, FileUp,
   Edit, Users, Rss, CreditCard, AlertCircle
 } from 'lucide-react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { useCurrency } from '@/contexts/CurrencyContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { 
@@ -46,7 +45,6 @@ export default function AuthorDashboard() {
   const [settings, setSettings] = useState<any>(null);
   const [categories, setCategories] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [shouldRenderChart, setShouldRenderChart] = useState(false);
   const [isUploadingProfile, setIsUploadingProfile] = useState(false);
   const [isAddingMpesa, setIsAddingMpesa] = useState(false);
   const [newMpesaNumber, setNewMpesaNumber] = useState('');
@@ -66,12 +64,6 @@ export default function AuthorDashboard() {
     price: 0
   });
   const [payoutAmount, setPayoutAmount] = useState('');
-
-  useEffect(() => {
-    // Component mount logic
-    const timer = setTimeout(() => setShouldRenderChart(true), 200);
-    return () => clearTimeout(timer);
-  }, []);
 
   const handleProfileImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -545,27 +537,15 @@ export default function AuthorDashboard() {
             className="glass p-8 rounded-3xl"
           >
             <div className="flex justify-between items-center mb-8">
-              <h3 className="text-xl font-bold">Sales Performance</h3>
-              <div className="flex gap-2">
-                <button className="glass px-3 py-1 rounded-lg text-xs font-bold hover:bg-primary hover:text-white transition-all">6M</button>
-                <button className="bg-primary text-white px-3 py-1 rounded-lg text-xs font-bold">1Y</button>
-              </div>
+              <h3 className="text-xl font-bold">Sales Overview</h3>
             </div>
-            <div className="h-[400px] w-full relative">
-              {shouldRenderChart && (
-                <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={performanceData}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.1)" />
-                    <XAxis dataKey="month" stroke="rgba(255,255,255,0.5)" />
-                    <YAxis stroke="rgba(255,255,255,0.5)" />
-                    <Tooltip 
-                      contentStyle={{ background: 'rgba(0,0,0,0.8)', border: 'none', borderRadius: '12px' }}
-                      itemStyle={{ color: '#fff' }}
-                    />
-                    <Bar dataKey="sales" fill="var(--primary)" radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              )}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {performanceData.slice(-4).map((data: any, i: number) => (
+                <div key={i} className="glass p-6 rounded-2xl border border-white/5">
+                  <p className="text-[10px] font-bold uppercase text-white/40 mb-1">{data.month}</p>
+                  <p className="text-xl font-bold text-white">{data.sales} Sales</p>
+                </div>
+              ))}
             </div>
           </motion.div>
 
