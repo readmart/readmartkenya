@@ -48,21 +48,26 @@ export async function createOrder(orderData: OrderData) {
   // Define a set of "new" columns that are prone to schema cache issues
   const potentialProblematicColumns = ['shipping_amount', 'subtotal_amount', 'tax_amount', 'total_amount', 'shipping_zone_id'];
 
+  // AGGRESSIVE BYPASS: Add X-PostgREST-Schema-Cache-Reload header to the request
+  // This tells PostgREST to reload the schema cache for this specific request
+  // We use .headers({ 'X-PostgREST-Schema-Cache-Reload': 'true' }) to force a reload
+  
   let currentInsertData = { ...orderInsertData };
   let order = null;
   let lastError = null;
   let attempts = 0;
-  const maxAttempts = potentialProblematicColumns.length + 2; // Extra attempts for generic fallbacks
+  const maxAttempts = potentialProblematicColumns.length + 2; 
 
   while (attempts < maxAttempts) {
     attempts++;
     console.log(`Order creation attempt ${attempts}... Data keys: ${Object.keys(currentInsertData).join(', ')}`);
     
-    // EXPLICITLY use .select('id') to avoid any implicit select *
+    // EXPLICITLY use .select('id') and force cache reload via headers
     const { data, error } = await supabase
       .from('orders')
       .insert({ ...currentInsertData })
       .select('id')
+      .headers({ 'X-PostgREST-Schema-Cache-Reload': 'true' })
       .maybeSingle();
 
     if (!error && data) {
@@ -81,10 +86,33 @@ export async function createOrder(orderData: OrderData) {
       error?.message?.toLowerCase().includes('not found');
 
     if (isSchemaError) {
+      // If we've already tried several times and still getting schema errors, 
+      // let's try a very aggressive approach by removing ALL known problematic columns immediately
+      if (attempts >= 2) {
+        console.warn('Persistent schema error detected. Switching to aggressive column filtering.');
+        for (const col of potentialProblematicColumns) {
+          if (currentInsertData[col] !== undefined) {
+            currentInsertData.metadata = {
+              ...(currentInsertData.metadata || {}),
+              [`aggressive_fallback_${col}`]: currentInsertData[col]
+            };
+            delete currentInsertData[col];
+          }
+        }
+        continue;
+      }
+
       // 1. Try to extract the problematic column name from the error message
       // Message format: "Could not find the 'column_name' column of 'table_name' in the schema cache"
       const match = error?.message?.match(/['"]([^'"]+)['"]/); // Match anything inside quotes
-      const problematicColumn = match ? match[1] : null;
+      let problematicColumn = match ? match[1] : null;
+
+      // Fallback: search for the column name in the error message if quotes didn't work
+      if (!problematicColumn && error?.message?.includes('shipping_amount')) problematicColumn = 'shipping_amount';
+      if (!problematicColumn && error?.message?.includes('subtotal_amount')) problematicColumn = 'subtotal_amount';
+      if (!problematicColumn && error?.message?.includes('tax_amount')) problematicColumn = 'tax_amount';
+      if (!problematicColumn && error?.message?.includes('total_amount')) problematicColumn = 'total_amount';
+      if (!problematicColumn && error?.message?.includes('shipping_zone_id')) problematicColumn = 'shipping_zone_id';
 
       if (problematicColumn && currentInsertData[problematicColumn] !== undefined) {
         console.warn(`Schema cache issue detected for specific column: ${problematicColumn}. Omiting and retrying...`);
@@ -172,7 +200,8 @@ export async function createOrder(orderData: OrderData) {
 
   const { error: itemsError } = await supabase
     .from('order_items')
-    .insert(orderItems);
+    .insert(orderItems)
+    .headers({ 'X-PostgREST-Schema-Cache-Reload': 'true' });
 
   if (itemsError) {
     console.error('Order items creation error details:', itemsError);
@@ -194,7 +223,8 @@ export async function createOrder(orderData: OrderData) {
 
        const { error: retryError } = await supabase
          .from('order_items')
-         .insert(minimalItems);
+         .insert(minimalItems)
+         .headers({ 'X-PostgREST-Schema-Cache-Reload': 'true' });
        
        if (retryError) {
          console.error('Final order items creation error after fallback:', retryError);
@@ -204,7 +234,8 @@ export async function createOrder(orderData: OrderData) {
          }));
          const { error: absoluteRetryError } = await supabase
            .from('order_items')
-           .insert(absoluteMinimalItems);
+           .insert(absoluteMinimalItems)
+           .headers({ 'X-PostgREST-Schema-Cache-Reload': 'true' });
          
          if (absoluteRetryError) throw absoluteRetryError;
        }

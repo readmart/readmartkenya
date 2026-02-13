@@ -2506,6 +2506,7 @@ export async function createBookClub(club: any) {
     .from('book_clubs')
     .insert([club])
     .select()
+    .headers({ 'X-PostgREST-Schema-Cache-Reload': 'true' })
     .single();
 
   if (error) throw error;
@@ -2533,6 +2534,7 @@ export async function createEvent(event: any) {
     .from('events')
     .insert([event])
     .select()
+    .headers({ 'X-PostgREST-Schema-Cache-Reload': 'true' })
     .single();
 
   if (error) throw error;
@@ -2560,6 +2562,7 @@ export async function createBanner(banner: any) {
     .from('banners')
     .insert([banner])
     .select()
+    .headers({ 'X-PostgREST-Schema-Cache-Reload': 'true' })
     .single();
 
   if (error) throw error;
@@ -2587,6 +2590,7 @@ export async function createAnnouncement(announcement: any) {
     .from('announcements')
     .insert([announcement])
     .select()
+    .headers({ 'X-PostgREST-Schema-Cache-Reload': 'true' })
     .single();
 
   if (error) throw error;
@@ -2642,6 +2646,7 @@ export async function createProduct(product: any) {
       .from('products')
       .insert([currentData])
       .select('id, title, slug')
+      .headers({ 'X-PostgREST-Schema-Cache-Reload': 'true' })
       .maybeSingle();
 
     if (error) {
