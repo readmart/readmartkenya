@@ -176,7 +176,8 @@ export default function Checkout() {
               status: step === 'confirmation' ? 'completed' : 
                       step === 'payment' ? 'payment_initiated' : 'initiated'
             })
-            .eq('id', sessionId);
+            .eq('id', sessionId)
+            .select('id');
         }
       } catch (error) {
         console.error('Error tracking checkout session:', error);

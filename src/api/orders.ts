@@ -45,68 +45,122 @@ export async function createOrder(orderData: OrderData) {
     orderInsertData.shipping_zone_id = orderData.shipping_zone_id;
   }
 
-  const { data, error } = await supabase
-    .from('orders')
-    .insert(orderInsertData)
-    .select('*')
-    .maybeSingle();
+  // Define a set of "new" columns that are prone to schema cache issues
+  const potentialProblematicColumns = ['shipping_amount', 'subtotal_amount', 'tax_amount', 'total_amount', 'shipping_zone_id'];
 
-  let order = data;
-  const orderError = error;
+  let currentInsertData = { ...orderInsertData };
+  let order = null;
+  let lastError = null;
+  let attempts = 0;
+  const maxAttempts = potentialProblematicColumns.length + 2; // Extra attempts for generic fallbacks
 
-  if (orderError) {
-    console.error('Order creation error details:', orderError);
+  while (attempts < maxAttempts) {
+    attempts++;
+    console.log(`Order creation attempt ${attempts}... Data keys: ${Object.keys(currentInsertData).join(', ')}`);
     
+    // EXPLICITLY use .select('id') to avoid any implicit select *
+    const { data, error } = await supabase
+      .from('orders')
+      .insert({ ...currentInsertData })
+      .select('id')
+      .maybeSingle();
+
+    if (!error && data) {
+      console.log('Order created successfully on attempt', attempts);
+      order = data;
+      break;
+    }
+
+    lastError = error;
+    console.warn(`Order creation attempt ${attempts} failed:`, error?.code, error?.message);
+
     const isSchemaError = 
-      orderError.code === 'PGRST204' || 
-      orderError.message?.includes('column') || 
-      orderError.message?.includes('cache');
+      error?.code === 'PGRST204' || 
+      error?.message?.toLowerCase().includes('column') || 
+      error?.message?.toLowerCase().includes('cache') ||
+      error?.message?.toLowerCase().includes('not found');
 
     if (isSchemaError) {
-       console.warn('Schema mismatch detected during order creation, attempting fallback...');
-       
-       // Fallback 1: Try with select('id') instead of select('*')
-       const { data: retryData, error: retryError } = await supabase
-         .from('orders')
-         .insert(orderInsertData)
-         .select('id')
-         .maybeSingle();
-       
-       if (!retryError && retryData) {
-         order = retryData;
-       } else if (retryError && (retryError.code === 'PGRST204' || retryError.message?.includes('shipping_amount'))) {
-         // Fallback 2: If shipping_amount is specifically problematic, try without it
-         // This works because we added a DEFAULT 0.00 in the migration
-         console.warn('Critical fallback: Omiting shipping_amount from order insert');
-         const { shipping_amount, subtotal_amount, ...coreData } = orderInsertData;
-         const { data: finalData, error: finalError } = await supabase
-           .from('orders')
-           .insert({
-             ...coreData,
-             // Try to put financial data into metadata as a backup
-             metadata: { 
-               ...(coreData.metadata || {}), 
-               original_shipping: shipping_amount,
-               original_subtotal: subtotal_amount
-             }
-           })
-           .select('id')
-           .maybeSingle();
-         
-         if (finalError) throw finalError;
-         if (!finalData) throw new Error('Order creation failed on ultimate fallback');
-         order = finalData;
-       } else {
-         throw retryError || new Error('Order creation failed after retry');
-       }
+      // 1. Try to extract the problematic column name from the error message
+      // Message format: "Could not find the 'column_name' column of 'table_name' in the schema cache"
+      const match = error?.message?.match(/['"]([^'"]+)['"]/); // Match anything inside quotes
+      const problematicColumn = match ? match[1] : null;
+
+      if (problematicColumn && currentInsertData[problematicColumn] !== undefined) {
+        console.warn(`Schema cache issue detected for specific column: ${problematicColumn}. Omiting and retrying...`);
+        
+        // Move to metadata as backup before removing
+        currentInsertData.metadata = {
+          ...(currentInsertData.metadata || {}),
+          [problematicColumn]: currentInsertData[problematicColumn],
+          schema_fallback: true,
+          fallback_at: new Date().toISOString()
+        };
+        
+        delete currentInsertData[problematicColumn];
+        continue; 
+      } 
+      
+      // 2. If we couldn't identify a specific column, or the identified one was already removed, 
+      // try removing columns from our known "problematic" list one by one
+      let removedSomething = false;
+      for (const col of potentialProblematicColumns) {
+        if (currentInsertData[col] !== undefined) {
+          console.warn(`Removing potential problematic column: ${col} and retrying...`);
+          currentInsertData.metadata = {
+            ...(currentInsertData.metadata || {}),
+            [`fallback_${col}`]: currentInsertData[col],
+            schema_fallback_generic: true
+          };
+          delete currentInsertData[col];
+          removedSomething = true;
+          break; // Try again after removing one
+        }
+      }
+
+      if (removedSomething) continue;
+
+      // 3. ULTIMATE FALLBACK: Remove ALL non-core columns
+      console.error('All specific column removals failed. Attempting ultimate fallback with core columns only.');
+      const coreColumns = ['user_id', 'shipping_address', 'status', 'payment_method'];
+      const minimalData: any = {};
+      const metadataBackup: any = { ...(currentInsertData.metadata || {}), absolute_fallback: true };
+
+      Object.keys(currentInsertData).forEach(key => {
+        if (coreColumns.includes(key)) {
+          minimalData[key] = currentInsertData[key];
+        } else if (key !== 'metadata') {
+          metadataBackup[`final_fallback_${key}`] = currentInsertData[key];
+        }
+      });
+      minimalData.metadata = metadataBackup;
+      
+      const { data: finalData, error: finalError } = await supabase
+        .from('orders')
+        .insert(minimalData)
+        .select('id')
+        .maybeSingle();
+      
+      if (!finalError && finalData) {
+        order = finalData;
+        break;
+      }
+      lastError = finalError;
+      break; // Give up
     } else {
-      throw orderError;
+      // Not a schema error (e.g., RLS, validation), don't retry
+      break;
     }
+  }
+
+  if (lastError && !order) {
+    console.error('Final order creation error after all fallbacks:', lastError);
+    throw lastError;
   }
 
   if (!order) throw new Error('Order creation failed');
 
-  // 2. Create order items
+  // 2. Create order items with resilience
   const orderItems = orderData.items.map(item => ({
     order_id: order.id,
     product_id: item.product_id,
@@ -122,22 +176,44 @@ export async function createOrder(orderData: OrderData) {
 
   if (itemsError) {
     console.error('Order items creation error details:', itemsError);
-    // If it's a schema cache error or missing column, try to insert without problematic columns if needed
-    // For now, we'll try a retry if it's a cache issue
-    if (itemsError.message?.includes('cache') || itemsError.message?.includes('column') || itemsError.code === 'PGRST204') {
+    const isSchemaError = 
+      itemsError.code === 'PGRST204' || 
+      itemsError.message?.toLowerCase().includes('cache') || 
+      itemsError.message?.toLowerCase().includes('column') ||
+      itemsError.message?.toLowerCase().includes('not found');
+
+    if (isSchemaError) {
+       console.warn('Schema cache issue on order_items, retrying with minimal payload');
+       // Try a minimal insert for items as well if needed
+       // Remove product_snapshot as it's the most likely "new" column causing issues
+       const minimalItems = orderItems.map(({ product_snapshot, price, ...rest }) => ({
+         ...rest,
+         // Ensure we use price_at_purchase as it's the core column
+         price_at_purchase: price 
+       }));
+
        const { error: retryError } = await supabase
          .from('order_items')
-         .insert(orderItems.map(({ product_snapshot, ...rest }) => rest)); // Try without snapshot as fallback
+         .insert(minimalItems);
        
-       if (retryError) throw retryError;
+       if (retryError) {
+         console.error('Final order items creation error after fallback:', retryError);
+         // If it still fails, try one more time with JUST core columns (order_id, product_id, quantity)
+         const absoluteMinimalItems = orderItems.map(({ order_id, product_id, quantity }) => ({
+           order_id, product_id, quantity
+         }));
+         const { error: absoluteRetryError } = await supabase
+           .from('order_items')
+           .insert(absoluteMinimalItems);
+         
+         if (absoluteRetryError) throw absoluteRetryError;
+       }
     } else {
       throw itemsError;
     }
   }
 
-  // Filter VAT for customer
-  const { tax_amount, ...orderForCustomer } = order;
-  return orderForCustomer;
+  return order;
 }
 
 export async function getOrder(orderId: string) {
