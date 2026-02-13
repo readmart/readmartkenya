@@ -7,6 +7,25 @@
     <link rel="apple-touch-icon" href="/logo.jpg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>ReadMart | Your Premium Bookstore</title>
+    <script>
+      // Suppress non-actionable browser deprecation warnings from Privacy Sandbox/Legacy Storage
+      // These are triggered by third-party libraries (Supabase, Vercel Analytics) during feature detection.
+      (function() {
+        const originalWarn = console.warn;
+        console.warn = function() {
+          const msg = arguments[0];
+          if (typeof msg === 'string' && (
+            msg.includes('Protected Audience API') || 
+            msg.includes('StorageType.persistent') ||
+            msg.includes('Shared Storage API') ||
+            msg.includes('navigator.storage')
+          )) {
+            return;
+          }
+          originalWarn.apply(console, arguments);
+        };
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
