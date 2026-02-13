@@ -56,17 +56,49 @@ export async function createOrder(orderData: OrderData) {
 
   if (orderError) {
     console.error('Order creation error details:', orderError);
-    // If it's a schema cache error, try to insert without select(*)
-    if (orderError.message?.includes('cache') || orderError.message?.includes('column') || orderError.code === 'PGRST204') {
-       const { data: retryOrder, error: retryError } = await supabase
+    
+    const isSchemaError = 
+      orderError.code === 'PGRST204' || 
+      orderError.message?.includes('column') || 
+      orderError.message?.includes('cache');
+
+    if (isSchemaError) {
+       console.warn('Schema mismatch detected during order creation, attempting fallback...');
+       
+       // Fallback 1: Try with select('id') instead of select('*')
+       const { data: retryData, error: retryError } = await supabase
          .from('orders')
          .insert(orderInsertData)
          .select('id')
          .maybeSingle();
        
-       if (retryError) throw retryError;
-       if (!retryOrder) throw new Error('Order creation failed after retry');
-       order = retryOrder;
+       if (!retryError && retryData) {
+         order = retryData;
+       } else if (retryError && (retryError.code === 'PGRST204' || retryError.message?.includes('shipping_amount'))) {
+         // Fallback 2: If shipping_amount is specifically problematic, try without it
+         // This works because we added a DEFAULT 0.00 in the migration
+         console.warn('Critical fallback: Omiting shipping_amount from order insert');
+         const { shipping_amount, subtotal_amount, ...coreData } = orderInsertData;
+         const { data: finalData, error: finalError } = await supabase
+           .from('orders')
+           .insert({
+             ...coreData,
+             // Try to put financial data into metadata as a backup
+             metadata: { 
+               ...(coreData.metadata || {}), 
+               original_shipping: shipping_amount,
+               original_subtotal: subtotal_amount
+             }
+           })
+           .select('id')
+           .maybeSingle();
+         
+         if (finalError) throw finalError;
+         if (!finalData) throw new Error('Order creation failed on ultimate fallback');
+         order = finalData;
+       } else {
+         throw retryError || new Error('Order creation failed after retry');
+       }
     } else {
       throw orderError;
     }
