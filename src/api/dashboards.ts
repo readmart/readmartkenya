@@ -643,6 +643,19 @@ export async function getInventory(authorId?: string) {
 
       if (error) {
         console.error('Error fetching inventory:', error);
+        
+        // Handle schema cache issues
+        if (error.code === 'PGRST204' || error.message?.includes('column') || error.message?.includes('cache')) {
+          console.warn('[API] Inventory schema mismatch, retrying with minimal select...');
+          const { data: fallback, error: fallbackError } = await supabase
+            .from('products')
+            .select('id, title, price, stock_quantity, image_url, created_at')
+            .order('created_at', { ascending: false });
+          
+          if (fallbackError) throw fallbackError;
+          return fallback || [];
+        }
+        
         throw error;
       }
       return data || [];
@@ -2091,48 +2104,38 @@ export async function updateApplicationStatus(table: string, id: string, status:
 
 export async function getApprovedAuthors() {
   try {
-    // This function is often used for public author lists
-    // RLS policies should ensure only basic info is returned if public
-    // or verifyAdmin is needed if it returns sensitive data
+    // Check if we have a session. If we do, we can attempt to verify admin.
+    // If we don't, or if verification fails, we can still return a public list
+    // of authors if RLS allows it.
+    const { data: { session } } = await supabase.auth.getSession();
     
-    // For public display, we might not need admin verification if the query is safe
-    // But currently this function returns profiles which might have sensitive info
-    // However, it selects specific columns: id, full_name, email
-    // Email might be sensitive.
-    
-    // If this is used in Founder Dashboard, it should be protected.
-    // If used in public Author page, it should be public but without email.
-    
-    // Let's check if we are in a protected context or not.
-    // Since we don't pass context, we can try to verify, but catch error.
-    
-    // Actually, let's keep verifyAdmin but handle the failure better in UI
-    // OR if this is used for "Meet our Authors" page, we need a public version.
-    
-    // Based on user error "Approved Authors fetch failed", it seems to be blocking.
-    // Let's make it safe by checking session but not throwing?
-    // No, if the user is not admin, they shouldn't see the list IF it's an admin function.
-    
-    // Wait, the error is in the console log. If it's just a log, maybe it's fine?
-    // But if it breaks the page...
-    
-    // If this is ONLY used in Founder Dashboard, then the error is correct for non-admins.
-    // But why is Founder Dashboard fetching if I'm not on it?
-    // Maybe the user IS on it?
-    
-    await verifyAdmin();
-    let { data, error } = await supabase
+    // For the Founder Dashboard, we want to select email. 
+    // For public views, we should probably exclude email.
+    // Let's check if the user is an admin.
+    let isAdmin = false;
+    if (session) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', session.user.id)
+        .single();
+      isAdmin = profile?.role === 'founder' || profile?.role === 'admin';
+    }
+
+    let query = supabase
       .from('profiles')
-      .select('id, full_name, email')
+      .select(isAdmin ? 'id, full_name, email' : 'id, full_name')
       .eq('role', 'author')
       .order('full_name');
+
+    let { data, error } = await query;
     
     // Fallback if any 400 error (likely role filter or column issue)
     if (error) {
       console.warn('Profiles role filter failed, retrying without filter.');
       const { data: allData, error: allErr } = await supabase
         .from('profiles')
-        .select('id, full_name, email, role')
+        .select(isAdmin ? 'id, full_name, email, role' : 'id, full_name, role')
         .order('full_name');
       
       if (!allErr && allData) {

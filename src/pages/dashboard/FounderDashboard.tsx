@@ -125,9 +125,9 @@ export default function FounderDashboard() {
         .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => fetchAllData())
         .on('postgres_changes', { event: '*', schema: 'public', table: 'products' }, () => fetchAllData())
         .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => fetchAllData())
-        .subscribe((status: string) => {
+        .subscribe((status: string, err?: Error) => {
           if (status === 'CHANNEL_ERROR') {
-            console.warn('Realtime Error (Core): Failed to subscribe to orders/products/profiles');
+            console.warn('Realtime Error (Core): Failed to subscribe to orders/products/profiles', err);
           }
         });
 
@@ -139,9 +139,9 @@ export default function FounderDashboard() {
         .on('postgres_changes', { event: '*', schema: 'public', table: 'banners' }, () => fetchAllData())
         .on('postgres_changes', { event: '*', schema: 'public', table: 'announcements' }, () => fetchAllData())
         .on('postgres_changes', { event: '*', schema: 'public', table: 'shipping_zones' }, () => fetchAllData())
-        .subscribe((status: string) => {
+        .subscribe((status: string, err?: Error) => {
           if (status === 'CHANNEL_ERROR') {
-            console.warn('Realtime Error (Content): Failed to subscribe to content tables');
+            console.warn('Realtime Error (Content): Failed to subscribe to content tables', err);
           }
         });
 
@@ -151,9 +151,9 @@ export default function FounderDashboard() {
         .on('postgres_changes', { event: '*', schema: 'public', table: 'author_applications' }, () => fetchAllData())
         .on('postgres_changes', { event: '*', schema: 'public', table: 'partnership_applications' }, () => fetchAllData())
         .on('postgres_changes', { event: '*', schema: 'public', table: 'partnership_agreements' }, () => fetchAllData())
-        .subscribe((status: string) => {
+        .subscribe((status: string, err?: Error) => {
           if (status === 'CHANNEL_ERROR') {
-            console.warn('Realtime Error (Apps): Failed to subscribe to applications/agreements');
+            console.warn('Realtime Error (Apps): Failed to subscribe to applications/agreements', err);
           }
         });
 
@@ -162,9 +162,9 @@ export default function FounderDashboard() {
         .channel('founder_dashboard_comms')
         .on('postgres_changes', { event: '*', schema: 'public', table: 'contact_messages' }, () => fetchAllData())
         .on('postgres_changes', { event: '*', schema: 'public', table: 'newsletter_subscriptions' }, () => fetchAllData())
-        .subscribe((status: string) => {
+        .subscribe((status: string, err?: Error) => {
           if (status === 'CHANNEL_ERROR') {
-            console.warn('Realtime Error (Comms): Failed to subscribe to messages/subscriptions');
+            console.warn('Realtime Error (Comms): Failed to subscribe to messages/subscriptions', err);
           }
         });
 
