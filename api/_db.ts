@@ -11,7 +11,14 @@ if (!supabaseUrl || !supabaseServiceKey) {
 // Native Supabase Client with service role for administrative actions
 export const supabase = createClient(
   supabaseUrl || 'https://placeholder.supabase.co', 
-  supabaseServiceKey || 'placeholder-key'
+  supabaseServiceKey || 'placeholder-key',
+  {
+    global: {
+      headers: {
+        'apikey': supabaseServiceKey || 'placeholder-key'
+      }
+    }
+  }
 );
 
 export const checkDbConfig = () => {

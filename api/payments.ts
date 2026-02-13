@@ -921,20 +921,39 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         if (profile?.role !== 'admin' && profile?.role !== 'founder') return unauthorized(res);
 
         // 1. Fetch pending payouts
+        // Hardened: Fetch ledger entries directly to avoid PGRST200 relationship issues
         const { data: payouts, error: payoutError } = await supabase
           .from('fulfillment_ledger')
-          .select('*, profiles!partner_id(*)')
+          .select('*')
           .eq('payout_status', 'pending')
           .limit(10); // Process in small batches
 
         if (payoutError) throw payoutError;
         if (!payouts || payouts.length === 0) return json(res, 200, { message: 'No pending payouts' });
 
+        // Manually fetch related profiles (partners)
+        const partnerIds = [...new Set(payouts.map((p: any) => p.partner_id).filter(Boolean))];
+        let partnersMap: Record<string, any> = {};
+        
+        if (partnerIds.length > 0) {
+          const { data: partnersData } = await supabase
+            .from('profiles')
+            .select('id, full_name, email, k2_recipient_id')
+            .in('id', partnerIds);
+          
+          if (partnersData) {
+            partnersMap = partnersData.reduce((acc: any, p: any) => {
+              acc[p.id] = p;
+              return acc;
+            }, {});
+          }
+        }
+
         const results = [];
 
         for (const payout of payouts) {
           try {
-            const partner = (payout as any).profiles;
+            const partner = payout.partner_id ? partnersMap[payout.partner_id] : null;
             if (!partner) {
               results.push({ id: payout.id, status: 'error', error: 'Partner profile not found' });
               continue;

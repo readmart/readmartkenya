@@ -421,7 +421,8 @@ export async function sendAbandonedCartReminders() {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${session.access_token}`,
-      'Content-Type': 'application/json'
+      'Content-Type': 'application/json',
+      'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY
     }
   });
 
@@ -1547,13 +1548,28 @@ export async function updateAuthorProfile(authorId: string, profileData: any) {
 export async function getAuthorEarnings(authorId: string) {
   try {
     await verifyRole(['author', 'admin', 'founder']);
+    
+    // Hardened query to handle potential schema cache/relationship errors
     const { data, error } = await supabase
       .from('author_earnings')
       .select('*')
       .eq('author_id', authorId)
       .maybeSingle();
 
-    if (error) throw error;
+    if (error) {
+      if (error.code === 'PGRST204' || error.message?.includes('cache') || (error as any).status === 400) {
+        console.warn('[API] Schema mismatch in author earnings, retrying with minimal select...');
+        const { data: fallback, error: fallbackError } = await supabase
+          .from('author_earnings')
+          .select('id, author_id, total_earnings, current_balance, created_at')
+          .eq('author_id', authorId)
+          .maybeSingle();
+        
+        if (fallbackError) throw fallbackError;
+        return fallback;
+      }
+      throw error;
+    }
     return data;
   } catch (err) {
     console.error('Author Earnings fetch failed:', err);
@@ -1607,7 +1623,8 @@ export async function requestAuthorPayout(authorId: string, amount: number, deta
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${authSession.access_token}`
+        'Authorization': `Bearer ${authSession.access_token}`,
+        'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY
       },
       body: JSON.stringify({
         amount,
@@ -1756,11 +1773,28 @@ export async function getPartnershipServices() {
     const { data, error } = await supabase
       .from('partnership_services')
       .select('*')
-      .eq('is_active', true)
-      .order('display_order', { ascending: true });
+      .eq('is_active', true);
 
-    if (error) throw error;
-    return data || [];
+    if (error) {
+      if (error.message?.includes('display_order') || error.message?.includes('column')) {
+        console.warn('display_order column missing in partnership_services, retrying without order');
+        const { data: fallback, error: fallbackError } = await supabase
+          .from('partnership_services')
+          .select('*')
+          .eq('is_active', true);
+        if (fallbackError) throw fallbackError;
+        return fallback || [];
+      }
+      throw error;
+    }
+
+    // Sort manually if display_order exists in the returned data
+    const sortedData = [...(data || [])];
+    if (sortedData.length > 0 && 'display_order' in sortedData[0]) {
+      sortedData.sort((a, b) => (a.display_order || 0) - (b.display_order || 0));
+    }
+
+    return sortedData;
   } catch (err) {
     console.error('Partnership Services fetch failed:', err);
     return [];
@@ -1886,7 +1920,8 @@ export async function disbursePayouts() {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${session.access_token}`,
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY
       }
     });
 
@@ -1976,7 +2011,8 @@ export async function sendCustomEmail(payload: {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${session.access_token}`
+        'Authorization': `Bearer ${session.access_token}`,
+        'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY
       },
       body: JSON.stringify(payload)
     });
@@ -2002,7 +2038,8 @@ export async function updateApplicationStatus(table: string, id: string, status:
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${session.access_token}`
+      'Authorization': `Bearer ${session.access_token}`,
+      'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY
     },
     body: JSON.stringify({
       id,

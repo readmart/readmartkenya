@@ -1605,7 +1605,7 @@ function AnalyticsView({ data, formatPrice }: any) {
           </div>
           <div className="h-[400px] min-h-[400px] w-full relative" ref={containerRef}>
             {shouldRenderChart && (
-              <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={400} debounce={50}>
                 <AreaChart data={data.salesData}>
                   <defs>
                     <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
@@ -1641,7 +1641,7 @@ function AnalyticsView({ data, formatPrice }: any) {
           <h3 className="text-xl font-black tracking-tighter uppercase mb-10">Category Saturation</h3>
           <div className="h-[400px] min-h-[400px] w-full relative">
             {shouldRenderChart && (
-              <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={400} debounce={50}>
                 <PieChart>
                   <Pie
                     data={data.categoryStats}
@@ -6626,7 +6626,7 @@ function PromosView({ data, onUpdate }: any) {
                   <div className="space-y-8">
                     <div className="h-64 min-h-[256px] relative">
                       {shouldRenderModalChart && (
-                        <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+                        <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={256} debounce={50}>
                         <AreaChart data={selectedMetrics}>
                           <defs>
                             <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
