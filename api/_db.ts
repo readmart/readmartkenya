@@ -8,6 +8,7 @@ if (!supabaseUrl || !supabaseServiceKey || supabaseServiceKey.includes('placehol
   console.error('CRITICAL: Supabase environment variables are missing or invalid.');
   console.log('SUPABASE_URL:', supabaseUrl ? 'Set' : 'Missing');
   console.log('SUPABASE_SERVICE_ROLE_KEY:', supabaseServiceKey ? (supabaseServiceKey.includes('placeholder') ? 'Placeholder' : 'Set') : 'Missing');
+  console.warn('NOTE: If this is running in Vercel, ensure SUPABASE_SERVICE_ROLE_KEY is set in project settings.');
 }
 
 // Native Supabase Client with service role for administrative actions

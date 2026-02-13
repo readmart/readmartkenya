@@ -76,6 +76,10 @@ BEGIN
     END IF;
 
     -- Add missing columns
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'fulfillment_ledger' AND column_name = 'payout_status') THEN
+        ALTER TABLE public.fulfillment_ledger ADD COLUMN payout_status text DEFAULT 'pending' CHECK (payout_status IN ('pending', 'paid', 'failed'));
+    END IF;
+
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'fulfillment_ledger' AND column_name = 'order_id') THEN
         ALTER TABLE public.fulfillment_ledger ADD COLUMN order_id uuid REFERENCES public.orders(id) ON DELETE CASCADE;
     END IF;
@@ -95,21 +99,21 @@ CREATE POLICY "Users can view their own ledger entries" ON public.fulfillment_le
     );
 
 
--- 4. Ensure site_assets storage bucket exists
--- This needs to be done via storage.buckets table
+-- 4. Ensure storage buckets exist
 INSERT INTO storage.buckets (id, name, public)
 VALUES ('site_assets', 'site_assets', true)
 ON CONFLICT (id) DO NOTHING;
 
-/*
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('banners', 'banners', true)
+ON CONFLICT (id) DO NOTHING;
+
 -- Storage policies for site_assets
--- Allow public access to view
 DROP POLICY IF EXISTS "Public View Site Assets" ON storage.objects;
 CREATE POLICY "Public View Site Assets"
 ON storage.objects FOR SELECT
 USING (bucket_id = 'site_assets');
 
--- Allow admins to manage site assets
 DROP POLICY IF EXISTS "Admins Manage Site Assets" ON storage.objects;
 CREATE POLICY "Admins Manage Site Assets"
 ON storage.objects FOR ALL
@@ -130,7 +134,55 @@ WITH CHECK (
         AND role IN ('admin', 'founder')
     )
 );
-*/
+
+-- Allow authors and partners to manage their own folders in site_assets
+DROP POLICY IF EXISTS "Users Manage Own Site Assets" ON storage.objects;
+CREATE POLICY "Users Manage Own Site Assets"
+ON storage.objects FOR ALL
+TO authenticated
+USING (
+    bucket_id = 'site_assets' 
+    AND (
+        (storage.foldername(name))[1] = 'authors' AND (storage.foldername(name))[2] = auth.uid()::text
+        OR
+        (storage.foldername(name))[1] = 'partners' AND (storage.foldername(name))[2] = auth.uid()::text
+    )
+)
+WITH CHECK (
+    bucket_id = 'site_assets' 
+    AND (
+        (storage.foldername(name))[1] = 'authors' AND (storage.foldername(name))[2] = auth.uid()::text
+        OR
+        (storage.foldername(name))[1] = 'partners' AND (storage.foldername(name))[2] = auth.uid()::text
+    )
+);
+
+-- Storage policies for banners
+DROP POLICY IF EXISTS "Public View Banners" ON storage.objects;
+CREATE POLICY "Public View Banners"
+ON storage.objects FOR SELECT
+USING (bucket_id = 'banners');
+
+DROP POLICY IF EXISTS "Admins Manage Banners" ON storage.objects;
+CREATE POLICY "Admins Manage Banners"
+ON storage.objects FOR ALL
+TO authenticated
+USING (
+    bucket_id = 'banners' 
+    AND EXISTS (
+        SELECT 1 FROM public.profiles
+        WHERE id = auth.uid() 
+        AND role IN ('admin', 'founder')
+    )
+)
+WITH CHECK (
+    bucket_id = 'banners' 
+    AND EXISTS (
+        SELECT 1 FROM public.profiles
+        WHERE id = auth.uid() 
+        AND role IN ('admin', 'founder')
+    )
+);
 
 
 -- 5. Fix promos table schema drift

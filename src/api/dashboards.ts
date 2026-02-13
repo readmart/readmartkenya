@@ -160,12 +160,22 @@ export async function getGlobalAnalytics() {
     // Selecting only required columns for security and performance
     const { data: orders, error: ordersError } = await supabase
       .from('orders')
-      .select('*')
+      .select('id, created_at, is_paid, total_amount, status')
       .gte('created_at', sixtyDaysAgo.toISOString());
 
     if (ordersError) {
-      console.error('Database Error (Orders):', ordersError);
-      throw ordersError;
+      if (ordersError.code === 'PGRST204' || ordersError.message?.includes('cache')) {
+        console.warn('Orders schema cache issue, retrying with minimal select');
+        const { data: fallbackOrders, error: fallbackError } = await supabase
+          .from('orders')
+          .select('id, created_at, is_paid')
+          .gte('created_at', sixtyDaysAgo.toISOString());
+        if (fallbackError) throw fallbackError;
+        (orders as any) = fallbackOrders;
+      } else {
+        console.error('Database Error (Orders):', ordersError);
+        throw ordersError;
+      }
     }
 
     // 2. Fetch basic counts and trends for products and users
@@ -175,8 +185,8 @@ export async function getGlobalAnalytics() {
       recentProductsResult,
       recentUsersResult
     ] = await Promise.allSettled([
-      supabase.from('profiles').select('*', { count: 'exact', head: true }),
-      supabase.from('products').select('*', { count: 'exact', head: true }),
+      supabase.from('profiles').select('id', { count: 'exact', head: true }),
+      supabase.from('products').select('id', { count: 'exact', head: true }),
       supabase.from('products').select('id, created_at').gte('created_at', sixtyDaysAgo.toISOString()),
       supabase.from('profiles').select('id, created_at').gte('created_at', sixtyDaysAgo.toISOString())
     ]);
@@ -194,39 +204,42 @@ export async function getGlobalAnalytics() {
 
     const userCount = profilesCount.count || 0;
     const productCount = productsCount.count || 0;
-    const productsData = recentProducts.data || [];
-    const usersData = recentUsers.data || [];
+    const productsData = (recentProducts.data as any[]) || [];
+    const usersData = (recentUsers.data as any[]) || [];
 
     // Product trends
-    const currentProducts = productsData?.filter((p: Product) => new Date(p.created_at) >= thirtyDaysAgo).length || 0;
-    const previousProducts = productsData?.filter((p: Product) => new Date(p.created_at) < thirtyDaysAgo).length || 0;
+    const currentProducts = productsData?.filter((p: any) => new Date(p.created_at) >= thirtyDaysAgo).length || 0;
+    const previousProducts = productsData?.filter((p: any) => new Date(p.created_at) < thirtyDaysAgo).length || 0;
     const productsTrend = calculateTrend(currentProducts, previousProducts);
 
     // User trends
-    const currentUsers = usersData?.filter((u: Profile) => new Date(u.created_at) >= thirtyDaysAgo).length || 0;
-    const previousUsers = usersData?.filter((u: Profile) => new Date(u.created_at) < thirtyDaysAgo).length || 0;
+    const currentUsers = usersData?.filter((u: any) => new Date(u.created_at) >= thirtyDaysAgo).length || 0;
+    const previousUsers = usersData?.filter((u: any) => new Date(u.created_at) < thirtyDaysAgo).length || 0;
     const usersTrend = calculateTrend(currentUsers, previousUsers);
 
     // 3. Process revenue and order trends
     // Use the 'transactions' table for actual paid revenue from webhooks
     const { data: transactions, error: txError } = await supabase
       .from('transactions')
-      .select('*')
+      .select('id, created_at, amount, status')
       .eq('status', 'completed')
       .gte('created_at', sixtyDaysAgo.toISOString());
 
     if (txError) {
-      console.error('Database Error (Transactions):', txError);
-      // Fallback to active orders if transactions table fails
+      if (txError.code === 'PGRST204' || txError.message?.includes('cache') || txError.code === '42P01') {
+        console.warn('Transactions table issues, falling back to orders for revenue calculation');
+      } else {
+        console.error('Database Error (Transactions):', txError);
+      }
     }
 
     // Filter paid orders for accurate count (webhook verified)
-    const currentPaidOrders = orders?.filter((o: Order) => o.is_paid === true && new Date(o.created_at) >= thirtyDaysAgo) || [];
-    const previousPaidOrders = orders?.filter((o: Order) => o.is_paid === true && new Date(o.created_at) < thirtyDaysAgo) || [];
+    const currentPaidOrders = (orders as any[])?.filter((o: any) => o.is_paid === true && new Date(o.created_at) >= thirtyDaysAgo) || [];
+    const previousPaidOrders = (orders as any[])?.filter((o: any) => o.is_paid === true && new Date(o.created_at) < thirtyDaysAgo) || [];
 
     // Revenue from actual completed transactions (webhooks)
-    const currentTx = transactions?.filter((t: Transaction) => new Date(t.created_at) >= thirtyDaysAgo) || [];
-    const previousTx = transactions?.filter((t: Transaction) => new Date(t.created_at) < thirtyDaysAgo) || [];
+    const currentTx = (transactions as any[])?.filter((t: any) => new Date(t.created_at) >= thirtyDaysAgo) || [];
+    const previousTx = (transactions as any[])?.filter((t: any) => new Date(t.created_at) < thirtyDaysAgo) || [];
 
     const currentRevenue = currentTx.reduce((acc: number, curr: Transaction) => {
       const val = Number(curr.amount);
@@ -267,7 +280,7 @@ export async function getGlobalAnalytics() {
 
     const { data: lowStockProducts, error: lowStockError } = await supabase
       .from('products')
-      .select('*')
+      .select('id, title, stock_quantity, price, image_url')
       .lt('stock_quantity', 10)
       .limit(10);
 
@@ -508,27 +521,39 @@ async function getAllRecords(table: string, orderBy: string = 'created_at') {
       } else if (table === 'newsletter_subscriptions') {
         query = supabase
           .from(table)
-          .select('*');
+          .select('id, email, status, created_at');
       } else if (table === 'partnership_applications') {
         query = supabase
           .from(table)
-          .select('*');
+          .select('id, full_name, email, company_name, status, created_at');
       } else if (table === 'author_applications') {
         query = supabase
           .from(table)
-          .select('*');
+          .select('id, full_name, email, status, created_at');
       } else if (table === 'contact_messages') {
         query = supabase
           .from(table)
-          .select('*');
+          .select('id, full_name, email, subject, status, created_at');
       } else if (table === 'audit_logs') {
         query = supabase
           .from(table)
-          .select('*');
-      } else if (table === 'book_clubs' || table === 'events' || table === 'banners' || table === 'announcements') {
+          .select('id, user_id, action, resource, created_at');
+      } else if (table === 'book_clubs') {
         query = supabase
           .from(table)
-          .select('*');
+          .select('id, name, description, category, status, created_at');
+      } else if (table === 'events') {
+        query = supabase
+          .from(table)
+          .select('id, title, date, location, status, created_at');
+      } else if (table === 'banners') {
+        query = supabase
+          .from(table)
+          .select('id, title, image_url, link_url, is_active, created_at');
+      } else if (table === 'announcements') {
+        query = supabase
+          .from(table)
+          .select('id, title, content, type, is_active, created_at');
       } else {
         query = supabase
           .from(table)
@@ -601,11 +626,11 @@ export async function getInventory(authorId?: string) {
         await verifyAdmin();
       }
 
-      // Use select('*') for schema resilience
+      // Explicit columns for schema resilience
       let query = supabase
         .from('products')
         .select(`
-          *,
+          id, title, price, sale_price, stock_quantity, image_url, category_id, author_id, status, created_at,
           category:categories(name)
         `)
         .order('created_at', { ascending: false });
@@ -659,10 +684,10 @@ export async function getOrders(partnerId?: string) {
         const { data: orders, error } = await supabase
           .from('orders')
           .select(`
-            *,
+            id, created_at, status, total_amount, subtotal_amount, shipping_amount, tax_amount, is_paid, shipping_address, payment_method,
             profiles(full_name, email),
             order_items(
-              *,
+              id, quantity, unit_price, price_at_purchase,
               product:products(id, title, image_url)
             )
           `)
@@ -1299,13 +1324,14 @@ export async function getPartnerPayouts(partnerId: string) {
       
       if (ledgerError) {
         if (ledgerError.code === '42703') {
+          // If payout_status is missing, fetch without it
           const { data: fallbackData, error: fallbackError } = await supabase
             .from('fulfillment_ledger')
-            .select('id, amount, payout_status, created_at')
+            .select('id, amount, created_at, metadata, order_id, partner_id')
             .eq('partner_id', partnerId)
             .order('created_at', { ascending: false });
           if (fallbackError) throw fallbackError;
-          return fallbackData || [];
+          return (fallbackData || []).map(item => ({ ...item, payout_status: 'pending' }));
         }
         throw ledgerError;
       }
@@ -1870,13 +1896,13 @@ export async function getAllPayouts() {
         
       if (ledgerError) {
         // Fallback: If order_id or other columns really don't exist yet, fetch what's available
-        if (ledgerError.code === '42703') {
+        if (ledgerError.code === '42703' || ledgerError.message?.includes('column')) {
            const { data: fallbackData, error: fallbackError } = await supabase
              .from('fulfillment_ledger')
-             .select('id, amount, payout_status, created_at')
+             .select('id, amount, created_at, metadata, order_id, partner_id')
              .order('created_at', { ascending: false });
            if (fallbackError) throw fallbackError;
-           return fallbackData || [];
+           return (fallbackData || []).map(item => ({ ...item, payout_status: 'pending' }));
         }
         throw ledgerError;
       }

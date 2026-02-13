@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { supabase, json, serverError } from './_utils.js';
+import { supabase, json, serverError, verifyJWT } from './_utils.js';
 import { sendEmail, renderAbandonedCartEmail } from './_email.js';
 
 export async function remindersHandler(req: VercelRequest, res: VercelResponse) {
@@ -9,11 +9,33 @@ export async function remindersHandler(req: VercelRequest, res: VercelResponse) 
     // 1. Authenticate and check for admin/founder role
     const authHeader = req.headers.authorization || '';
     const token = authHeader.split(' ')[1];
-    if (!token) return json(res, 401, { error: 'Unauthorized' });
+    
+    // Debug logging for 401 investigation
+    console.log('Reminders Auth Attempt - Header present:', !!authHeader);
+    console.log('Reminders Auth Attempt - Token present:', !!token);
 
+    if (!token) {
+      console.warn('Reminders Auth Failed: No token provided in Authorization header');
+      return json(res, 401, { error: 'Unauthorized', details: 'No token provided' });
+    }
+
+    // Try to get user from Supabase Auth
     const { data: userData, error: authError } = await supabase.auth.getUser(token);
-    const user = userData?.user;
-    if (authError || !user) return json(res, 401, { error: 'Unauthorized' });
+    let user = userData?.user;
+
+    // Fallback: If Supabase Auth fails, try custom JWT verification
+    if (authError || !user) {
+      console.warn('Supabase Auth getUser failed, trying custom JWT verify:', authError?.message);
+      const decoded = await verifyJWT(req);
+      if (decoded) {
+        console.log('Custom JWT verification succeeded for:', decoded.email);
+        // Mock user object for downstream logic
+        user = { id: decoded.userId, email: decoded.email } as any;
+      } else {
+        console.error('Reminders Auth Error - Both Auth methods failed:', authError);
+        return json(res, 401, { error: 'Unauthorized', details: authError?.message || 'Invalid token' });
+      }
+    }
 
     let { data: profile, error: profileError } = await supabase
       .from('profiles')
