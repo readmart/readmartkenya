@@ -48,7 +48,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const { data, error } = await supabase
           .from('orders')
           .insert(orderInsertData)
-          .select('id, user_id, status, total_amount, payment_status, is_paid, created_at')
+          .select('id, user_id, status, created_at')
           .single();
         order = data;
         orderError = error;

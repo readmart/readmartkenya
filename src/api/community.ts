@@ -141,12 +141,11 @@ export async function getWishlist() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Authentication required');
 
-  const productColumns = 'id, title, price, sale_price, image_url, category_id, stock_quantity, author_id, type';
   let { data, error } = await supabase
     .from('wishlist_items')
     .select(`
       id, user_id, product_id, created_at,
-      product:products(${productColumns})
+      product:products(*)
     `)
     .eq('user_id', user.id);
 
@@ -637,45 +636,46 @@ export async function getEventRSVPs(eventId: string): Promise<(EventRSVP & { pro
  */
 export async function getClubDiscussions(clubId: string): Promise<ClubDiscussion[]> {
   try {
-    const columns = 'id, club_id, author_id, title, content, image_url, is_pinned, created_at';
-    let data: any[] = [];
-    const { data: discussions, error } = await supabase
+    let { data, error } = await supabase
       .from('club_discussions')
-      .select(columns)
+      .select(`
+        *,
+        author:profiles(*)
+      `)
       .eq('club_id', clubId)
       .order('is_pinned', { ascending: false })
       .order('created_at', { ascending: false });
-
-    if (!error && discussions) {
-      // Manually fetch profiles from the secure public view
-      const authorIds = [...new Set(discussions.map((d: any) => d.author_id))];
-      const { data: profiles } = await supabase
-        .from('public_profiles')
-        .select('id, full_name, avatar_url')
-        .in('id', authorIds);
-      
-      const profileMap = Object.fromEntries(profiles?.map((p: any) => [p.id, p]) || []);
-      data = discussions.map((d: any) => ({
-        ...d,
-        author: profileMap[d.author_id] || null
-      }));
-    }
 
     if (error) {
       if (error.code === 'PGRST204' || error.message?.includes('column') || error.message?.includes('cache')) {
         console.warn('Advanced discussion columns missing from cache, falling back to core columns');
         const { data: fallbackData, error: fallbackError } = await supabase
           .from('club_discussions')
-          .select(`
-            id, club_id, author_id, title, is_pinned, created_at,
-            author:profiles(full_name)
-          `)
+          .select('*')
           .eq('club_id', clubId)
           .order('is_pinned', { ascending: false })
           .order('created_at', { ascending: false });
         
         if (fallbackError) throw fallbackError;
-        data = fallbackData as any;
+        
+        // Manual join if possible
+        const discussions = fallbackData || [];
+        const authorIds = [...new Set(discussions.map((d: any) => d.author_id).filter(Boolean))];
+        
+        if (authorIds.length > 0) {
+          const { data: profiles } = await supabase.from('profiles').select('id, full_name').in('id', authorIds);
+          const profileMap = (profiles || []).reduce((acc: any, p: any) => {
+            acc[p.id] = p;
+            return acc;
+          }, {});
+          
+          data = discussions.map((d: any) => ({
+            ...d,
+            author: profileMap[d.author_id] || null
+          })) as any;
+        } else {
+          data = discussions as any;
+        }
       } else {
         throw error;
       }

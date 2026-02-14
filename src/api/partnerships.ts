@@ -53,13 +53,52 @@ export type PartnerProfile = z.infer<typeof partnerProfileSchema> & { id: string
 export async function applyToPartnership(applicationData: z.input<typeof partnershipApplicationSchema>) {
   try {
     const validatedData = partnershipApplicationSchema.parse(applicationData);
+    
+    // Add user_id from current session if available
+    const { data: { user } } = await supabase.auth.getUser();
+    const insertData: any = { 
+      ...validatedData,
+      user_id: user?.id 
+    };
+
+    // If schema mismatch occurs (e.g. contact_name vs full_name), 
+    // we'll try to map common fields to ensure submission success
     const { data, error } = await supabase
       .from('partnership_applications')
-      .insert([validatedData])
+      .insert([insertData])
       .select()
       .single();
 
-    if (error) throw error;
+    if (error) {
+      if (error.code === 'PGRST204' || error.message?.includes('column') || error.message?.includes('cache')) {
+        console.warn('Partnership application schema mismatch, retrying with mapped fields');
+        
+        // Map common discrepancies
+        const fallbackData: any = {
+          full_name: insertData.contact_name || insertData.full_name,
+          email: insertData.contact_email || insertData.email,
+          organization: insertData.company_name || insertData.organization,
+          bio: insertData.description || insertData.bio,
+          service_type: insertData.category || insertData.service_type,
+          proof_url: insertData.proof_url,
+          user_id: insertData.user_id,
+          status: insertData.status || 'pending'
+        };
+
+        // Remove undefined fields
+        Object.keys(fallbackData).forEach(key => fallbackData[key] === undefined && delete fallbackData[key]);
+
+        const { data: retryData, error: retryError } = await supabase
+          .from('partnership_applications')
+          .insert([fallbackData])
+          .select()
+          .single();
+
+        if (retryError) throw retryError;
+        return retryData as PartnershipApplication;
+      }
+      throw error;
+    }
 
     // Trigger notification email (optional: we can add this to an edge function later)
     return data as PartnershipApplication;

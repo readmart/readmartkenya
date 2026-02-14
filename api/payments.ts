@@ -204,7 +204,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         try {
           const { data, error } = await supabase
             .from('orders')
-            .select('payment_status, is_paid, payment_id')
+            .select('*')
             .eq('id', orderId)
             .maybeSingle();
           existingOrder = data;
@@ -214,18 +214,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
 
         if (orderError) {
-          if (orderError.code === 'PGRST204' || orderError.message?.includes('cache')) {
+          if (orderError.code === 'PGRST204' || orderError.message?.includes('cache') || orderError.message?.includes('column')) {
             console.warn('Orders schema cache issue in webhook, falling back to core columns');
             const { data: retryOrder } = await supabase
               .from('orders')
-              .select('id, is_paid')
+              .select('id, status, total_amount')
               .eq('id', orderId)
               .maybeSingle();
             existingOrder = retryOrder;
           }
         }
 
-        if (existingOrder?.is_paid && !isReversalEvent) {
+        const orderIsPaid = existingOrder?.is_paid === true || existingOrder?.payment_status === 'paid' || existingOrder?.status === 'paid';
+        if (orderIsPaid && !isReversalEvent) {
           console.log(`Order ${orderId} is already marked as paid. Skipping redundant webhook.`);
           return json(res, 200, { received: true, already_processed: true });
         }
@@ -444,15 +445,34 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               updatePayload.mpesa_receipt_number = transactionId;
             }
             
-            let { data: updatedOrders, error: orderError } = await supabase
-              .from('orders')
-              .update(updatePayload)
-              .eq('id', orderId)
-              .select('id, user_id, total_amount, shipping_address, status');
+            let updatedOrders: any = null;
+            let orderError: any = null;
+
+            try {
+              const { data, error } = await supabase
+                .from('orders')
+                .update(updatePayload)
+                .eq('id', orderId)
+                .select('id, user_id, total_amount, shipping_address, status');
+              updatedOrders = data;
+              orderError = error;
+            } catch (e: any) {
+              orderError = e;
+            }
 
             if (orderError) {
-              if (orderError.code === 'PGRST204' || orderError.message?.includes('cache')) {
-                console.warn('Orders schema cache issue during update, retrying with minimal select');
+              if (orderError.code === 'PGRST204' || orderError.message?.includes('cache') || orderError.message?.includes('column')) {
+                console.warn('Orders schema cache issue during update, retrying with minimal payload');
+                
+                // If it's a column error, try to identify which one and remove it
+                const match = orderError.message.match(/column ['"](.+)['"]/) || orderError.message.match(/['"](.+)['"] column/);
+                if (match && match[1]) {
+                  const missingCol = match[1];
+                  delete updatePayload[missingCol];
+                } else if (orderError.message.includes('is_paid')) {
+                  delete updatePayload.is_paid;
+                }
+                
                 const { data: retryOrders, error: retryError } = await supabase
                   .from('orders')
                   .update(updatePayload)

@@ -21,7 +21,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (req.method === 'GET') {
       const { id, category, featured } = req.query;
 
-      const productColumns = 'id, title, description, price, sale_price, image_url, category_id, stock_quantity, is_active, is_featured, created_at, author_id, ebook_file_path, weight, volume, metadata, ebook_metadata';
+      const productColumns = '*';
       let query = supabase.from('products').select(productColumns);
 
       if (id) {

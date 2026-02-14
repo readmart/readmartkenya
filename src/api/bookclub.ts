@@ -284,13 +284,11 @@ export async function getClubBooks(clubId: string) {
 // --- Discussions ---
 
 export async function getClubDiscussions(clubId: string) {
-  const columns = 'id, club_id, author_id, title, content, is_pinned, created_at, updated_at';
-  const profileColumns = 'full_name, avatar_url';
   let { data, error } = await supabase
     .from('book_club_discussions')
     .select(`
-      ${columns},
-      author:profiles (${profileColumns})
+      *,
+      author:profiles (*)
     `)
     .eq('club_id', clubId)
     .order('is_pinned', { ascending: false })
@@ -301,16 +299,31 @@ export async function getClubDiscussions(clubId: string) {
       console.warn('Advanced discussion columns missing from cache, falling back to core columns');
       const { data: fallbackData, error: fallbackError } = await supabase
         .from('book_club_discussions')
-        .select(`
-          id, club_id, author_id, title, is_pinned, created_at,
-          author:profiles (full_name)
-        `)
+        .select('*')
         .eq('club_id', clubId)
         .order('is_pinned', { ascending: false })
         .order('created_at', { ascending: false });
       
       if (fallbackError) throw fallbackError;
-      data = fallbackData as any;
+      
+      // Manual join if possible
+      const discussions = fallbackData || [];
+      const authorIds = [...new Set(discussions.map((d: any) => d.author_id).filter(Boolean))];
+      
+      if (authorIds.length > 0) {
+        const { data: profiles } = await supabase.from('profiles').select('id, full_name').in('id', authorIds);
+        const profileMap = (profiles || []).reduce((acc: any, p: any) => {
+          acc[p.id] = p;
+          return acc;
+        }, {});
+        
+        data = discussions.map((d: any) => ({
+          ...d,
+          author: profileMap[d.author_id] || null
+        })) as any;
+      } else {
+        data = discussions as any;
+      }
     } else {
       throw error;
     }
