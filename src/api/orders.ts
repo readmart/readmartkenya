@@ -48,9 +48,8 @@ export async function createOrder(orderData: OrderData) {
   // Define a set of "new" columns that are prone to schema cache issues
   const potentialProblematicColumns = ['shipping_amount', 'subtotal_amount', 'tax_amount', 'total_amount', 'shipping_zone_id'];
 
-  // AGGRESSIVE BYPASS: Add X-PostgREST-Schema-Cache-Reload header to the request
-  // This tells PostgREST to reload the schema cache for this specific request
-  // We use .headers({ 'X-PostgREST-Schema-Cache-Reload': 'true' }) to force a reload
+  // AGGRESSIVE BYPASS: Use resilient insertion pattern
+  // This handles schema cache issues by filtering problematic columns on failure
   
   let currentInsertData = { ...orderInsertData };
   let order = null;
@@ -62,12 +61,11 @@ export async function createOrder(orderData: OrderData) {
     attempts++;
     console.log(`Order creation attempt ${attempts}... Data keys: ${Object.keys(currentInsertData).join(', ')}`);
     
-    // EXPLICITLY use .select('id') and force cache reload via headers
+    // EXPLICITLY use .select('id')
     const { data, error } = await supabase
       .from('orders')
       .insert({ ...currentInsertData })
       .select('id')
-      .headers({ 'X-PostgREST-Schema-Cache-Reload': 'true' })
       .maybeSingle();
 
     if (!error && data) {
@@ -200,8 +198,7 @@ export async function createOrder(orderData: OrderData) {
 
   const { error: itemsError } = await supabase
     .from('order_items')
-    .insert(orderItems)
-    .headers({ 'X-PostgREST-Schema-Cache-Reload': 'true' });
+    .insert(orderItems);
 
   if (itemsError) {
     console.error('Order items creation error details:', itemsError);
@@ -223,8 +220,7 @@ export async function createOrder(orderData: OrderData) {
 
        const { error: retryError } = await supabase
          .from('order_items')
-         .insert(minimalItems)
-         .headers({ 'X-PostgREST-Schema-Cache-Reload': 'true' });
+         .insert(minimalItems);
        
        if (retryError) {
          console.error('Final order items creation error after fallback:', retryError);
@@ -234,8 +230,7 @@ export async function createOrder(orderData: OrderData) {
          }));
          const { error: absoluteRetryError } = await supabase
            .from('order_items')
-           .insert(absoluteMinimalItems)
-           .headers({ 'X-PostgREST-Schema-Cache-Reload': 'true' });
+           .insert(absoluteMinimalItems);
          
          if (absoluteRetryError) throw absoluteRetryError;
        }
@@ -281,7 +276,6 @@ export async function getOrder(orderId: string) {
   }
 
   const { data, error } = await query
-    .headers({ 'X-PostgREST-Schema-Cache-Reload': 'true' })
     .maybeSingle();
   
   if (error) {

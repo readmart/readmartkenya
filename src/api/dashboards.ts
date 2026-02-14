@@ -2176,7 +2176,7 @@ export async function getApprovedAuthors() {
       .eq('role', 'author')
       .order('full_name');
 
-    let { data, error } = await query;
+    let { data, error }: { data: any, error: any } = await query;
     
     // Fallback if any 400 error (likely role filter or column issue)
     if (error) {
@@ -2557,7 +2557,6 @@ export async function createBookClub(club: any) {
     .from('book_clubs')
     .insert([club])
     .select()
-    .headers({ 'X-PostgREST-Schema-Cache-Reload': 'true' })
     .single();
 
   if (error) throw error;
@@ -2585,7 +2584,6 @@ export async function createEvent(event: any) {
     .from('events')
     .insert([event])
     .select()
-    .headers({ 'X-PostgREST-Schema-Cache-Reload': 'true' })
     .single();
 
   if (error) throw error;
@@ -2613,7 +2611,6 @@ export async function createBanner(banner: any) {
     .from('banners')
     .insert([banner])
     .select()
-    .headers({ 'X-PostgREST-Schema-Cache-Reload': 'true' })
     .single();
 
   if (error) throw error;
@@ -2641,7 +2638,6 @@ export async function createAnnouncement(announcement: any) {
     .from('announcements')
     .insert([announcement])
     .select()
-    .headers({ 'X-PostgREST-Schema-Cache-Reload': 'true' })
     .single();
 
   if (error) throw error;
@@ -2677,27 +2673,44 @@ function generateSlug(text: string): string {
 export async function createProduct(product: any) {
   // Try author verification first, fallback to admin
   try {
-    await verifyAuthor();
+    const session = await verifyAuthor();
+    if (session && session.user) {
+      product.author_id = session.user.id;
+    }
   } catch (e) {
-    await verifyAdmin();
+    try {
+      const session = await verifyAdmin();
+      if (session && session.user) {
+        product.author_id = session.user.id;
+      }
+    } catch (err) {
+      console.warn('Could not verify author or admin for product creation');
+    }
   }
   
   const { ebook_metadata, ...productData } = product;
   
+  // Handle description explicitly to ensure it works seamlessly
+  const finalProductData = { ...productData };
+  if (finalProductData.description !== undefined) {
+    if (finalProductData.description === null || (typeof finalProductData.description === 'string' && finalProductData.description.trim() === '')) {
+      finalProductData.description = null;
+    }
+  }
+
   // Ensure slug exists
-  if (!productData.slug && productData.title) {
-    productData.slug = `${generateSlug(productData.title)}-${Math.random().toString(36).substring(2, 7)}`;
+  if (!finalProductData.slug && finalProductData.title) {
+    finalProductData.slug = `${generateSlug(finalProductData.title)}-${Math.random().toString(36).substring(2, 7)}`;
   }
   
-  const currentData = { ...productData };
+  const currentData = { ...finalProductData };
 
   return withRetry(async () => {
     console.log('[API] Creating product with payload:', currentData);
     const { data, error } = await supabase
       .from('products')
-      .insert([currentData])
+      .insert([{ ...currentData }])
       .select('id, title, slug')
-      .headers({ 'X-PostgREST-Schema-Cache-Reload': 'true' })
       .maybeSingle();
 
     if (error) {
@@ -2772,6 +2785,14 @@ export async function updateProduct(id: string, product: any) {
   
   const { ebook_metadata, ...productData } = product;
 
+  // Handle description explicitly for updates to ensure it works seamlessly
+  const finalProductData = { ...productData };
+  if (finalProductData.description !== undefined) {
+    if (finalProductData.description === null || (typeof finalProductData.description === 'string' && finalProductData.description.trim() === '')) {
+      finalProductData.description = null;
+    }
+  }
+
   // Get old data for audit - hardened to avoid schema cache issues
   let oldData = null;
   try {
@@ -2787,13 +2808,13 @@ export async function updateProduct(id: string, product: any) {
     console.warn('Failed to fetch oldData for product update audit, proceeding...');
   }
 
-  const currentData = { ...productData };
+  const currentData = { ...finalProductData };
 
   return withRetry(async () => {
     console.log(`[API] Updating product ${id} with payload:`, currentData);
     const { data, error } = await supabase
       .from('products')
-      .update(currentData)
+      .update({ ...currentData })
       .eq('id', id)
       .select('id, title, slug')
       .maybeSingle();

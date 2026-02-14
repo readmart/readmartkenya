@@ -75,8 +75,7 @@ export default function Account() {
           )
         `)
         .eq('user_id', user?.id)
-        .order('created_at', { ascending: false })
-        .headers({ 'X-PostgREST-Schema-Cache-Reload': 'true' });
+        .order('created_at', { ascending: false });
 
       if (error) {
         // Fallback for schema cache issues (PGRST204 or missing column errors)

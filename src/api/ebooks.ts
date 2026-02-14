@@ -28,8 +28,7 @@ export async function getMyEbooks() {
     `)
     .eq('orders.user_id', user.id)
     .eq('products.is_ebook', true)
-    .in('orders.status', ['completed', 'paid', 'delivered'])
-    .headers({ 'X-PostgREST-Schema-Cache-Reload': 'true' });
+    .in('orders.status', ['completed', 'paid', 'delivered']);
 
   if (error) {
     if (error.code === 'PGRST204' || error.message?.toLowerCase().includes('column') || error.message?.toLowerCase().includes('cache')) {

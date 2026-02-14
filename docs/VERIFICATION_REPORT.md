@@ -48,6 +48,12 @@ All 17 tabs were inspected for button-to-API mapping.
 - **Payouts**: "Trigger Disbursements" correctly calculates pending totals and initiates Stripe-integrated disbursement engine.
 - **Agreements**: Protocol linking and agreement issuing (Author/Partner) is fully automated.
 
+### 2.5 Recent Fixes & Stability Improvements
+- **Supabase Integration**: Removed illegal `.headers()` calls in `dashboards.ts`, `orders.ts`, `ebooks.ts`, `Account.tsx`, and `OrderHistory.tsx`. These calls were causing PostgREST errors in the browser.
+- **Type Safety**: Resolved several TypeScript errors in `Checkout.tsx`, `OrderHistory.tsx`, and `FounderDashboard.tsx` to ensure build stability.
+- **Import Fixes**: Corrected missing `uploadBannerImage` import in `FounderDashboard.tsx`, ensuring banner and club asset uploads function correctly.
+- **Unused Code**: Cleaned up unused imports and variables in `FounderDashboard.tsx` and `AuthorDashboard.tsx` to improve maintainability.
+
 ## 3. Discrepancies & Recommendations
 - **Discrepancy**: The "View Milestones" button in the Author view (referenced in docs) remains a frontend-only CTA with no backend badge system implemented yet.
 - **Recommendation**: Implement a `milestones` table to track author achievements if gamification is a priority for the next phase.

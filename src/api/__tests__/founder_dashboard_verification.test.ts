@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as dashboardApi from '../dashboards';
 import { supabase } from '@/lib/supabase/client';
-import * as apiHelpers from '@/lib/utils/api-helpers';
 
 const mockSupabaseChain = {
   select: vi.fn(() => mockSupabaseChain),

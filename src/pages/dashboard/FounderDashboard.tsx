@@ -1,7 +1,7 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { 
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, 
+  XAxis, YAxis, CartesianGrid, 
   Tooltip, ResponsiveContainer, Cell,
   AreaChart, Area, PieChart, Pie
 } from 'recharts';
@@ -35,7 +35,7 @@ import {
   getProtocolAgreements, createProtocolAgreement, updateProtocolAgreement, deleteProtocolAgreement,
   deleteRecord, getAllPayouts, disbursePayouts, getNotificationLogs
 } from '@/api/dashboards';
-import { uploadSiteAsset, uploadProductImage, uploadEbookFile, uploadAgreementFile } from '@/api/storage';
+import { uploadSiteAsset, uploadProductImage, uploadEbookFile, uploadAgreementFile, uploadBannerImage } from '@/api/storage';
 import { getEventRSVPs } from '@/api/community';
 import FounderPartnerships from './FounderPartnerships';
 import { 
@@ -1744,7 +1744,7 @@ function AnalyticsView({ data, formatPrice }: any) {
           <div className="flex justify-between items-center mb-10">
             <h3 className="text-xl font-black tracking-tighter uppercase">Revenue Trajectory</h3>
           </div>
-          <div className="h-[300px] w-full">
+          <div className="h-[300px] w-full min-h-[400px]">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={data.salesData}>
                 <defs>
@@ -1756,14 +1756,14 @@ function AnalyticsView({ data, formatPrice }: any) {
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                 <XAxis 
                   dataKey="created_at" 
-                  tickFormatter={(str) => new Date(str).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                  tickFormatter={(str: string) => new Date(str).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
                   axisLine={false}
                   tickLine={false}
                   tick={{ fill: '#64748b', fontSize: 12, fontWeight: 600 }}
                   dy={10}
                 />
                 <YAxis 
-                  tickFormatter={(val) => `KES ${val}`}
+                  tickFormatter={(val: number) => `KES ${val}`}
                   axisLine={false}
                   tickLine={false}
                   tick={{ fill: '#64748b', fontSize: 12, fontWeight: 600 }}
@@ -1777,7 +1777,7 @@ function AnalyticsView({ data, formatPrice }: any) {
                     padding: '12px'
                   }}
                   formatter={(value: any) => [formatPrice(value), 'Revenue']}
-                  labelFormatter={(label) => new Date(label).toLocaleDateString(undefined, { dateStyle: 'long' })}
+                  labelFormatter={(label: string) => new Date(label).toLocaleDateString(undefined, { dateStyle: 'long' })}
                 />
                 <Area 
                   type="monotone" 
@@ -1795,7 +1795,7 @@ function AnalyticsView({ data, formatPrice }: any) {
 
         <div className="bg-white p-10 rounded-[40px] border border-slate-100 shadow-sm">
           <h3 className="text-xl font-black tracking-tighter uppercase mb-10">Category Saturation</h3>
-          <div className="h-[300px] w-full">
+          <div className="h-[300px] w-full min-h-[400px]">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
@@ -1808,7 +1808,7 @@ function AnalyticsView({ data, formatPrice }: any) {
                   dataKey="value"
                   animationDuration={1500}
                 >
-                  {data.categoryStats.map((entry: any, index: number) => (
+                  {data.categoryStats.map((_entry: any, index: number) => (
                     <Cell key={`cell-${index}`} fill={[
                       '#2563eb', '#7c3aed', '#db2777', '#ea580c', '#16a34a', '#0891b2'
                     ][index % 6]} />
@@ -3360,7 +3360,7 @@ function BannersView({ settings, banners, announcements, onUpdate }: any) {
     const loadingToast = toast.loading('Uploading banner asset...');
     try {
       const url = await uploadBannerImage(file, {
-        onProgress: (progress) => {
+        onProgress: (progress: { loaded: number; total: number }) => {
           const percent = Math.round((progress.loaded / progress.total) * 100);
           setUploadProgress(prev => ({ ...prev, banner: percent }));
         }
@@ -4962,7 +4962,7 @@ function ClubsView({ data, onUpdate }: any) {
     const loadingToast = toast.loading('Uploading community asset...');
     try {
       const url = await uploadBannerImage(file, {
-        onProgress: (progress) => {
+        onProgress: (progress: { loaded: number; total: number }) => {
           const percent = Math.round((progress.loaded / progress.total) * 100);
           setUploadProgress(prev => ({ ...prev, club: percent }));
         }

@@ -2,7 +2,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useState, useEffect, useMemo } from 'react';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, 
-  Tooltip, ResponsiveContainer, Cell 
+  Tooltip, ResponsiveContainer 
 } from 'recharts';
 import { 
   BookOpen, DollarSign, TrendingUp,

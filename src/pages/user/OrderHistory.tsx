@@ -12,8 +12,10 @@ interface ProductSnapshot {
 }
 
 interface OrderItem {
+  id?: string;
+  quantity?: number;
+  price_at_purchase?: number;
   product_snapshot?: ProductSnapshot;
-  // Add other properties of order_items if known, e.g., quantity, price
 }
 
 interface Order {
@@ -50,8 +52,7 @@ export default function OrderHistory() {
           )
         `)
         .eq('user_id', user?.id)
-        .order('created_at', { ascending: false })
-        .headers({ 'X-PostgREST-Schema-Cache-Reload': 'true' }) as { data: Order[] | null, error: PostgrestError | null };
+        .order('created_at', { ascending: false }) as { data: Order[] | null, error: PostgrestError | null };
 
       if (error) {
         // Fallback for schema cache issues (PGRST204 or missing column errors)

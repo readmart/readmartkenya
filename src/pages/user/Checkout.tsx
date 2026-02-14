@@ -33,16 +33,16 @@ interface ShippingZone {
 
 interface Order {
   id: string;
-  full_name: string;
-  email: string;
-  phone: string;
-  address: string;
-  city: string;
-  subtotal_amount: number;
-  shipping_amount: number;
-  shipping_zone_id: string;
-  payment_method: 'm-pesa' | 'card';
-  items: {
+  full_name?: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  city?: string;
+  subtotal_amount?: number;
+  shipping_amount?: number;
+  shipping_zone_id?: string;
+  payment_method?: 'm-pesa' | 'card';
+  items?: {
     product_id: string;
     quantity: number;
     price: number;
