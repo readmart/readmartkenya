@@ -61,7 +61,7 @@ export const serverError = (res: VercelResponse, err: unknown) => {
 
 export const logAction = async (req: VercelRequest, userId: string | null, action: string, resource?: string, payload?: Record<string, unknown>) => {
   const forward = req.headers['x-forwarded-for'];
-  const ip = (Array.isArray(forward) ? forward[0] : (forward as string | undefined))?.split(',')[0]?.trim() || req.socket.remoteAddress || null;
+  const ip = (Array.isArray(forward) ? forward[0] : (forward as string | undefined))?.split(',')[0]?.trim() || req.socket?.remoteAddress || null;
   try {
     // Explicit columns to avoid schema cache issues with wildcard select
     const { error } = await supabase
@@ -103,15 +103,13 @@ export const createNotification = async (params: {
 
   try {
     const { data: insertData, error: insertError } = await supabase
-      .from('notifications')
+      .from('notification_logs')
       .insert([{ 
-        user_id: userId, 
-        type, 
-        title, 
-        message, 
-        metadata: { ...metadata, link } 
+        recipient: userId, 
+        subject: title, 
+        metadata: { ...metadata, link, message, type } 
       }])
-      .select('id, user_id, type, title')
+      .select('id')
       .single();
     data = insertData;
     error = insertError;
@@ -123,12 +121,10 @@ export const createNotification = async (params: {
     if (error.code === 'PGRST204' || error.message?.includes('column') || error.message?.includes('cache')) {
       console.warn('Schema cache issue on notification creation, retrying with minimal select');
       const { data: retryData, error: retryError } = await supabase
-        .from('notifications')
+        .from('notification_logs')
         .insert([{ 
-          user_id: userId, 
-          type, 
-          title, 
-          message
+          recipient: userId, 
+          subject: title
         }])
         .select('id')
         .single();
@@ -201,14 +197,14 @@ export const calculateOrderCommissions = async (orderId: string) => {
     // Always fetch items separately to avoid PGRST200 relationship issues
     const { data: orderItems, error: itemsError } = await supabase
       .from('order_items')
-      .select('id, product_id, quantity, price, price_at_purchase, product_snapshot, author_id')
+      .select('id, product_id, quantity, price, product_snapshot, author_id')
       .eq('order_id', orderId);
 
     if (itemsError) {
       console.warn(`[API] Order items fetch failed for order ${orderId}, trying minimal select:`, itemsError);
       const { data: fallbackItems } = await supabase
         .from('order_items')
-        .select('id, product_id, quantity, price_at_purchase')
+        .select('id, product_id, quantity, product_snapshot')
         .eq('order_id', orderId);
       order.order_items = fallbackItems || [];
     } else {

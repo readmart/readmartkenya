@@ -108,6 +108,25 @@ async function checkDatabase() {
         }
       }
 
+      if (table === 'orders') {
+        const requiredColumns = ['id', 'user_id', 'total_amount', 'subtotal_amount', 'shipping_amount', 'status', 'payment_method', 'shipping_address', 'created_at'];
+        const missingCols = [];
+        for (const col of requiredColumns) {
+          const { error } = await supabase.from(table).select(col).limit(1);
+          if (error && error.code === '42703') {
+            missingCols.push(col);
+          }
+        }
+
+        if (missingCols.length > 0) {
+          return { 
+            table, 
+            status: '❌ Error', 
+            details: `Missing columns: ${missingCols.join(', ')}` 
+          };
+        }
+      }
+
       const { error, count } = await supabase.from(table).select('*', { count: 'exact', head: true });
 
       if (error) {

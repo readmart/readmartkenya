@@ -14,6 +14,7 @@ import {
   RefreshCw, Shield, Globe, Bell, DollarSign,
   TrendingUp, BarChart2, Briefcase, UserPlus,
   Clock, MapPin, FileUp, Download, Filter,
+  History, RotateCcw,
   ChevronLeft, ChevronRight, CheckSquare, Square,
   HelpCircle, Zap, Database, ChevronUp, Handshake
 } from 'lucide-react';
@@ -23,9 +24,9 @@ import { useCurrency } from '@/contexts/CurrencyContext';
 import { 
   getGlobalAnalytics, getInventory, getOrders, getAllUsers, 
   getSiteSettings, updateSiteSettings, getInquiries, 
-  getPartnerships, getAuthors, getApprovedAuthors, updateProduct, deleteProduct,
-  createProduct, updateOrderStatus, updateUserStatus, updateApplicationStatus,
-  getCategories, getShippingZones, getPromos, togglePromoStatus,
+  getPartnerships, getAuthors, getApprovedAuthors, deleteProduct,
+  updateOrderStatus, updateUserStatus, updateApplicationStatus,
+  getCategories, getShippingZones, getPromos,
   initializeCampaign, getPromoMetrics, getPromoAuditLogs, calculateImpact,
   getClubs, createBookClub, updateBookClub,
   getEvents, createEvent, updateEvent,
@@ -35,6 +36,7 @@ import {
   getProtocolAgreements, createProtocolAgreement, updateProtocolAgreement, deleteProtocolAgreement,
   deleteRecord, getAllPayouts, disbursePayouts, getNotificationLogs
 } from '@/api/dashboards';
+import { uploadBook, updateBook, getBookVersions, revertBookVersion } from '@/api/books';
 import { uploadSiteAsset, uploadProductImage, uploadEbookFile, uploadAgreementFile, uploadBannerImage } from '@/api/storage';
 import { getEventRSVPs } from '@/api/community';
 import FounderPartnerships from './FounderPartnerships';
@@ -1847,11 +1849,15 @@ function InventoryView({ data, categories, approvedAuthors, onUpdate }: any) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
   const [editingItem, setEditingItem] = useState<any>(null);
+  const [versions, setVersions] = useState<any[]>([]);
+  const [isReverting, setIsReverting] = useState(false);
+  const [activeSubTab, setActiveSubTab] = useState<'details' | 'versions'>('details');
 
   useEffect(() => {
     setIsMounted(true);
     return () => setIsMounted(false);
   }, []);
+
   const [uploadProgress, setUploadProgress] = useState<{ [key: string]: number }>({});
   const [formData, setFormData] = useState({
     title: '',
@@ -1869,7 +1875,8 @@ function InventoryView({ data, categories, approvedAuthors, onUpdate }: any) {
     is_ebook: false,
     ebook_url: '',
     is_active: true,
-    metadata: {}
+    metadata: {},
+    change_summary: ''
   });
 
   const filtered = useMemo(() => {
@@ -1879,8 +1886,19 @@ function InventoryView({ data, categories, approvedAuthors, onUpdate }: any) {
     );
   }, [data, searchTerm]);
 
+  const fetchVersions = async (productId: string) => {
+    try {
+      const history = await getBookVersions(productId);
+      setVersions(history);
+    } catch (error) {
+      console.error('Failed to fetch versions:', error);
+      toast.error('Could not load version history');
+    }
+  };
+
   const handleEdit = (item: any) => {
     setEditingItem(item);
+    setActiveSubTab('details');
     // Support both direct column and metadata table
     const ebookUrl = item.ebook_metadata?.[0]?.file_path || item.ebook_url || '';
     
@@ -1900,13 +1918,17 @@ function InventoryView({ data, categories, approvedAuthors, onUpdate }: any) {
       is_ebook: item.type === 'ebook',
       ebook_url: ebookUrl,
       is_active: item.is_active ?? true,
-      metadata: item.metadata || {}
+      metadata: item.metadata || {},
+      change_summary: ''
     });
     setIsModalOpen(true);
+    fetchVersions(item.id);
   };
 
   const handleAddNew = () => {
     setEditingItem(null);
+    setVersions([]);
+    setActiveSubTab('details');
     setFormData({
       title: '',
       author: '',
@@ -1923,9 +1945,28 @@ function InventoryView({ data, categories, approvedAuthors, onUpdate }: any) {
       is_ebook: false,
       ebook_url: '',
       is_active: true,
-      metadata: {}
+      metadata: {},
+      change_summary: ''
     });
     setIsModalOpen(true);
+  };
+
+  const handleRevert = async (version: any) => {
+    if (!confirm(`Are you sure you want to revert to version ${version.version_number}?`)) return;
+    
+    setIsReverting(true);
+    const loadingToast = toast.loading(`Reverting to version ${version.version_number}...`);
+    try {
+      await revertBookVersion(editingItem.id, version.id);
+      toast.success(`Successfully reverted to version ${version.version_number}`, { id: loadingToast });
+      setIsModalOpen(false);
+      onUpdate();
+    } catch (error: any) {
+      console.error('Revert failed:', error);
+      toast.error(error.message || 'Revert failed', { id: loadingToast });
+    } finally {
+      setIsReverting(false);
+    }
   };
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1985,35 +2026,29 @@ function InventoryView({ data, categories, approvedAuthors, onUpdate }: any) {
     console.log('[InventoryView] Submitting form data:', formData);
 
     try {
-      // Destructure to remove fields that don't belong in the products table
-      const { is_ebook, ebook_url, type, author, ...rawFormData } = formData;
-
-      const productPayload = {
-        ...rawFormData,
+      const bookData = {
+        title: formData.title,
+        author: formData.author,
+        author_id: formData.author_id,
+        description: formData.description,
         price: parseFloat(formData.price.toString()) || 0,
         sale_price: formData.sale_price ? parseFloat(formData.sale_price.toString()) : null,
+        category_id: formData.category_id,
+        type: formData.type as 'ebook' | 'physical',
         stock_quantity: parseInt(formData.stock_quantity.toString()) || 0,
-        category_id: formData.category_id || null,
-        author_id: formData.author_id || null,
         weight: parseFloat(formData.weight.toString()) || 0.5,
         volume: parseFloat(formData.volume.toString()) || 0.001,
-        is_ebook: formData.type === 'ebook',
-        ebook_url: formData.ebook_url, 
-        ebook_metadata: formData.type === 'ebook' ? {
-          file_path: formData.ebook_url,
-          format: 'pdf',
-        } : null
+        is_active: formData.is_active,
+        image_url: formData.image_url,
+        ebook_url: formData.ebook_url
       };
 
-      console.log('[InventoryView] Sending payload to API:', productPayload);
-
       if (editingItem) {
-        await updateProduct(editingItem.id, productPayload);
-        toast.success('Asset updated', { id: loadingToast });
+        await updateBook(editingItem.id, bookData, formData.change_summary || 'Manual update');
+        toast.success('Asset updated with version control', { id: loadingToast });
       } else {
-        const result = await createProduct(productPayload);
-        console.log('[InventoryView] Registration successful:', result);
-        toast.success('Asset registered', { id: loadingToast });
+        await uploadBook(bookData);
+        toast.success('Asset registered successfully', { id: loadingToast });
       }
       setIsModalOpen(false);
       onUpdate();
@@ -2024,10 +2059,10 @@ function InventoryView({ data, categories, approvedAuthors, onUpdate }: any) {
   };
 
   const handleToggleStatus = async (id: string, currentActive: boolean) => {
-    const loadingToast = toast.loading(currentActive ? 'Deactivating campaign...' : 'Activating campaign...');
+    const loadingToast = toast.loading(currentActive ? 'Deactivating asset...' : 'Activating asset...');
     try {
-      await togglePromoStatus(id, !currentActive);
-      toast.success(`Campaign ${currentActive ? 'Deactivated' : 'Activated'}`, { id: loadingToast });
+      await updateBook(id, { is_active: !currentActive }, `Toggled status to ${!currentActive ? 'Active' : 'Draft'}`);
+      toast.success(`Asset ${currentActive ? 'Deactivated' : 'Activated'}`, { id: loadingToast });
       onUpdate();
     } catch (error) {
       toast.error('Toggle failed', { id: loadingToast });
@@ -2175,7 +2210,41 @@ function InventoryView({ data, categories, approvedAuthors, onUpdate }: any) {
                 </button>
               </div>
 
-              <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-10 custom-scrollbar">
+              {editingItem && (
+                <div className="flex border-b border-slate-50 px-8 bg-slate-50/30">
+                  <button
+                    onClick={() => setActiveSubTab('details')}
+                    className={`px-6 py-4 text-xs font-black uppercase tracking-widest transition-all relative ${
+                      activeSubTab === 'details' ? 'text-primary' : 'text-slate-400 hover:text-slate-600'
+                    }`}
+                  >
+                    Asset Details
+                    {activeSubTab === 'details' && (
+                      <motion.div layoutId="activeTab" className="absolute bottom-0 left-0 right-0 h-1 bg-primary rounded-t-full" />
+                    )}
+                  </button>
+                  <button
+                    onClick={() => setActiveSubTab('versions')}
+                    className={`px-6 py-4 text-xs font-black uppercase tracking-widest transition-all relative flex items-center gap-2 ${
+                      activeSubTab === 'versions' ? 'text-primary' : 'text-slate-400 hover:text-slate-600'
+                    }`}
+                  >
+                    <History className="w-4 h-4" />
+                    Version History
+                    {versions.length > 0 && (
+                      <span className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full text-[10px]">
+                        {versions.length}
+                      </span>
+                    )}
+                    {activeSubTab === 'versions' && (
+                      <motion.div layoutId="activeTab" className="absolute bottom-0 left-0 right-0 h-1 bg-primary rounded-t-full" />
+                    )}
+                  </button>
+                </div>
+              )}
+
+              {activeSubTab === 'details' ? (
+                <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-10 custom-scrollbar">
                 <div className="grid md:grid-cols-2 gap-10">
                   <div className="space-y-6">
                     <div>
@@ -2455,6 +2524,19 @@ function InventoryView({ data, categories, approvedAuthors, onUpdate }: any) {
                   <p className="mt-2 text-[10px] text-slate-400 font-medium italic">Provide the ecosystem with context regarding the impact of this protocol asset.</p>
                 </div>
 
+                {editingItem && (
+                  <div className="mt-8">
+                    <label className="block text-[10px] font-black uppercase tracking-widest text-primary mb-2">Protocol Change Summary (Optional)</label>
+                    <textarea 
+                      value={formData.change_summary}
+                      onChange={(e) => setFormData({...formData, change_summary: e.target.value})}
+                      className="w-full px-6 py-4 bg-primary/5 rounded-2xl border-2 border-primary/10 outline-none focus:ring-2 focus:ring-primary/20 font-bold h-24 resize-none placeholder:text-primary/30"
+                      placeholder="Briefly explain what has changed in this version..."
+                    />
+                    <p className="mt-2 text-[10px] text-primary/60 font-medium italic">This summary will be archived in the version history for future audit references.</p>
+                  </div>
+                )}
+
                 <div className="mt-12 flex gap-4">
                   <button 
                     type="submit"
@@ -2471,6 +2553,78 @@ function InventoryView({ data, categories, approvedAuthors, onUpdate }: any) {
                   </button>
                 </div>
               </form>
+            ) : (
+              <div className="flex-1 overflow-y-auto p-10 custom-scrollbar space-y-6">
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="text-xl font-black uppercase tracking-tighter">Archived Protocol Versions</h3>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                    Immutable Audit Trail
+                  </span>
+                </div>
+
+                {versions.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-20 bg-slate-50 rounded-[32px] border-2 border-dashed border-slate-200">
+                    <History className="w-12 h-12 text-slate-200 mb-4" />
+                    <p className="font-bold text-slate-400 uppercase tracking-widest text-xs">No version history detected</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {versions.map((v, idx) => (
+                      <div 
+                        key={v.id} 
+                        className={`p-6 rounded-[32px] border-2 transition-all group flex items-center justify-between ${
+                          idx === 0 ? 'bg-primary/5 border-primary/20' : 'bg-white border-slate-100 hover:border-slate-200'
+                        }`}
+                      >
+                        <div className="flex items-center gap-6">
+                          <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-black ${
+                            idx === 0 ? 'bg-primary text-white' : 'bg-slate-100 text-slate-400'
+                          }`}>
+                            {v.version_number}
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2 mb-1">
+                              <p className="font-black text-slate-900 uppercase tracking-tighter">
+                                Version {v.version_number}
+                              </p>
+                              {idx === 0 && (
+                                <span className="px-2 py-0.5 bg-primary text-white text-[8px] font-black uppercase tracking-widest rounded-full">
+                                  Current Active
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                              <Clock className="w-3 h-3" />
+                              {new Date(v.created_at).toLocaleString()}
+                            </p>
+                            {v.change_summary && (
+                              <p className="mt-2 text-xs font-medium text-slate-600 italic">
+                                "{v.change_summary}"
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                        
+                          {idx !== 0 && (
+                            <button
+                              onClick={() => handleRevert(v)}
+                              disabled={isReverting}
+                              className="px-6 py-3 bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-primary transition-all shadow-xl shadow-slate-900/20 disabled:opacity-50 flex items-center gap-2"
+                            >
+                              {isReverting ? (
+                                <Loader2 className="w-3 h-3 animate-spin" />
+                              ) : (
+                                <RotateCcw className="w-3 h-3" />
+                              )}
+                              {isReverting ? 'Reverting...' : 'Rollback to this state'}
+                            </button>
+                          )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
             </motion.div>
           </div>
         )}

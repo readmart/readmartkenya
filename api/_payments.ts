@@ -198,6 +198,91 @@ export const getK2Token = async () => {
   return data.access_token;
 };
 
+/**
+ * Revokes an application access token as per jj.md L75
+ */
+export const revokeK2Token = async (tokenToRevoke: string) => {
+  assertK2Config('revokeK2Token');
+  const clientId = (process.env.KOPOKOPO_CLIENT_ID || '').trim();
+  const clientSecret = (process.env.KOPOKOPO_CLIENT_SECRET || '').trim();
+
+  const response = await fetchWithBackoff(`${getK2AuthUrl()}/oauth/revoke`, {
+    method: 'POST',
+    headers: { 
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'User-Agent': 'ReadMart/1.0.0 (https://readmartke.com)',
+      'Accept': 'application/json'
+    },
+    body: new URLSearchParams({
+      client_id: clientId,
+      client_secret: clientSecret,
+      token: tokenToRevoke,
+    }).toString(),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`K2 Token Revocation Error (Status ${response.status}): ${errorText}`);
+  }
+
+  if (tokenToRevoke === cachedToken?.token) {
+    cachedToken = null;
+  }
+
+  return { success: true };
+};
+
+/**
+ * Introspects an access token to check validity as per jj.md L113
+ */
+export const introspectK2Token = async (tokenToIntrospect: string) => {
+  assertK2Config('introspectK2Token');
+  const clientId = (process.env.KOPOKOPO_CLIENT_ID || '').trim();
+  const clientSecret = (process.env.KOPOKOPO_CLIENT_SECRET || '').trim();
+
+  const response = await fetchWithBackoff(`${getK2AuthUrl()}/oauth/introspect`, {
+    method: 'POST',
+    headers: { 
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'User-Agent': 'ReadMart/1.0.0 (https://readmartke.com)',
+      'Accept': 'application/json'
+    },
+    body: new URLSearchParams({
+      client_id: clientId,
+      client_secret: clientSecret,
+      token: tokenToIntrospect,
+    }).toString(),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`K2 Token Introspection Error (Status ${response.status}): ${errorText}`);
+  }
+
+  return await response.json();
+};
+
+/**
+ * Gets info about an access token as per jj.md L157
+ */
+export const getK2TokenInfo = async (token: string) => {
+  const response = await fetchWithBackoff(`${getK2AuthUrl()}/oauth/token/info`, {
+    method: 'GET',
+    headers: { 
+      'Authorization': `Bearer ${token}`,
+      'User-Agent': 'ReadMart/1.0.0 (https://readmartke.com)',
+      'Accept': 'application/json'
+    }
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`K2 Token Info Error (Status ${response.status}): ${errorText}`);
+  }
+
+  return await response.json();
+};
+
 export const initiateK2StkPush = async (params: K2StkPushRequest) => {
   const token = await getK2Token();
   const apiKey = (process.env.KOPOKOPO_API_KEY || '').trim();
@@ -218,8 +303,8 @@ export const initiateK2StkPush = async (params: K2StkPushRequest) => {
   const formattedPhone = `+${numericPhone}`;
 
   const payload = {
-    payment_channel: 'M-PESA STK Push',
-    till_number: tillNumber,
+    payment_channel: 'M-PESA',
+    till_number: tillNumber.startsWith('K') ? tillNumber : `K${tillNumber}`,
     subscriber: {
       first_name: params.firstName || 'ReadMart',
       last_name: params.lastName || 'Customer',
@@ -228,7 +313,7 @@ export const initiateK2StkPush = async (params: K2StkPushRequest) => {
     },
     amount: {
       currency: params.currency || 'KES',
-      value: Number(params.amount), 
+      value: Number(params.amount),
     },
     metadata: {
       order_id: params.orderId,
@@ -374,6 +459,49 @@ export const listK2Webhooks = async () => {
   return await response.json();
 };
 
+/**
+ * Initiates a settlement transfer as per jj.md L1357 (blind) or L1400 (targeted)
+ */
+export const initiateK2SettlementTransfer = async (params: {
+  amount?: { currency: string; value: number };
+  destination_type?: 'merchant_bank_account' | 'merchant_wallet';
+  destination_reference?: string;
+  callbackUrl?: string;
+}) => {
+  const token = await getK2Token();
+  const baseUrl = getK2BaseUrl();
+
+  const payload: any = {
+    _links: {
+      callback_url: params.callbackUrl || getK2CallbackUrl()
+    }
+  };
+
+  if (params.amount) payload.amount = params.amount;
+  if (params.destination_type) payload.destination_type = params.destination_type;
+  if (params.destination_reference) payload.destination_reference = params.destination_reference;
+
+  const response = await fetchWithBackoff(`${baseUrl}/api/v1/settlement_transfers`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+      'User-Agent': 'ReadMart/1.0.0 (https://readmartke.com)'
+    },
+    body: JSON.stringify(payload)
+  });
+
+  if (response.status === 201) {
+    const location = response.headers.get('location');
+    return { success: true, location };
+  }
+
+  const errorText = await response.text();
+  console.error(`K2 Settlement Transfer Error (Status ${response.status}):`, errorText);
+  return { success: false, status: response.status, error: errorText };
+};
+
 export const K2_EVENT_TYPES = {
   STK_PUSH_SUCCESS: 'incoming_payment',
   BUYGOODS_RECEIVED: 'buygoods_transaction_received',
@@ -449,7 +577,7 @@ export const createK2PayRecipient = async (params: {
       };
     }
 
-    const response = await fetch(`${baseUrl}/api/v1/pay_recipients`, {
+    const response = await fetchWithBackoff(`${baseUrl}/api/v1/pay_recipients`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -491,16 +619,23 @@ export const initiateK2Payment = async (params: {
     const token = await getK2Token();
     const baseUrl = getK2BaseUrl();
 
-    const payload = {
-      ...params,
-      _links: {
-        callback_url: params.callbackUrl || getK2CallbackUrl()
-      }
-    };
-    // Remove callbackUrl from top level as it's now in _links
-    delete (payload as any).callbackUrl;
+  const payload = {
+    amount: {
+      currency: params.amount.currency,
+      value: params.amount.value,
+    },
+    description: params.description,
+    category: params.category,
+    tags: params.tags,
+    metadata: params.metadata,
+    _links: {
+      callback_url: params.callbackUrl || getK2CallbackUrl(),
+    },
+    destination_type: params.destination_type,
+    destination_reference: params.destination_reference,
+  };
 
-    const response = await fetch(`${baseUrl}/api/v1/payments`, {
+    const response = await fetchWithBackoff(`${baseUrl}/api/v1/payments`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -613,7 +748,7 @@ export const extractK2WebhookData = (payload: any) => {
 
   // 4. Determine Success
   const isSuccess = [
-    'Success', 'Completed', 'Received', 'success', 'Transferred', 'Processed', 'Incoming Payment Request'
+    'Success', 'Completed', 'Received', 'success', 'Transferred', 'Processed', 'Incoming Payment Request', 'Complete'
   ].includes(status);
 
   // 5. Extract Amount (can be object {value, currency} or direct string)
@@ -625,16 +760,24 @@ export const extractK2WebhookData = (payload: any) => {
     amount = resource.amount;
   }
   
-  const currency = typeof amountObj === 'object' ? (amountObj.currency) : (resource.currency || data.currency || 'KES');
+  // Handle amount object in STK Push result (v1)
+  if (!amount && payload.amount) {
+    amount = payload.amount.value || payload.amount.amount;
+  }
+  
+  const currency = typeof amountObj === 'object' ? (amountObj.currency) : (resource.currency || data.currency || payload.currency || 'KES');
   
   // 6. Extract Phone Number or Card Number
   const phone = (
     resource.sender_phone_number || 
     resource.phone_number || 
     resource.subscriber?.phone_number || 
+    payload.phone_number ||
+    payload.subscriber?.phone_number ||
     metadata.phone ||
     metadata.phoneNumber ||
-    resource.sender_msisdn
+    resource.sender_msisdn ||
+    resource.sending_till // B2B
   );
 
   // 7. Extract Transaction ID (M-Pesa Receipt Number or K2 Reference)
@@ -651,9 +794,9 @@ export const extractK2WebhookData = (payload: any) => {
   );
 
   // 8. Extract Sender Name
-  const firstName = resource.sender_first_name || resource.first_name || resource.subscriber?.first_name || metadata.firstName || '';
-  const lastName = resource.sender_last_name || resource.last_name || resource.subscriber?.last_name || metadata.lastName || '';
-  const senderName = `${firstName} ${lastName}`.trim();
+  const firstName = resource.sender_first_name || resource.first_name || resource.subscriber?.first_name || payload.first_name || payload.subscriber?.first_name || metadata.firstName || '';
+  const lastName = resource.sender_last_name || resource.last_name || resource.subscriber?.last_name || payload.last_name || payload.subscriber?.last_name || metadata.lastName || '';
+  const senderName = (resource.till_name || resource.sending_till) ? (resource.till_name || `Till ${resource.sending_till}`) : `${firstName} ${lastName}`.trim();
 
   // 9. Extract Order ID from metadata
   const orderId = (
@@ -701,7 +844,7 @@ export const sendK2SmsNotification = async (webhookEventReference: string, messa
         'User-Agent': 'ReadMart/1.0.0 (https://readmartke.com)'
       },
       body: JSON.stringify({
-        webhook_event_reference: webhookEventReference,
+        webhook_event_id: webhookEventReference, // K2 v1 uses webhook_event_id
         message: message,
         _links: {
           callback_url: callbackUrl

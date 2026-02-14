@@ -15,6 +15,7 @@ export interface OrderData {
   city: string;
   subtotal_amount: number;
   shipping_amount: number;
+  total_amount?: number; // Added total_amount as optional
   shipping_zone_id?: string;
   items: OrderItem[];
   payment_method: string;
@@ -24,12 +25,17 @@ export async function createOrder(orderData: OrderData) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('User must be logged in to place an order');
 
+  // Ensure amounts are valid numbers to avoid NaN -> null conversion in JSON
+  const subtotal = Number(orderData.subtotal_amount) || 0;
+  const shipping = Number(orderData.shipping_amount) || 0;
+  const total = orderData.total_amount !== undefined ? Number(orderData.total_amount) : (subtotal + shipping);
+
   // 1. Create the order
   const orderInsertData: any = {
     user_id: user.id,
-    subtotal_amount: orderData.subtotal_amount,
-    shipping_amount: orderData.shipping_amount,
-    total_amount: (orderData.subtotal_amount || 0) + (orderData.shipping_amount || 0),
+    subtotal_amount: subtotal,
+    shipping_amount: shipping,
+    total_amount: total,
     shipping_address: {
       full_name: orderData.full_name,
       email: orderData.email,
@@ -47,13 +53,13 @@ export async function createOrder(orderData: OrderData) {
   }
 
   // Define a set of "new" columns that are prone to schema cache issues
+  // total_amount is NOT here because it's required (NOT NULL)
   const potentialProblematicColumns = [
     'shipping_amount', 
     'subtotal_amount', 
     'tax_amount', 
-    'total_amount', 
-    'shipping_zone_id',
-    'metadata' // Added metadata here as it's causing PGRST204 errors
+    'shipping_zone_id'
+    // 'metadata' removed because it's confirmed missing in orders table
   ];
 
   // AGGRESSIVE BYPASS: Use resilient insertion pattern
@@ -98,13 +104,6 @@ export async function createOrder(orderData: OrderData) {
         console.warn('Persistent schema error detected. Switching to aggressive column filtering.');
         for (const col of potentialProblematicColumns) {
           if (currentInsertData[col] !== undefined) {
-            // Only try to move to metadata if the column we are removing IS NOT metadata
-            if (col !== 'metadata') {
-              currentInsertData.metadata = {
-                ...(currentInsertData.metadata || {}),
-                [`aggressive_fallback_${col}`]: currentInsertData[col]
-              };
-            }
             delete currentInsertData[col];
           }
         }
@@ -113,6 +112,7 @@ export async function createOrder(orderData: OrderData) {
 
       // 1. Try to extract the problematic column name from the error message
       // Message format: "Could not find the 'column_name' column of 'table_name' in the schema cache"
+      // or "null value in column 'column_name' violates not-null constraint"
       const match = error?.message?.match(/['"]([^'"]+)['"]/); // Match anything inside quotes
       let problematicColumn = match ? match[1] : null;
 
@@ -124,18 +124,11 @@ export async function createOrder(orderData: OrderData) {
       if (!problematicColumn && error?.message?.includes('shipping_zone_id')) problematicColumn = 'shipping_zone_id';
 
       if (problematicColumn && currentInsertData[problematicColumn] !== undefined) {
+        // IMPORTANT: If the problematic column is total_amount or subtotal_amount, 
+        // we probably shouldn't just remove it if it's required.
+        // But if it's a schema cache error (PGRST204), we HAVE to remove it to succeed.
+        
         console.warn(`Schema cache issue detected for specific column: ${problematicColumn}. Omiting and retrying...`);
-        
-        // Only try to move to metadata if the problematic column IS NOT metadata itself
-        if (problematicColumn !== 'metadata') {
-          currentInsertData.metadata = {
-            ...(currentInsertData.metadata || {}),
-            [problematicColumn]: currentInsertData[problematicColumn],
-            schema_fallback: true,
-            fallback_at: new Date().toISOString()
-          };
-        }
-        
         delete currentInsertData[problematicColumn];
         continue; 
       } 
@@ -146,16 +139,6 @@ export async function createOrder(orderData: OrderData) {
       for (const col of potentialProblematicColumns) {
         if (currentInsertData[col] !== undefined) {
           console.warn(`Removing potential problematic column: ${col} and retrying...`);
-          
-          // Only move to metadata if the column we are removing IS NOT metadata
-          if (col !== 'metadata') {
-            currentInsertData.metadata = {
-              ...(currentInsertData.metadata || {}),
-              [`fallback_${col}`]: currentInsertData[col],
-              schema_fallback_generic: true
-            };
-          }
-          
           delete currentInsertData[col];
           removedSomething = true;
           break; // Try again after removing one
@@ -166,30 +149,14 @@ export async function createOrder(orderData: OrderData) {
 
       // 3. ULTIMATE FALLBACK: Remove ALL non-core columns
       console.error('All specific column removals failed. Attempting ultimate fallback with core columns only.');
-      const coreColumns = ['user_id', 'shipping_address', 'status', 'payment_method'];
+      const coreColumns = ['user_id', 'shipping_address', 'status', 'payment_method', 'total_amount', 'subtotal_amount'];
       const minimalData: any = {};
       
-      // Only include metadata if it's NOT in our list of problematic columns 
-      // or if we haven't identified it as missing yet
-      const includeMetadata = !potentialProblematicColumns.includes('metadata') || (currentInsertData.metadata && !error?.message?.includes('metadata'));
-      
-      if (includeMetadata) {
-        const metadataBackup: any = { ...(currentInsertData.metadata || {}), absolute_fallback: true };
-        Object.keys(currentInsertData).forEach(key => {
-          if (coreColumns.includes(key)) {
-            minimalData[key] = currentInsertData[key];
-          } else if (key !== 'metadata') {
-            metadataBackup[`final_fallback_${key}`] = currentInsertData[key];
-          }
-        });
-        minimalData.metadata = metadataBackup;
-      } else {
-        Object.keys(currentInsertData).forEach(key => {
-          if (coreColumns.includes(key)) {
-            minimalData[key] = currentInsertData[key];
-          }
-        });
-      }
+      Object.keys(currentInsertData).forEach(key => {
+        if (coreColumns.includes(key)) {
+          minimalData[key] = currentInsertData[key];
+        }
+      });
       
       const { data: finalData, error: finalError } = await supabase
         .from('orders')

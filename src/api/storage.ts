@@ -118,10 +118,15 @@ export async function uploadProfileImage(file: File, options: UploadOptions = {}
 export async function uploadEbookFile(file: File, identifier: string, options: UploadOptions = {}) {
   validateFile(file, { 
     maxSizeMB: options.maxSizeMB || 100, // 100MB default for ebooks
-    allowedTypes: ['application/pdf', 'application/epub+zip'] 
+    allowedTypes: [
+      'application/pdf', 
+      'application/epub+zip',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document', // DOCX
+      'application/msword' // DOC
+    ] 
   });
 
-  const fileExt = file.name.split('.').pop() || 'pdf';
+  const fileExt = file.name.split('.').pop()?.toLowerCase() || 'pdf';
   const fileName = `${identifier}_${Date.now()}.${fileExt}`;
   const filePath = options.path ? `${options.path}/${fileName}` : fileName;
   
@@ -131,7 +136,13 @@ export async function uploadEbookFile(file: File, identifier: string, options: U
   console.log(`[Storage] Starting ${useTus ? 'TUS ' : ''}upload for ${file.name} (${(file.size / 1024 / 1024).toFixed(2)}MB) to ebooks bucket`);
 
   // Explicitly handle content type to avoid binary/octet-stream issues
-  const contentType = file.type || (fileExt === 'epub' ? 'application/epub+zip' : 'application/pdf');
+  let contentType = file.type;
+  if (!contentType) {
+    if (fileExt === 'epub') contentType = 'application/epub+zip';
+    else if (fileExt === 'docx') contentType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+    else if (fileExt === 'doc') contentType = 'application/msword';
+    else contentType = 'application/pdf';
+  }
 
   return withRetry(async () => {
     console.log(`[Storage] Uploading ebook: ${filePath} (${file.size} bytes, useTus: ${useTus}, contentType: ${contentType})`);

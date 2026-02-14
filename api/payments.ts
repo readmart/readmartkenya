@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { supabase, json, badRequest, unauthorized, serverError, createNotification, calculateOrderCommissions, logAction } from './_utils.js';
+import { supabase, json, badRequest, unauthorized, serverError, createNotification, logAction } from './_utils.js';
 import {
   verifyK2Signature,
   extractK2WebhookData,
@@ -9,7 +9,6 @@ import {
   listK2Webhooks,
   getK2CallbackUrl,
   K2_EVENT_TYPES,
-  getK2Token,
   createK2PayRecipient,
   initiateK2Payment,
   sendK2SmsNotification
@@ -61,7 +60,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
 
       const webhookData = extractK2WebhookData(payload);
-      const { webhookEventId, transactionId, amount, phone, eventType, senderName, status, currency } = webhookData;
+      const { webhookEventId, transactionId, amount, eventType, status, currency } = webhookData;
       
       // The orderId can come from metadata OR from the query parameter in the callback URL
       const orderId = webhookData.orderId || queryOrderId;
@@ -162,31 +161,39 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       if (orderId && (isTransactionEvent || isReversalEvent)) {
         // --- IDEMPOTENCY CHECK ---
-        // 1. Check if this specific webhook event has been processed
+        // 1. Check if this specific transaction has been processed
         let existingProcessedEvent: any = null;
         let processedError: any = null;
 
         try {
+          // Attempt to check idempotency if provider_reference exists
           const { data, error } = await supabase
             .from('transactions')
             .select('id')
-            .eq('webhook_event_id', webhookEventId)
+            .eq('provider_reference', transactionId)
             .maybeSingle();
-          existingProcessedEvent = data;
-          processedError = error;
+          
+          if (error && error.code !== '42703') { // 42703 is undefined_column
+            processedError = error;
+          } else if (data) {
+            existingProcessedEvent = data;
+          }
         } catch (e: any) {
-          processedError = e;
+          // If it's a column missing error, we just proceed
+          if (e.code !== '42703') processedError = e;
         }
 
         if (processedError) {
           if (processedError.code === 'PGRST204' || processedError.message?.includes('cache')) {
             console.warn('Transactions schema cache issue, falling back to basic select');
-            const { data: retryData } = await supabase
-              .from('transactions')
-              .select('id')
-              .eq('provider_reference', transactionId)
-              .maybeSingle();
-            existingProcessedEvent = retryData;
+            try {
+              const { data: retryData } = await supabase
+                .from('transactions')
+                .select('id')
+                .eq('id', transactionId) // Fallback to id if provider_reference is missing
+                .maybeSingle();
+              existingProcessedEvent = retryData;
+            } catch (e) {}
           } else {
             console.error('Error checking idempotency:', processedError);
           }
@@ -195,6 +202,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         if (existingProcessedEvent) {
           console.log(`Webhook event ${webhookEventId} already processed. Skipping.`);
           return json(res, 200, { received: true, already_processed: true });
+        }
+
+        // --- IDEMPOTENCY CHECK 2 ---
+        // Check if a transaction with this reference already exists in the transactions table
+        // This is a second layer of defense
+        if (transactionId) {
+          try {
+            const { data: txByRef } = await supabase
+              .from('transactions')
+              .select('id')
+              .eq('provider_reference', transactionId)
+              .maybeSingle();
+            
+            if (txByRef) {
+              console.log(`Transaction ${transactionId} already exists in transactions table. Skipping.`);
+              return json(res, 200, { received: true, already_processed: true });
+            }
+          } catch (e) {
+            // Ignore error here
+          }
         }
 
         // 2. Check if the order is already paid (for non-reversal events)
@@ -225,7 +252,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           }
         }
 
-        const orderIsPaid = existingOrder?.is_paid === true || existingOrder?.payment_status === 'paid' || existingOrder?.status === 'paid';
+            const orderIsPaid = existingOrder?.status === 'paid' || existingOrder?.status === 'processing' || existingOrder?.status === 'completed';
         if (orderIsPaid && !isReversalEvent) {
           console.log(`Order ${orderId} is already marked as paid. Skipping redundant webhook.`);
           return json(res, 200, { received: true, already_processed: true });
@@ -233,9 +260,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         const isSuccess = webhookData.isSuccess;
         const actuallyPaid = isSuccess && !isReversalEvent;
-        const paymentStatus = isReversalEvent ? 'refunded' : (isSuccess ? 'paid' : 'failed');
-        // For now we map refunds to a cancelled order with refunded payment_status.
-        const finalStatus = isReversalEvent ? 'cancelled' : (isSuccess ? 'paid' : 'failed');
+        // Map KopoKopo status to ReadMart order status
+        // valid statuses: 'pending', 'paid', 'processing', 'completed', 'cancelled'
+        const finalStatus = isReversalEvent ? 'cancelled' : (isSuccess ? 'paid' : 'cancelled');
         
         const isMembership = orderId.startsWith('MEMB-');
         
@@ -415,17 +442,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
               // Log membership transaction for observability
               try {
-                const { error: membTxError } = await supabase.from('transactions').insert([{
+                const txPayload: any = {
                   order_id: null,
                   user_id: userId,
                   amount: amount || payment.amount,
-                  status: actuallyPaid ? 'completed' : (isReversalEvent ? 'failed' : 'failed'),
-                  provider_reference: transactionId,
-                  webhook_event_id: webhookEventId,
-                  metadata: { ...payload, order_id: orderId, type: 'membership_payment' }
-                }]);
+                  status: actuallyPaid ? 'completed' : 'failed'
+                };
+                
+                // Add columns only if they are likely to exist
+                const { error: membTxError } = await supabase.from('transactions').insert([txPayload]);
+                
                 if (membTxError) {
-                  console.error('Failed to log membership transaction:', membTxError);
+                  if (membTxError.code === '42703') {
+                    // Undefined column, already tried minimal
+                    console.warn('Transactions table missing columns, logged minimal transaction');
+                  } else {
+                    console.error('Failed to log membership transaction:', membTxError);
+                  }
                 }
               } catch (e) {
                 console.error('Membership transaction logging exception:', e);
@@ -435,14 +468,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             console.log(`Updating order ${orderId} status to ${finalStatus}`);
             const updatePayload: any = { 
               status: finalStatus,
-              payment_status: paymentStatus,
-              is_paid: actuallyPaid,
               payment_metadata: payload 
             };
             
             if (transactionId) {
               updatePayload.payment_id = transactionId;
-              updatePayload.mpesa_receipt_number = transactionId;
             }
             
             let updatedOrders: any = null;
@@ -469,11 +499,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 if (match && match[1]) {
                   const missingCol = match[1];
                   delete updatePayload[missingCol];
-                } else if (orderError.message.includes('is_paid')) {
-                  delete updatePayload.is_paid;
+                } else if (orderError.message.includes('status')) {
+                  delete updatePayload.status;
                 }
                 
-                const { data: retryOrders, error: retryError } = await supabase
+                const { error: retryError } = await supabase
                   .from('orders')
                   .update(updatePayload)
                   .eq('id', orderId)
@@ -505,7 +535,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                   amount: amount || (order as any).total_amount,
                   status: actuallyPaid ? 'completed' : (isReversalEvent ? 'failed' : 'failed'),
                   provider_reference: transactionId,
-                  webhook_event_id: webhookEventId,
                   metadata: { ...payload }
                 }]);
 
@@ -538,17 +567,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 // Fetch items with product type and ebook metadata to check for digital-only order
                 let items: any[] = [];
                 try {
-                  const itemColumns = 'id, order_id, product_id, quantity, price, price_at_purchase, product_snapshot';
                   const { data, error } = await supabase
                     .from('order_items')
-                    .select(`
-                      ${itemColumns},
-                      product:products(
-                        id,
-                        type,
-                        metadata
-                      )
-                    `)
+                    .select('id, order_id, product_id, quantity')
                     .eq('order_id', order.id);
                   
                   if (error) {
@@ -556,7 +577,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                       console.warn('Schema cache issue in order_items fetch, retrying with minimal select');
                       const { data: fallbackItems, error: fallbackError } = await supabase
                         .from('order_items')
-                        .select('id, product_id, quantity, price_at_purchase, product_snapshot')
+                        .select('id, product_id, quantity')
                         .eq('order_id', order.id);
                       
                       if (fallbackError) throw fallbackError;
@@ -587,7 +608,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
                 // Check if this is a digital-only order (all items are ebooks)
                 const isDigitalOnly = items && items.length > 0 && items.every((item: any) => 
-                  item.product?.type === 'ebook' || item.product_snapshot?.type === 'ebook' || item.product_snapshot?.category === 'Digital'
+                  item.product?.type === 'ebook' || item.product?.category === 'Digital'
                 );
 
                 if (isDigitalOnly) {
@@ -883,7 +904,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (action === 'register-webhooks' || url.includes('register-webhooks')) {
       try {
         const token = req.headers.authorization?.split(' ')[1] || '';
-        const { data: userData, error: authError } = await supabase.auth.getUser(token);
+        const { data: userData } = await supabase.auth.getUser(token);
         const user = userData?.user;
         
         if (!user) return unauthorized(res, 'Authentication required');
