@@ -3359,8 +3359,7 @@ function BannersView({ settings, banners, announcements, onUpdate }: any) {
     setIsUploadingBanner(true);
     const loadingToast = toast.loading('Uploading banner asset...');
     try {
-      const url = await uploadSiteAsset(file, {
-        path: 'banners',
+      const url = await uploadBannerImage(file, {
         onProgress: (progress) => {
           const percent = Math.round((progress.loaded / progress.total) * 100);
           setUploadProgress(prev => ({ ...prev, banner: percent }));
@@ -4962,7 +4961,7 @@ function ClubsView({ data, onUpdate }: any) {
 
     const loadingToast = toast.loading('Uploading community asset...');
     try {
-      const url = await uploadSiteAsset(file, {
+      const url = await uploadBannerImage(file, {
         onProgress: (progress) => {
           const percent = Math.round((progress.loaded / progress.total) * 100);
           setUploadProgress(prev => ({ ...prev, club: percent }));
